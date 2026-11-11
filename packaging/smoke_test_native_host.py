@@ -44,6 +44,8 @@ def main() -> int:
         (app_dir / "browser_bridge.json").write_text(
             json.dumps({"extension_id": extension_id}), encoding="utf-8"
         )
+        environment = os.environ.copy()
+        environment["LOCALAPPDATA"] = str(local_app_data)
 
         rejected = subprocess.run(
             [str(executable), f"chrome-extension://{'b' * 32}/"],
@@ -72,8 +74,6 @@ def main() -> int:
                 ),
             ]
         )
-        environment = os.environ.copy()
-        environment["LOCALAPPDATA"] = str(local_app_data)
         result = subprocess.run(
             [str(executable), origin],
             input=requests,
