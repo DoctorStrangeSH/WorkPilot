@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WorkPilot Browser Bridge</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div class="mark">W</div>
+      <div>
+        <strong>WorkPilot</strong>
+        <span>Browser Bridge</span>
+      </div>
+    </header>
+    <div id="status" class="status" role="status" aria-live="polite">Проверяем соединение…</div>
+    <button id="share" type="button" disabled>Поделиться вкладкой</button>
+    <p class="privacy">Передаётся только текущая вкладка и только после нажатия. Параметры URL, фрагмент, cookies и содержимое страницы не передаются.</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
