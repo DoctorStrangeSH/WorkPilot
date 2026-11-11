@@ -42,6 +42,7 @@
 - [x] Подтвердить PyInstaller Native Messaging host smoke test в Windows CI (origin rejection, framing, URL sanitization, SQLite write).
 - [x] Получить успешные NSIS installer и extension artifacts из Windows workflow `43032886364` (артефакты скачаны и проверены).
 - [x] Подготовить PowerShell-регистрацию Native Messaging host с автоопределением Tauri resource path, explicit path override и HKCU-only registry writes.
+- [x] Сделать исходник registration script ASCII-only для совместимости с Windows PowerShell 5.1.
 - [x] Проверить PowerShell syntax validation скриптов в Windows CI.
 - [ ] При необходимости повторно собрать NSIS после изменений регистрации; текущий доступный установщик из workflow `43032886364` уже содержит Native Messaging host.
 - [ ] Проверить регистрацию host и ручную передачу вкладки на Яндекс Браузере 26.10.3.771 (64-bit); пользователь уже установил распакованное расширение и передал его ID.
