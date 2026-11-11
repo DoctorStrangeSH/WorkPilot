@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Activity, ArrowUpRight, BrainCircuit, Check, ChevronDown, CircleHelp,
@@ -100,9 +100,9 @@ export default function App(){
   </div>;
 }
 
-function Nav({icon,label,active,count,onClick}:{icon:React.ReactNode;label:string;active:boolean;count?:number;onClick:()=>void}){return <button className={"nav-item "+(active?"active":"")} onClick={onClick}><span>{icon}</span>{label}{!!count&&<em>{count}</em>}</button>;}
-function Metric({icon,label,value,detail,tone,progress}:{icon:React.ReactNode;label:string;value:string;detail:string;tone:string;progress?:number}){return <div className="metric"><div className={"metric-icon "+tone}>{icon}</div><small>{label}</small><strong>{value}</strong><p>{detail}</p>{progress!==undefined&&<div className="progress"><i className={tone} style={{width:Math.max(0,Math.min(progress,100))+"%"}}/></div>}</div>;}
+function Nav({icon,label,active,count,onClick}:{icon:ReactNode;label:string;active:boolean;count?:number;onClick:()=>void}){return <button className={"nav-item "+(active?"active":"")} onClick={onClick}><span>{icon}</span>{label}{!!count&&<em>{count}</em>}</button>;}
+function Metric({icon,label,value,detail,tone,progress}:{icon:ReactNode;label:string;value:string;detail:string;tone:string;progress?:number}){return <div className="metric"><div className={"metric-icon "+tone}>{icon}</div><small>{label}</small><strong>{value}</strong><p>{detail}</p>{progress!==undefined&&<div className="progress"><i className={tone} style={{width:Math.max(0,Math.min(progress,100))+"%"}}/></div>}</div>;}
 function TaskList({tasks,onCancel}:{tasks:Task[];onCancel:(id:string)=>void}){if(!tasks.length)return <Empty title="Задач пока нет" text="Создайте задачу, чтобы она появилась здесь."/>;return <div className="task-list">{tasks.map(t=><div className="task-row" key={t.id}><span className={"task-state "+t.status}>{t.status==="pending"?<Clock3 size={14}/>:<X size={14}/>}</span><div className="task-copy"><b>{t.title}</b><small>{t.description||"Без дополнительного описания"} · {time(t.created_at)}</small></div><span className={"task-badge "+t.status}>{t.status==="pending"?"В очереди":"Отменено"}</span>{t.status==="pending"&&<button className="icon-btn tiny" title="Отменить" onClick={()=>onCancel(t.id)}><X size={14}/></button>}</div>)}</div>;}
 function Empty({title,text}:{title:string;text:string}){return <div className="empty"><div><ListTodo size={18}/></div><b>{title}</b><p>{text}</p></div>;}
-function Coming({icon,title,text}:{icon:React.ReactNode;title:string;text:string}){return <div className="coming"><div>{icon}</div><small>СЛЕДУЮЩИЙ ЭТАП РАЗРАБОТКИ</small><h1>{title}</h1><p>{text}</p><span>Модуль пока не подключён</span></div>;}
-function Setting({icon,title,text,value,action}:{icon:React.ReactNode;title:string;text:string;value:string;action?:React.ReactNode}){return <div className="panel setting"><div className="setting-icon">{icon}</div><h3>{title}</h3><p>{text}</p><div className="setting-bottom"><b>{value}</b>{action}</div></div>;}
+function Coming({icon,title,text}:{icon:ReactNode;title:string;text:string}){return <div className="coming"><div>{icon}</div><small>СЛЕДУЮЩИЙ ЭТАП РАЗРАБОТКИ</small><h1>{title}</h1><p>{text}</p><span>Модуль пока не подключён</span></div>;}
+function Setting({icon,title,text,value,action}:{icon:ReactNode;title:string;text:string;value:string;action?:ReactNode}){return <div className="panel setting"><div className="setting-icon">{icon}</div><h3>{title}</h3><p>{text}</p><div className="setting-bottom"><b>{value}</b>{action}</div></div>;}
