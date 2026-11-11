@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sqlite3
 import struct
 import sys
 from pathlib import Path
@@ -133,6 +134,8 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
         saved = store.record_browser_tab(url, title)
     except ValueError as error:
         return {**response, "ok": False, "error": str(error)}
+    except sqlite3.Error:
+        return {**response, "ok": False, "error": "local_storage_unavailable"}
 
     return {**response, "ok": True, "type": "tab_shared", "tab": saved}
 
