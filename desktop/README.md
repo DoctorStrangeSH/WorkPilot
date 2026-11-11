@@ -10,7 +10,7 @@ React + Vite frontend and Tauri 2 host for the local Python Agent Runtime.
 - List and filter queued tasks.
 - Create and cancel pending tasks.
 - Recent local activity events.
-- Browser, image search and model pages clearly marked as not yet connected.
+- Browser page shows only tabs explicitly shared by the user through the Browser Bridge preview.
 
 Tasks are persisted in SQLite by the Python runtime. **They are queued only; this version does not execute them.**
 
@@ -39,7 +39,11 @@ If Python is installed outside PATH, set `WORKPILOT_PYTHON` to the Python execut
 
 ## Build Windows installer in CI
 
-Push to `feat/desktop-shell` or manually run the **Windows installer** workflow. It packages the Python agent with PyInstaller, runs `tauri build --bundles nsis`, and uploads `workpilot-windows-installer` for 14 days.
+Push to `feat/desktop-shell` or manually run the **Windows installer** workflow. It packages the Python agent and Native Messaging host with PyInstaller `onedir`, smoke-tests the native host, builds the NSIS installer, and uploads both `workpilot-windows-installer` and `workpilot-browser-extension` for 14 days.
+
+## Browser Bridge preview
+
+The extension source is in `browser-extension/`. It requests only `activeTab` and `nativeMessaging`, and sends the active tab only after the user clicks its button. The Native Messaging host is packaged at `resources/workpilot-native-host/workpilot-native-host.exe`. See `browser-extension/README.md` for local sideloading and the per-user registration script. Compatibility must be tested on the exact Yandex Browser version before treating the bridge as supported.
 
 ## Build frontend
 
