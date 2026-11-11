@@ -31,7 +31,8 @@ The server accepts loopback Host values only, does not enable CORS, and limits J
 - GET /v1/resources — memory snapshot, CPU logical processor count, operating mode and recommended parallelism.
 - GET /v1/tasks?limit=50 — newest local tasks.
 - GET /v1/events?limit=50 — newest audit events.
+- GET /v1/browser/tabs?limit=20 — latest active tabs explicitly shared by the user through the Browser Bridge.
 - POST /v1/tasks — add a task to the local queue. JSON: {"title":"...","description":"..."}.
 - POST /v1/tasks/{uuid}/cancel — cancel a pending task.
 
-The current MVP persists and lists tasks but does not execute them. Browser control, desktop control, AI planning and image search are not implemented yet.
+The current MVP persists and lists tasks but does not execute them. Browser Bridge supports only explicit active-tab sharing in its preview; automatic tab discovery, DOM access, screenshots, desktop control, AI planning and image search are not implemented.
