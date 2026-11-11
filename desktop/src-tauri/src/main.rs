@@ -39,6 +39,7 @@ struct Dashboard {
     resources: Value,
     tasks: Vec<Value>,
     events: Vec<Value>,
+    browser_tabs: Vec<Value>,
 }
 
 fn api_get(token: &str, path: &str) -> Result<Value, String> {
@@ -183,8 +184,9 @@ fn get_dashboard(state: State<'_, AgentState>) -> Result<Dashboard, String> {
     let resources = api_get(&token, "/v1/resources")?.get("resources").cloned().unwrap_or(Value::Null);
     let tasks = api_get(&token, "/v1/tasks?limit=30")?.get("tasks").and_then(Value::as_array).cloned().unwrap_or_default();
     let events = api_get(&token, "/v1/events?limit=30")?.get("events").and_then(Value::as_array).cloned().unwrap_or_default();
+    let browser_tabs = api_get(&token, "/v1/browser/tabs?limit=20")?.get("tabs").and_then(Value::as_array).cloned().unwrap_or_default();
 
-    Ok(Dashboard { running: true, resources, tasks, events })
+    Ok(Dashboard { running: true, resources, tasks, events, browser_tabs })
 }
 
 #[tauri::command]
