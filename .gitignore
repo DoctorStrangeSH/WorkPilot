@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+.env
+
+# WorkPilot local data and secrets
+.workpilot/
+workpilot-data/
+*.sqlite
+*.sqlite3
+*.db
+*.log
+*.token
+
+# Desktop build output
+node_modules/
+dist/
+target/
+src-tauri/target/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
