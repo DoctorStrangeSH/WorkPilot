@@ -45,7 +45,7 @@ Last updated: 2026-11-11
 - Extension permissions are limited to `activeTab` and `nativeMessaging`. The user manually shares one active HTTP(S) tab; query/fragment are stripped, and no DOM/cookies/history/profile files are read.
 - The host validates the registered extension origin, uses bounded length-prefixed JSON, and stores at most 100 shared tabs in SQLite. Desktop API/UI exposes only those shared tabs.
 - Native Messaging support and host discovery still need testing against the user's exact Yandex Browser build. Do not claim the integration works end-to-end until tested there.
-- Latest release-mode NSIS artifact is still unverified; inspect the newest Windows installer workflow before distributing.
+- Latest release-mode NSIS build is still running after successful agent/host packaging, host smoke test, extension archive preparation and frontend dependency installation. No installer artifact is available until the build and upload steps complete.
 
 ## Important validation
 
@@ -66,7 +66,7 @@ Last updated: 2026-11-11
 
 ## Next tasks
 
-1. Inspect the latest Windows installer workflow, including the packaged agent and native-host smoke tests, and verify both uploaded artifacts.
+1. Wait for the current NSIS build/upload to complete and inspect both artifacts.
 2. Test install/uninstall and app start/stop with the bundled agent on the user's Windows machine.
 3. Verify Native Messaging registration and active-tab sharing on the user's exact Yandex Browser version/channel; ask for that version if it is not known.
 4. Verify persistent SQLite storage and that stopping the app leaves no agent process behind.
