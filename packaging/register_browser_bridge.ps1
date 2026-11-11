@@ -65,14 +65,19 @@ function Find-InstalledNativeHost {
         foreach ($key in (Get-ChildItem -LiteralPath $uninstallRoot -ErrorAction SilentlyContinue)) {
             try {
                 $entry = Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction Stop
-                if ([string]$entry.DisplayName -notmatch '^WorkPilot(?:\s|$)') { continue }
+                $displayNameProperty = $entry.PSObject.Properties["DisplayName"]
+                $installLocationProperty = $entry.PSObject.Properties["InstallLocation"]
+                $displayIconProperty = $entry.PSObject.Properties["DisplayIcon"]
 
-                if ($entry.InstallLocation) {
-                    Add-UniquePath -List $installRoots -Path ([string]$entry.InstallLocation)
+                $displayName = if ($displayNameProperty) { [string]$displayNameProperty.Value } else { "" }
+                if ($displayName -notmatch '^WorkPilot(?:\s|$)') { continue }
+
+                if ($installLocationProperty -and $installLocationProperty.Value) {
+                    Add-UniquePath -List $installRoots -Path ([string]$installLocationProperty.Value)
                 }
 
-                if ($entry.DisplayIcon) {
-                    $iconPath = [string]$entry.DisplayIcon
+                if ($displayIconProperty -and $displayIconProperty.Value) {
+                    $iconPath = [string]$displayIconProperty.Value
                     if ($iconPath -match '^"([^"]+\.exe)"') {
                         $iconPath = $Matches[1]
                     }
