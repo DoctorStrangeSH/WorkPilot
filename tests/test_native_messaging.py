@@ -34,6 +34,16 @@ class NativeMessagingProtocolTests(unittest.TestCase):
         write_message(destination, payload)
         self.assertEqual(read_message(io.BytesIO(destination.getvalue())), payload)
 
+    def test_reads_frames_split_across_short_pipe_reads(self):
+        class ChunkedReader(io.BytesIO):
+            def read(self, size=-1):
+                return super().read(min(size, 2) if size >= 0 else size)
+
+        payload = {"type": "hello", "title": "Разделённый поток"}
+        encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        source = ChunkedReader(struct.pack("<I", len(encoded)) + encoded)
+        self.assertEqual(read_message(source), payload)
+
     def test_eof_returns_none(self):
         self.assertIsNone(read_message(io.BytesIO()))
 
