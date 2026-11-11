@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "workpilot-agent"
+version = "0.1.0"
+description = "Local-first WorkPilot agent runtime"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "WorkPilot contributors" }]
+dependencies = []
+
+[project.scripts]
+workpilot-agent = "workpilot.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "agent"}
+
+[tool.setuptools.packages.find]
+where = ["agent"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
