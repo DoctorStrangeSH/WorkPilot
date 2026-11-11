@@ -30,11 +30,12 @@
 - Запуск и остановка Python Agent из приложения.
 - RAM/CPU, очередь задач, создание и отмена.
 - Локальный токен остаётся в Rust-процессе и не передаётся frontend.
-- Windows NSIS installer собирается через GitHub Actions; встроенный Python Agent упаковывается PyInstaller `onedir`.
+- Windows NSIS installer собирается через GitHub Actions; Python Agent и Native Messaging host упаковываются PyInstaller `onedir`.
+- Browser Bridge preview: ручная передача только активной вкладки через MV3 extension + Native Messaging; URL сохраняется без query и fragment.
 
-Сборка установщика ещё требует успешного завершения release workflow и проверки итогового артефакта.
+Установщик с новым Browser Bridge требует успешного завершения текущего Windows workflow и проверки артефакта. Совместимость Native Messaging ещё нужно проверить на точной версии Яндекс Браузера пользователя.
 
-**Пока не реализовано:** выполнение задач, Browser Bridge для Яндекс Браузера, Desktop Automation, поиск по изображениям и интеграция локальной LLM. Соответствующие экраны пока показывают статус «не подключено».
+**Пока не реализовано:** выполнение задач, автоматическое чтение/переключение вкладок, DOM, скриншоты, Desktop Automation, поиск по изображениям и интеграция локальной LLM.
 
 ## Запуск Python Agent отдельно
 
