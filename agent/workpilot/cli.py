@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import secrets
 
 from .config import database_path
@@ -27,14 +28,15 @@ def main() -> int:
 
     store = TaskStore(database_path())
     snapshot = ResourceManager().snapshot()
-    token = secrets.token_urlsafe(32)
+    token = os.environ.get("WORKPILOT_API_TOKEN") or secrets.token_urlsafe(32)
 
     print("WorkPilot Agent 0.1.0")
     print(f"Local API: http://{args.host}:{args.port}")
     print(f"Resource mode: {snapshot.mode}")
     print(f"Available memory: {snapshot.available_memory_bytes} bytes")
-    print("Temporary API token (keep private; valid for this run only):")
-    print(token)
+    if "WORKPILOT_API_TOKEN" not in os.environ:
+        print("Temporary API token (keep private; valid for this run only):")
+        print(token)
     print("Press Ctrl+C to stop. No browser or desktop actions are enabled in this MVP.")
 
     serve(args.host, args.port, store, token)
