@@ -36,6 +36,8 @@ There are no `tabs`, `history`, `cookies`, `scripting`, or broad host permission
 
 The script writes only to the current user's `%LOCALAPPDATA%\WorkPilot` folder and `HKCU` registry keys; it does not require administrator rights. It verifies the host EXE and adjacent PyInstaller `_internal` folder before registering.
 
+If the popup reports that the host is not found or access is forbidden, open `browser://policy` and inspect `NativeMessagingUserLevelHosts`, `NativeMessagingAllowlist` and `NativeMessagingBlocklist`. Yandex documents that user-level hosts are permitted when the policy is Not Configured (the default) or Enabled; Disabled blocks user-level hosts. Do not change a policy managed by an organization—ask its administrator instead.
+
 To unregister the native host:
 
 ```powershell
