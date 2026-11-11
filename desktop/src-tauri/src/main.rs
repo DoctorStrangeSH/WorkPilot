@@ -10,7 +10,7 @@ use std::{
     thread,
     time::Duration,
 };
-use tauri::State;
+use tauri::{path::BaseDirectory, Manager, State};
 
 const API_HOST: &str = "127.0.0.1";
 const API_PORT: u16 = 8765;
@@ -69,7 +69,7 @@ fn agent_directory() -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
-fn start_agent(state: State<'_, AgentState>) -> Result<String, String> {
+fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<String, String> {
     let mut child_guard = state.child.lock().map_err(|_| "Ошибка состояния агента".to_string())?;
     if let Some(child) = child_guard.as_mut() {
         if child.try_wait().map_err(|error| error.to_string())?.is_none() {
@@ -82,21 +82,47 @@ fn start_agent(state: State<'_, AgentState>) -> Result<String, String> {
         return Err("Порт 8765 уже занят. Останови другой экземпляр WorkPilot Agent.".to_string());
     }
 
-    let agent_dir = agent_directory()?;
     let mut random = [0_u8; 32];
     OsRng.fill_bytes(&mut random);
     let token = random.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
-    let python = std::env::var("WORKPILOT_PYTHON").unwrap_or_else(|_| "python".to_string());
 
-    let mut command = Command::new(python);
+    let packaged_agent = app
+        .path()
+        .resolve("resources/workpilot-agent.exe", BaseDirectory::Resource)
+        .ok()
+        .filter(|path| path.is_file());
+
+    let mut command = if let Some(agent_path) = packaged_agent {
+        Command::new(agent_path)
+    } else {
+        #[cfg(debug_assertions)]
+        {
+            let agent_dir = agent_directory()?;
+            let python = std::env::var("WORKPILOT_PYTHON")
+                .unwrap_or_else(|_| "python".to_string());
+            let mut command = Command::new(python);
+            command
+                .arg("-m")
+                .arg("workpilot")
+                .env("PYTHONPATH", &agent_dir)
+                .current_dir(&agent_dir);
+            command
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            return Err(
+                "Не найден встроенный WorkPilot Agent. Переустанови приложение.".to_string()
+            );
+        }
+    };
+
     command
-        .arg("-m").arg("workpilot")
-        .arg("--host").arg(API_HOST)
-        .arg("--port").arg(API_PORT.to_string())
-        .env("PYTHONPATH", &agent_dir)
+        .arg("--host")
+        .arg(API_HOST)
+        .arg("--port")
+        .arg(API_PORT.to_string())
         .env("PYTHONUNBUFFERED", "1")
         .env("WORKPILOT_API_TOKEN", &token)
-        .current_dir(&agent_dir)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
