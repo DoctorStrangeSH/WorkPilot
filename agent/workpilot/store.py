@@ -65,6 +65,16 @@ class TaskStore:
                     FOREIGN KEY(task_id) REFERENCES tasks(id)
                 );
 
+                CREATE TABLE IF NOT EXISTS browser_tabs (
+                    id TEXT PRIMARY KEY,
+                    url TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    shared_at TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_browser_tabs_shared
+                    ON browser_tabs(shared_at DESC);
+
                 CREATE INDEX IF NOT EXISTS idx_tasks_created
                     ON tasks(created_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_events_created
@@ -128,5 +138,34 @@ class TaskStore:
         with self._session() as db:
             rows = db.execute(
                 "SELECT * FROM events ORDER BY id DESC LIMIT ?", (safe_limit,)
+            ).fetchall()
+        return [dict(row) for row in rows]
+    def record_browser_tab(self, url: str, title: str) -> dict[str, Any]:
+        """Persist a tab explicitly shared by the user through the browser extension."""
+        tab_id = str(uuid.uuid4())
+        now = _now()
+        with self._session() as db:
+            db.execute(
+                "INSERT INTO browser_tabs (id, url, title, shared_at) VALUES (?, ?, ?, ?)",
+                (tab_id, url, title, now),
+            )
+            db.execute(
+                "DELETE FROM browser_tabs WHERE id NOT IN "
+                "(SELECT id FROM browser_tabs ORDER BY shared_at DESC LIMIT 100)"
+            )
+            db.execute(
+                """INSERT INTO events (task_id, event_type, message, created_at)
+                   VALUES (NULL, 'browser.tab_shared',
+                           'Пользователь поделился активной вкладкой', ?)""",
+                (now,),
+            )
+        return {"id": tab_id, "url": url, "title": title, "shared_at": now}
+
+    def list_browser_tabs(self, limit: int = 20) -> list[dict[str, Any]]:
+        safe_limit = max(1, min(int(limit), 100))
+        with self._session() as db:
+            rows = db.execute(
+                "SELECT * FROM browser_tabs ORDER BY shared_at DESC LIMIT ?",
+                (safe_limit,),
             ).fetchall()
         return [dict(row) for row in rows]
