@@ -37,7 +37,7 @@ Last updated: 2026-11-11
 - Create/cancel actions operate on the SQLite queue.
 - Browser, image search and AI sections are placeholders explicitly marked as not connected.
 - Tauri NSIS bundling is enabled for a per-user Windows installer.
-- PyInstaller entry point: `packaging/workpilot_agent_entry.py`; output expected at `desktop/src-tauri/resources/workpilot-agent.exe`.
+- PyInstaller entry point: `packaging/workpilot_agent_entry.py`; build mode is `onedir`, executable expected at `desktop/src-tauri/resources/workpilot-agent/workpilot-agent.exe` with its `_internal` runtime folder alongside it.
 - Bundle resources include `resources/`; release Rust host resolves and starts the packaged agent. Debug builds use Python from the source tree.
 - `.github/workflows/windows-installer.yml` builds the NSIS installer and uploads a 14-day artifact. Do not claim the installer exists until this workflow succeeds.
 
