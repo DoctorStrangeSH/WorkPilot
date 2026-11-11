@@ -3,10 +3,20 @@ name: Windows installer
 on:
   push:
     branches: ["feat/desktop-shell"]
+    paths:
+      - "agent/**"
+      - "desktop/**"
+      - "packaging/**"
+      - "pyproject.toml"
+      - ".github/workflows/windows-installer.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-installer:
