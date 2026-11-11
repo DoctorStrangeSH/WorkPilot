@@ -1,0 +1,9 @@
+{
+  "$schema":"https://schema.tauri.app/config/2",
+  "productName":"WorkPilot",
+  "version":"0.2.0",
+  "identifier":"com.workpilot.desktop",
+  "build":{"beforeDevCommand":"npm run dev","devUrl":"http://127.0.0.1:1420","beforeBuildCommand":"npm run build","frontendDist":"../dist"},
+  "app":{"windows":[{"title":"WorkPilot","width":1440,"height":920,"minWidth":1080,"minHeight":720,"center":true,"resizable":true}],"security":{"csp":"default-src 'self'; connect-src ipc: http://ipc.localhost"}},
+  "bundle":{"active":false}
+}
