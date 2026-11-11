@@ -21,6 +21,18 @@ struct AgentState {
     token: Mutex<Option<String>>,
 }
 
+
+impl Drop for AgentState {
+    fn drop(&mut self) {
+        if let Ok(child_slot) = self.child.get_mut() {
+            if let Some(mut child) = child_slot.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+}
+
 #[derive(Serialize)]
 struct Dashboard {
     running: bool,
