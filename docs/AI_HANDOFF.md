@@ -39,7 +39,9 @@ Last updated: 2026-11-11
 - Tauri NSIS bundling is enabled for a per-user Windows installer.
 - PyInstaller entry point: `packaging/workpilot_agent_entry.py`; build mode is `onedir`, executable expected at `desktop/src-tauri/resources/workpilot-agent/workpilot-agent.exe` with its `_internal` runtime folder alongside it.
 - Bundle resources include `resources/`; release Rust host resolves and starts the packaged agent. Debug builds use Python from the source tree.
-- `.github/workflows/windows-installer.yml` builds the NSIS installer and uploads a 14-day artifact. Do not claim the installer exists until this workflow succeeds.
+- `.github/workflows/windows-installer.yml` builds the NSIS installer and uploads a 14-day artifact.
+- PyInstaller `onedir` output and the packaged agent `--help` smoke test passed on Windows.
+- Latest Windows desktop checks passed: Vite build, Tauri `cargo check`, and Windows Python unit tests. The release-mode installer build is still running; do not claim a final installer until the onedir NSIS workflow succeeds.
 
 ## Important validation
 
@@ -60,9 +62,9 @@ Last updated: 2026-11-11
 
 ## Next tasks
 
-1. Verify Windows unit tests after fixing SQLite connection lifecycle; ensure the desktop checks pass.
-2. Run the Windows installer workflow and inspect the generated NSIS artifact.
-3. Test installed app start/stop and persistent SQLite storage on the user's Windows machine.
+1. Wait for the onedir NSIS workflow to complete and inspect the generated artifact.
+2. Test install/uninstall and app start/stop with the bundled agent on the user's Windows machine.
+3. Verify persistent SQLite storage and that stopping the app leaves no agent process behind.
 4. Implement Yandex Browser extension + Native Messaging after verifying the installed browser version.
 5. Add desktop UI automation and Vision Engine.
 6. Add a local model provider only after measuring RAM use on the 16 GB target.
