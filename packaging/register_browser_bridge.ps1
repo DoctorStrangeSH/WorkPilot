@@ -25,11 +25,12 @@ $manifest = @{
     type = "stdio"
     allowed_origins = @("chrome-extension://$ExtensionId/")
 }
-$manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$manifestJson = $manifest | ConvertTo-Json -Depth 5
+[System.IO.File]::WriteAllText($manifestPath, $manifestJson, $utf8NoBom)
 
-@{ extension_id = $ExtensionId } |
-    ConvertTo-Json |
-    Set-Content -LiteralPath $configPath -Encoding UTF8
+$configJson = @{ extension_id = $ExtensionId } | ConvertTo-Json
+[System.IO.File]::WriteAllText($configPath, $configJson, $utf8NoBom)
 
 # Yandex Browser is Chromium-based. Register the Yandex-specific location and
 # Chromium fallback for builds that use the upstream Chromium lookup path.
