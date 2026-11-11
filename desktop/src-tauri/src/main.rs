@@ -88,16 +88,26 @@ fn start_agent(state: State<'_, AgentState>) -> Result<String, String> {
     let token = random.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
     let python = std::env::var("WORKPILOT_PYTHON").unwrap_or_else(|_| "python".to_string());
 
-    let child = Command::new(python)
+    let mut command = Command::new(python);
+    command
         .arg("-m").arg("workpilot")
         .arg("--host").arg(API_HOST)
         .arg("--port").arg(API_PORT.to_string())
         .env("PYTHONPATH", &agent_dir)
+        .env("PYTHONUNBUFFERED", "1")
         .env("WORKPILOT_API_TOKEN", &token)
         .current_dir(&agent_dir)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::null());
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
+
+    let child = command
         .spawn()
         .map_err(|error| format!("Не удалось запустить Python Agent. Проверь Python 3.11+ и PATH: {error}"))?;
 
