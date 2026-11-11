@@ -25,7 +25,7 @@
 - [x] Реализовать просмотр, создание и отмену задач через локальный API.
 - [x] Обозначить неподключённые Browser/Vision/AI разделы.
 - [x] Проверить frontend build и Windows Rust compilation в CI (успешны; отдельно исправлена Windows SQLite file-lock ошибка в тестах).
-- [x] Подготовить PyInstaller entry point и release-mode запуск упакованного Python Agent.
+- [x] Подготовить PyInstaller entry point и release-mode запуск упакованного Python Agent (`onedir`, чтобы остановка не оставляла дочерний процесс).
 - [x] Включить NSIS per-user bundle и workflow сборки Windows installer.
 - [ ] Подтвердить прохождение Windows unit tests после исправления SQLite connection lifecycle.
 - [ ] Получить успешный NSIS artifact из Windows installer workflow.
