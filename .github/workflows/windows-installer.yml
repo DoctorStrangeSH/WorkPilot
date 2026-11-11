@@ -32,7 +32,7 @@ jobs:
 
       - name: Package local Python agent
         run: >-
-          python -m PyInstaller --clean --onefile
+          python -m PyInstaller --clean --onedir
           --name workpilot-agent
           --distpath desktop/src-tauri/resources
           --workpath "$env:RUNNER_TEMP/workpilot-pyinstaller"
@@ -42,11 +42,13 @@ jobs:
       - name: Verify bundled agent
         shell: pwsh
         run: |
-          $agent = "desktop/src-tauri/resources/workpilot-agent.exe"
+          $agent = "desktop/src-tauri/resources/workpilot-agent/workpilot-agent.exe"
           if (!(Test-Path $agent)) { throw "Bundled Python agent was not produced." }
           $size = (Get-Item $agent).Length
           if ($size -lt 1000000) { throw "Bundled agent looks unexpectedly small ($size bytes)." }
           Write-Host "Bundled agent size: $size bytes"
+          & $agent --help | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "Bundled agent smoke test failed." }
 
       - name: Install frontend dependencies
         working-directory: desktop
