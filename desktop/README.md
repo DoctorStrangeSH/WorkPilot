@@ -37,6 +37,10 @@ The Tauri host starts the Python agent on `127.0.0.1:8765`. It injects a random 
 
 If Python is installed outside PATH, set `WORKPILOT_PYTHON` to the Python executable path before starting Tauri. If the agent source directory is not at the repository's expected `agent` path, set `WORKPILOT_AGENT_DIR`.
 
+## Build Windows installer in CI
+
+Push to `feat/desktop-shell` or manually run the **Windows installer** workflow. It packages the Python agent with PyInstaller, runs `tauri build --bundles nsis`, and uploads `workpilot-windows-installer` for 14 days.
+
 ## Build frontend
 
 ```powershell
@@ -45,7 +49,7 @@ npm install
 npm run build
 ```
 
-The desktop CI validates the frontend and checks Rust compilation on Windows. The Tauri bundle is intentionally disabled while the runtime packaging strategy is being finalized. A distributable installer is not produced by this MVP.
+The desktop CI validates the frontend and checks Rust compilation on Windows. The Windows NSIS bundle now includes a PyInstaller-built `workpilot-agent.exe` under `resources/`. The release-mode Rust host resolves and launches that executable; debug mode continues to launch Python from the repository. The installer workflow is `.github/workflows/windows-installer.yml`. A downloadable installer is considered ready only after that workflow completes successfully and the artifact is inspected.
 
 ## Security notes
 
