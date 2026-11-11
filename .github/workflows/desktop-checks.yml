@@ -1,0 +1,32 @@
+name: Desktop checks
+
+on:
+  push:
+    branches: ["main", "feat/**"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install frontend dependencies
+        working-directory: desktop
+        run: npm install
+      - name: Build frontend
+        working-directory: desktop
+        run: npm run build
+      - name: Check Tauri host
+        run: cargo check --manifest-path desktop/src-tauri/Cargo.toml
+      - name: Run Python unit tests
+        env:
+          PYTHONPATH: agent
+        run: python -m unittest discover -s tests -v
