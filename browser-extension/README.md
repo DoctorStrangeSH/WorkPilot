@@ -22,13 +22,36 @@ There are no `tabs`, `history`, `cookies`, `scripting`, or broad host permission
    .\packaging\register_browser_bridge.ps1 -ExtensionId YOUR_32_CHARACTER_EXTENSION_ID
    ```
 
-   Or download the script from the feature branch and run it:
+   Or download the verified script pinned to the ASCII fix commit (paste the entire block):
 
    ```powershell
-   $script = Join-Path $env:TEMP "register_workpilot_browser_bridge.ps1"
-   Invoke-WebRequest "https://raw.githubusercontent.com/DoctorStrangeSH/WorkPilot/feat/desktop-shell/packaging/register_browser_bridge.ps1" -OutFile $script
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -ExtensionId YOUR_32_CHARACTER_EXTENSION_ID
+   & {
+       $ErrorActionPreference = "Stop"
+       $sha = "c7c5f48a4a206048a9aef65efeacce24face79c9"
+       $expected = "de7350d5df7d50b7192a030fa79da443b1bf82b269529a4a6525d602eb87f470"
+       $fresh = Join-Path $env:TEMP ("workpilot-register-" + [guid]::NewGuid() + ".ps1")
+       $url = "https://raw.githubusercontent.com/DoctorStrangeSH/WorkPilot/$sha/packaging/register_browser_bridge.ps1"
+       Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $fresh -ErrorAction Stop
+       $bytes = [IO.File]::ReadAllBytes($fresh)
+       if ($bytes.Length -eq 0 -or @($bytes | Where-Object { $_ -gt 0x7F }).Count -gt 0) {
+           throw "Downloaded script is empty or non-ASCII. Nothing executed."
+       }
+       $hasher = [Security.Cryptography.SHA256]::Create()
+       try { $actual = [BitConverter]::ToString($hasher.ComputeHash($bytes)).Replace("-", "").ToLowerInvariant() }
+       finally { $hasher.Dispose() }
+       if ($actual -ne $expected) {
+           throw "Script SHA256 mismatch. Nothing executed."
+       }
+       $tokens = $null
+       $parseErrors = $null
+       [System.Management.Automation.Language.Parser]::ParseFile($fresh, [ref]$tokens, [ref]$parseErrors) | Out-Null
+       if ($parseErrors.Count -gt 0) { throw "Script syntax check failed. Nothing executed." }
+       powershell.exe -NoProfile -ExecutionPolicy Bypass -File $fresh -ExtensionId YOUR_32_CHARACTER_EXTENSION_ID
+       if ($LASTEXITCODE -ne 0) { throw "Registration failed (exit $LASTEXITCODE)." }
+   }
    ```
+
+   The block creates a unique file, stops on download/ASCII/hash/syntax failure, and only then executes that file. Never rerun the previous `$script` temp file. The commit URL avoids the mutable branch cache; the SHA256 above covers the exact 7433 downloaded bytes.
 
    If the host is installed in a non-standard location, add `-NativeHostPath "C:\full\path\to\workpilot-native-host.exe"`.
 7. Close all Yandex Browser windows (including background processes) and restart the browser.
