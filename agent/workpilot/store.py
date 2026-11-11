@@ -140,6 +140,7 @@ class TaskStore:
                 "SELECT * FROM events ORDER BY id DESC LIMIT ?", (safe_limit,)
             ).fetchall()
         return [dict(row) for row in rows]
+
     def record_browser_tab(self, url: str, title: str) -> dict[str, Any]:
         """Persist a tab explicitly shared by the user through the browser extension."""
         tab_id = str(uuid.uuid4())
