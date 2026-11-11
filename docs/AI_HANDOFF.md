@@ -36,7 +36,10 @@ Last updated: 2026-11-11
 - Dashboard shows memory and CPU metrics, task queue and event log.
 - Create/cancel actions operate on the SQLite queue.
 - Browser, image search and AI sections are placeholders explicitly marked as not connected.
-- Tauri bundle is disabled; no installer/EXE is produced yet.
+- Tauri NSIS bundling is enabled for a per-user Windows installer.
+- PyInstaller entry point: `packaging/workpilot_agent_entry.py`; output expected at `desktop/src-tauri/resources/workpilot-agent.exe`.
+- Bundle resources include `resources/`; release Rust host resolves and starts the packaged agent. Debug builds use Python from the source tree.
+- `.github/workflows/windows-installer.yml` builds the NSIS installer and uploads a 14-day artifact. Do not claim the installer exists until this workflow succeeds.
 
 ## Important validation
 
@@ -57,9 +60,9 @@ Last updated: 2026-11-11
 
 ## Next tasks
 
-1. Resolve any Windows CI failures based on actual logs.
-2. Test app start/stop on the user's Windows machine.
-3. Package the Python runtime as a sidecar and create an installer.
+1. Verify Windows unit tests after fixing SQLite connection lifecycle; ensure the desktop checks pass.
+2. Run the Windows installer workflow and inspect the generated NSIS artifact.
+3. Test installed app start/stop and persistent SQLite storage on the user's Windows machine.
 4. Implement Yandex Browser extension + Native Messaging after verifying the installed browser version.
 5. Add desktop UI automation and Vision Engine.
 6. Add a local model provider only after measuring RAM use on the 16 GB target.
