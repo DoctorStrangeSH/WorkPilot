@@ -25,26 +25,30 @@ MAX_MESSAGE_BYTES = 1024 * 1024
 _EXTENSION_ID_RE = re.compile(r"^[a-p]{32}$")
 
 
+def _read_exact(stream: BinaryIO, length: int, *, allow_eof: bool = False) -> bytes | None:
+    chunks = bytearray()
+    while len(chunks) < length:
+        chunk = stream.read(length - len(chunks))
+        if not chunk:
+            if allow_eof and not chunks:
+                return None
+            raise ValueError("incomplete native messaging frame")
+        chunks.extend(chunk)
+    return bytes(chunks)
+
+
 def read_message(stream: BinaryIO) -> dict[str, Any] | None:
     """Read one length-prefixed UTF-8 JSON object from a native messaging stream."""
-    header = stream.read(4)
-    if not header:
+    header = _read_exact(stream, 4, allow_eof=True)
+    if header is None:
         return None
-    if len(header) != 4:
-        raise ValueError("incomplete native messaging header")
 
     (length,) = struct.unpack("<I", header)
     if length < 2 or length > MAX_MESSAGE_BYTES:
         raise ValueError("native messaging frame size is not allowed")
 
-    chunks = bytearray()
-    while len(chunks) < length:
-        chunk = stream.read(length - len(chunks))
-        if not chunk:
-            raise ValueError("incomplete native messaging payload")
-        chunks.extend(chunk)
-
-    value = json.loads(chunks.decode("utf-8"))
+    payload = _read_exact(stream, length)
+    value = json.loads(payload.decode("utf-8"))
     if not isinstance(value, dict):
         raise ValueError("native messaging payload must be a JSON object")
     return value
@@ -122,7 +126,7 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
         if not isinstance(raw_title, str):
             raise ValueError("tab title must be text")
         title = "".join(
-            char for char in raw_title if char >= " " and char != "\\x7f"
+            char for char in raw_title if char >= " " and ord(char) != 127
         )[:300].strip()
         if not title:
             title = urlsplit(url).hostname or "Shared tab"
