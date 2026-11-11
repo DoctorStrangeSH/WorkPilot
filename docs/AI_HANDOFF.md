@@ -48,7 +48,8 @@ Last updated: 2026-11-11
 - Yandex's official docs confirm Chrome/Opera catalogue extension support and document NativeMessagingUserLevelHosts; default Not Configured permits user-level hosts. The public docs do not establish a registry lookup contract for every stable desktop build.
 - Registration script auto-detects the host from the running WorkPilot process, current-user uninstall metadata and the known Tauri resource layout; explicit `-NativeHostPath` override is supported. It writes UTF-8 without BOM and registers per-user Yandex + Chromium fallback keys.
 - Latest successful Windows installer workflow run: `43032886364` (commit `4378f558d44a7123c6fb527bc8059000aba24e4e`). Artifacts were downloaded and inspected: NSIS installer ZIP contained `WorkPilot_0.2.0_x64-setup.exe`; extension ZIP contained `manifest.json`, popup HTML/CSS/JS and README.
-- Subsequent Python and Desktop checks passed on branch revision `55a17cddcb657794b42df4f4ffabfbb87e16e81d`. Newer host-registration script changes trigger another Windows installer workflow; verify its PowerShell parse step and artifact before distributing.
+- Registration script PowerShell syntax validation passed in Windows workflow `43037394425`; the same run packaged both Python onedir folders and passed the Native Messaging host smoke test, then was cancelled during frontend dependency setup before NSIS build/artifact upload due a subsequent branch update. The already-successful installer artifact `43032886364` remains the current installable build.
+- Latest Python CI passed on revision `0ef9c30`; frontend build passed on that revision, and Tauri Rust check was still running at last inspection.
 
 ## Important validation
 
