@@ -104,6 +104,13 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager):
                 except ValueError:
                     limit = 50
                 self._send(200, {"events": store.list_events(limit)})
+            elif parsed.path == "/v1/browser/tabs":
+                query = parse_qs(parsed.query)
+                try:
+                    limit = int(query.get("limit", ["20"])[0])
+                except ValueError:
+                    limit = 20
+                self._send(200, {"tabs": store.list_browser_tabs(limit)})
             else:
                 self._send(404, {"error": "not_found"})
 
