@@ -45,6 +45,18 @@ def main() -> int:
             json.dumps({"extension_id": extension_id}), encoding="utf-8"
         )
 
+        rejected = subprocess.run(
+            [str(executable), f"chrome-extension://{'b' * 32}/"],
+            input=b"",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=environment,
+            timeout=10,
+            check=False,
+        )
+        if rejected.returncode != 3 or rejected.stdout:
+            raise RuntimeError("Native host did not reject an unregistered extension origin")
+
         requests = b"".join(
             [
                 frame({"type": "hello", "request_id": "hello"}),
@@ -91,7 +103,7 @@ def main() -> int:
         database = app_dir / "workpilot.sqlite3"
         if not database.is_file():
             raise RuntimeError("Native host did not persist the explicitly shared tab")
-        print("Native Messaging host framing, origin check, tab validation and SQLite write passed.")
+        print("Native Messaging host origin rejection, framing, tab validation and SQLite write passed.")
     return 0
 
 
