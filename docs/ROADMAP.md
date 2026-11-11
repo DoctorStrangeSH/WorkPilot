@@ -39,7 +39,8 @@
 - [x] Удалять query/fragment и отклонять URL с credentials перед сохранением.
 - [x] Сохранять последние 100 явно переданных вкладок в SQLite и показывать их в Desktop UI.
 - [x] Добавить unit-тесты протокола, проверки URL и authenticated API endpoint.
-- [ ] Подтвердить PyInstaller Native Messaging host smoke test и сборку NSIS в Windows CI.
+- [x] Подтвердить PyInstaller Native Messaging host smoke test в Windows CI (origin rejection, framing, URL sanitization, SQLite write).
+- [ ] Получить успешный NSIS artifact и extension archive из текущего Windows workflow.
 - [ ] Проверить регистрацию host и ручную передачу вкладки на точной версии/канале Яндекс Браузера пользователя.
 - [ ] Реализовать reconnect, тайм-ауты и диагностику соединения.
 - [ ] Отдельно спроектировать чтение DOM/скриншоты и список вкладок только после явного согласия и отдельного permission review.
