@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 
 def _now() -> str:
@@ -26,8 +27,23 @@ class TaskStore:
         connection.execute("PRAGMA busy_timeout = 5000")
         return connection
 
+    @contextmanager
+    def _session(self) -> Iterator[sqlite3.Connection]:
+        """Commit/rollback a database operation and always release its file handle.
+
+        sqlite3.Connection's context manager does not close the connection. Explicit
+        closure is essential on Windows, where an open handle prevents temporary
+        database directories from being removed and can block app shutdown.
+        """
+        db = self._connect()
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
+
     def _initialize(self) -> None:
-        with self._connect() as db:
+        with self._session() as db:
             db.execute("PRAGMA journal_mode = WAL")
             db.executescript(
                 """
@@ -59,7 +75,7 @@ class TaskStore:
     def create_task(self, title: str, description: str = "") -> dict[str, Any]:
         task_id = str(uuid.uuid4())
         now = _now()
-        with self._connect() as db:
+        with self._session() as db:
             db.execute(
                 """INSERT INTO tasks
                    (id, title, description, status, created_at, updated_at)
@@ -75,13 +91,13 @@ class TaskStore:
         return self.get_task(task_id)
 
     def get_task(self, task_id: str) -> dict[str, Any] | None:
-        with self._connect() as db:
+        with self._session() as db:
             row = db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return dict(row) if row else None
 
     def list_tasks(self, limit: int = 50) -> list[dict[str, Any]]:
         safe_limit = max(1, min(int(limit), 100))
-        with self._connect() as db:
+        with self._session() as db:
             rows = db.execute(
                 "SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?",
                 (safe_limit,),
@@ -90,7 +106,7 @@ class TaskStore:
 
     def cancel_task(self, task_id: str) -> dict[str, Any] | None:
         now = _now()
-        with self._connect() as db:
+        with self._session() as db:
             row = db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
             if row is None:
                 return None
@@ -109,7 +125,7 @@ class TaskStore:
 
     def list_events(self, limit: int = 50) -> list[dict[str, Any]]:
         safe_limit = max(1, min(int(limit), 200))
-        with self._connect() as db:
+        with self._session() as db:
             rows = db.execute(
                 "SELECT * FROM events ORDER BY id DESC LIMIT ?", (safe_limit,)
             ).fetchall()
