@@ -49,7 +49,7 @@ npm install
 npm run build
 ```
 
-The desktop CI validates the frontend and checks Rust compilation on Windows. The Windows NSIS bundle now includes a PyInstaller-built `workpilot-agent.exe` under `resources/`. The release-mode Rust host resolves and launches that executable; debug mode continues to launch Python from the repository. The installer workflow is `.github/workflows/windows-installer.yml`. A downloadable installer is considered ready only after that workflow completes successfully and the artifact is inspected.
+The desktop CI validates the frontend and checks Rust compilation on Windows. The Windows NSIS bundle now includes a PyInstaller `onedir` output at `resources/workpilot-agent/workpilot-agent.exe`. The release-mode Rust host resolves and launches that executable from the onedir folder; debug mode continues to launch Python from the repository. The installer workflow is `.github/workflows/windows-installer.yml`. A downloadable installer is considered ready only after that workflow completes successfully and the artifact is inspected.
 
 ## Security notes
 
