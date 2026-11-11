@@ -9,7 +9,7 @@ import {
 
 type Task = { id:string; title:string; description:string; status:"pending"|"cancelled"; created_at:string; };
 type EventItem = { id:number; event_type:string; message:string; created_at:string; };
-type Resources = { total_memory_bytes:number; available_memory_bytes:number; used_memory_percent:number; logical_processors:number; mode:"normal"|"economy"|"emergency"; recommended_parallel_jobs:number; };
+type Resources = { total_memory_bytes:number; available_memory_bytes:number; used_memory_percent:number; logical_processors:number; cpu_usage_percent:number; mode:"normal"|"economy"|"emergency"; recommended_parallel_jobs:number; };
 type Dashboard = { running:boolean; resources:Resources; tasks:Task[]; events:EventItem[]; };
 type Page = "overview"|"tasks"|"browser"|"search"|"ai"|"settings";
 
@@ -76,7 +76,7 @@ export default function App(){
           </section>
           <section className="metrics">
             <Metric icon={<MemoryStick/>} label="Оперативная память" value={data?data.resources.used_memory_percent.toFixed(1)+"%":"—"} detail={data?bytes(data.resources.available_memory_bytes)+" свободно из "+bytes(data.resources.total_memory_bytes):"Ожидает подключения"} tone={mode==="emergency"?"red":mode==="economy"?"amber":"green"} progress={data?.resources.used_memory_percent}/>
-            <Metric icon={<Cpu/>} label="Процессор" value={data?String(data.resources.logical_processors):"—"} detail="Логических процессоров" tone="violet"/>
+            <Metric icon={<Cpu/>} label="Загрузка процессора" value={data?data.resources.cpu_usage_percent.toFixed(1)+"%":"—"} detail={data?data.resources.logical_processors+" логических процессоров":"Ожидает подключения"} tone="violet" progress={data?.resources.cpu_usage_percent}/>
             <Metric icon={<ListTodo/>} label="Задачи в очереди" value={String(data?.tasks.filter(t=>t.status==="pending").length??0)} detail="Ожидают выполнения" tone="blue"/>
             <Metric icon={<Activity/>} label="Режим ресурсов" value={modeLabel} detail={data?"Параллельность: "+data.resources.recommended_parallel_jobs:"Ожидает подключения"} tone={mode==="emergency"?"red":mode==="economy"?"amber":"green"}/>
           </section>
