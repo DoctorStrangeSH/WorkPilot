@@ -27,8 +27,9 @@
 - [x] Проверить frontend build и Windows Rust compilation в CI (успешны; отдельно исправлена Windows SQLite file-lock ошибка в тестах).
 - [x] Подготовить PyInstaller entry point и release-mode запуск упакованного Python Agent (`onedir`, чтобы остановка не оставляла дочерний процесс).
 - [x] Включить NSIS per-user bundle и workflow сборки Windows installer.
-- [ ] Подтвердить прохождение Windows unit tests после исправления SQLite connection lifecycle.
-- [ ] Получить успешный NSIS artifact из Windows installer workflow.
+- [x] Подтвердить прохождение Windows unit tests после исправления SQLite connection lifecycle.
+- [x] Проверить PyInstaller onedir package и запуск упакованного агента с `--help` в Windows CI.
+- [ ] Получить успешный NSIS artifact из Windows installer workflow (текущая onedir-сборка выполняется).
 - [ ] Проверить установку и запуск на компьютере пользователя.
 
 ## Этап 3 — Яндекс Браузер: Browser Bridge
