@@ -14,11 +14,11 @@ from workpilot.store import TaskStore
 class LocalApiTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        store = TaskStore(Path(self.temp_dir.name) / "api.sqlite3")
+        self.store = TaskStore(Path(self.temp_dir.name) / "api.sqlite3")
         self.token = "test-only-token"
         self.server = WorkPilotHTTPServer(
             ("127.0.0.1", 0),
-            make_handler(store, self.token, ResourceManager()),
+            make_handler(self.store, self.token, ResourceManager()),
         )
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -39,6 +39,18 @@ class LocalApiTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as error:
             urlopen(f"{self.base_url}/v1/tasks", timeout=2)
         self.assertEqual(error.exception.code, 401)
+
+    def test_authenticated_browser_tabs_endpoint_lists_shared_tabs(self):
+        self.store.record_browser_tab("https://example.com/path", "Example")
+        request = Request(
+            f"{self.base_url}/v1/browser/tabs?limit=10",
+            headers={"Authorization": f"Bearer {self.token}"},
+        )
+        with urlopen(request, timeout=2) as response:
+            payload = json.loads(response.read())
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["tabs"][0]["title"], "Example")
+        self.assertEqual(payload["tabs"][0]["url"], "https://example.com/path")
 
     def test_authenticated_request_can_queue_task(self):
         body = json.dumps({"title": "Read-only check", "description": "Test"}).encode()
