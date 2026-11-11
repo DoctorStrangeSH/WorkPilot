@@ -88,7 +88,7 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
 
     let packaged_agent = app
         .path()
-        .resolve("resources/workpilot-agent.exe", BaseDirectory::Resource)
+        .resolve("resources/workpilot-agent/workpilot-agent.exe", BaseDirectory::Resource)
         .ok()
         .filter(|path| path.is_file());
 
