@@ -24,9 +24,12 @@
 - [x] Вывести RAM/CPU и режим Resource Manager.
 - [x] Реализовать просмотр, создание и отмену задач через локальный API.
 - [x] Обозначить неподключённые Browser/Vision/AI разделы.
-- [ ] Проверить frontend build и Windows Rust compilation в CI.
-- [ ] Проверить запуск на компьютере пользователя.
-- [ ] Подготовить packaged Python sidecar и Windows installer.
+- [x] Проверить frontend build и Windows Rust compilation в CI (успешны; отдельно исправлена Windows SQLite file-lock ошибка в тестах).
+- [x] Подготовить PyInstaller entry point и release-mode запуск упакованного Python Agent.
+- [x] Включить NSIS per-user bundle и workflow сборки Windows installer.
+- [ ] Подтвердить прохождение Windows unit tests после исправления SQLite connection lifecycle.
+- [ ] Получить успешный NSIS artifact из Windows installer workflow.
+- [ ] Проверить установку и запуск на компьютере пользователя.
 
 ## Этап 3 — Яндекс Браузер: Browser Bridge
 - [ ] Проверить версию Яндекс Браузера и поддержку расширения/Native Messaging.
