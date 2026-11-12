@@ -33,7 +33,7 @@ class KnowledgeBase:
         if not isinstance(title, str) or not title.strip() or len(title) > 120:
             raise KnowledgeError("Название: от 1 до 120 символов")
         limit = 2000 if kind == "memory" else 6000
-        if kind not in {"memory", "note"} or not isinstance(content, str) or not content.strip() or len(content) > limit:
+        if not isinstance(kind, str) or kind not in {"memory", "note"} or not isinstance(content, str) or not content.strip() or len(content) > limit:
             raise KnowledgeError(f"Текст: от 1 до {limit} символов")
 
     def save(self, request_id, title, content, kind="memory"):

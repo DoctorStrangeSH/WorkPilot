@@ -31,7 +31,7 @@ class KnowledgeTests(unittest.TestCase):
         with self.assertRaises(KnowledgeError):self.base.save(record['id'],'Изменено',record['content'])
         self.assertEqual(len(self.base.list()),1)
     def test_invalid_and_excessive_memory_is_rejected(self):
-        for title,content,kind in [('', 'text','memory'),('title','x'*2001,'memory'),('title','text','command')]:
+        for title,content,kind in [('', 'text','memory'),('title','x'*2001,'memory'),('title','text','command'),('title','text',[]),('title','text',{})]:
             with self.assertRaises(KnowledgeError):self.base.save(str(uuid4()),title,content,kind)
         for n in range(12):self.save(title=str(n))
         with self.assertRaises(KnowledgeError):self.save()
