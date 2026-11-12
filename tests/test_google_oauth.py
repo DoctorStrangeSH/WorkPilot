@@ -18,7 +18,7 @@ from malenia.google_oauth import (
 
 
 CLIENT_ID = "123456789012-testclient.apps.googleusercontent.com"
-REDIRECT = "http://127.0.0.1:49152/oauth2/callback"
+REDIRECT = "http://127.0.0.1:49152"
 VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
 STATE = "one-time-state-fixture-0123456789"
 
@@ -38,7 +38,7 @@ class GoogleOAuthProtocolTests(unittest.TestCase):
         state = create_oauth_state()
         self.assertGreaterEqual(len(state), 32)
         self.assertEqual(parse_callback_target(
-            "/oauth2/callback?code=abc123&state=" + state, state
+            "/?code=abc123&state=" + state, state
         ), "abc123")
 
     def test_authorization_url_requests_only_sheets_readonly_with_pkce(self):
@@ -81,18 +81,18 @@ class GoogleOAuthProtocolTests(unittest.TestCase):
 
     def test_callback_requires_exact_path_one_state_and_one_code(self):
         self.assertEqual(
-            parse_callback_target("/oauth2/callback?code=abc123&state=" + STATE, STATE),
+            parse_callback_target("/?code=abc123&state=" + STATE, STATE),
             "abc123",
         )
         invalid_targets = (
             "/wrong?code=abc123&state=" + STATE,
-            "/oauth2/callback?code=abc123&state=wrong",
-            "/oauth2/callback?code=abc123&state=" + STATE + "&state=" + STATE,
-            "/oauth2/callback?state=" + STATE,
-            "/oauth2/callback?code=a&code=b&state=" + STATE,
-            "/oauth2/callback?code=a%0Ab&state=" + STATE,
-            "/oauth2/callback?code=%ZZ&state=" + STATE,
-            "/oauth2/callback?code=a&state",
+            "/?code=abc123&state=wrong",
+            "/?code=abc123&state=" + STATE + "&state=" + STATE,
+            "/?state=" + STATE,
+            "/?code=a&code=b&state=" + STATE,
+            "/?code=a%0Ab&state=" + STATE,
+            "/?code=%ZZ&state=" + STATE,
+            "/?code=a&state",
         )
         for target in invalid_targets:
             with self.subTest(target=target), self.assertRaises(GoogleOAuthError):
@@ -101,7 +101,7 @@ class GoogleOAuthProtocolTests(unittest.TestCase):
     def test_user_denial_is_not_mistaken_for_authorization(self):
         with self.assertRaises(GoogleOAuthError):
             parse_callback_target(
-                "/oauth2/callback?error=access_denied&state=" + STATE, STATE
+                "/?error=access_denied&state=" + STATE, STATE
             )
 
     def test_only_the_exact_read_only_scope_is_accepted(self):
