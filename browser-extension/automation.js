@@ -62,7 +62,8 @@ var MaleniaAutomation = (() => {
     "search_origin_mismatch", "unexpected_document", "empty_page",
     "unmapped_paginated_table", "pagination_cycle", "pagination_limit",
     "changed_table_schema", "too_many_rows", "native_host_rejected",
-    "page_timeout", "tab_closed"
+    "page_timeout", "tab_closed", "unsupported_search_form",
+    "dynamic_search_ui"
   ]);
   function reasonCode(error) {
     return error instanceof Error && SAFE_FAILURE_CODES.has(error.message) ?
@@ -80,12 +81,19 @@ var MaleniaAutomation = (() => {
       func: (resourceRole, code) => {
         const fieldName = resourceRole === "datalens" ?
           "main_partner_code_original" : "cargo_place";
-        const forms = [...document.querySelectorAll("form")].filter(form =>
+        const allForms = [...document.querySelectorAll("form")];
+        const forms = allForms.filter(form =>
           form.method.toLowerCase() === "get" &&
           form.querySelectorAll('input[type="password"],input[type="hidden"]').length === 0 &&
           form.querySelectorAll('input[name="' + fieldName + '"]').length === 1 &&
           form.querySelectorAll("input[name]").length === 1);
-        if (forms.length !== 1) return null;
+        if (forms.length !== 1) {
+          // Report the type of unsupported UI, never labels, form values or URLs.
+          const kind = allForms.length ? "unsupported_search_form" :
+            document.querySelectorAll('[role="searchbox"],input[type="search"]').length ?
+              "dynamic_search_ui" : "unmapped_search_form";
+          return {origin: location.origin, kind};
+        }
         const form = forms[0];
         const input = form.querySelector('input[name="' + fieldName + '"]');
         if (!["search", "text"].includes(input.type.toLowerCase())) return null;
@@ -99,7 +107,10 @@ var MaleniaAutomation = (() => {
     });
     const result = results?.[0]?.result;
     if (!result || result.origin !== origin || typeof result.url !== "string") {
-      throw new Error("unmapped_search_form");
+      const kind = result?.origin === origin && [
+        "unsupported_search_form", "dynamic_search_ui"
+      ].includes(result.kind) ? result.kind : "unmapped_search_form";
+      throw new Error(kind);
     }
     const target = new URL(result.url);
     if (target.protocol !== "https:" || target.origin !== origin ||
