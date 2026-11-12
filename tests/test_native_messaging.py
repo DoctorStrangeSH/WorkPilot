@@ -67,7 +67,8 @@ class NativeMessagingProtocolTests(unittest.TestCase):
     def test_hello_reports_only_explicit_capability(self):
         response = handle_message({"type": "hello", "request_id": "1"}, self.store)
         self.assertEqual(response["host"], HOST_NAME)
-        self.assertEqual(response["capabilities"], ["share_active_tab", "inspect_active_page", "reconcile_site_tables"])
+        self.assertEqual(response["capabilities"], ["share_active_tab", "inspect_active_page", "reconcile_site_tables",
+                         "claim_browser_audit", "finish_browser_audit"])
         self.assertTrue(response["ok"])
 
     def test_user_shared_tab_is_sanitized_and_persisted(self):
@@ -159,6 +160,25 @@ class NativeMessagingProtocolTests(unittest.TestCase):
         bad = handle_message({"type": "reconcile_site_tables",
                               "snapshots": snapshots}, self.store)
         self.assertFalse(bad["ok"])
+
+    def test_browser_audit_job_claimed_once_and_finished(self):
+        pending = self.store.request_browser_audit()
+        first = handle_message({"type": "claim_browser_audit"}, self.store)
+        self.assertTrue(first["ok"])
+        self.assertEqual(first["job"]["job_id"], pending["job_id"])
+        self.assertEqual(first["job"]["status"], "running")
+        self.assertIsNone(handle_message(
+            {"type": "claim_browser_audit"}, self.store)["job"])
+        wrong = handle_message({"type": "finish_browser_audit",
+                                "job_id": "another-job", "succeeded": True}, self.store)
+        self.assertFalse(wrong["ok"])
+        result = handle_message({"type": "finish_browser_audit",
+                                 "job_id": pending["job_id"], "succeeded": True}, self.store)
+        self.assertTrue(result["ok"])
+        self.assertEqual(self.store.latest_browser_audit_job()["status"], "completed")
+        self.assertFalse(handle_message({"type": "finish_browser_audit",
+            "job_id": pending["job_id"], "succeeded": True}, self.store)["ok"])
+        self.assertIsNone(self.store.latest_browser_audit_summary())
 
     def test_unknown_messages_are_rejected(self):
         response = handle_message({"type": "execute_script"}, self.store)
