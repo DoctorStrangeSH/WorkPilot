@@ -49,6 +49,7 @@ struct Dashboard {
     tasks: Vec<Value>,
     events: Vec<Value>,
     browser_tabs: Vec<Value>,
+    browser_audit: Value,
     permissions: Vec<Value>,
 }
 
@@ -249,8 +250,10 @@ fn get_dashboard(state: State<'_, AgentState>) -> Result<Dashboard, String> {
     let browser_tabs = api_get(&token, "/v1/browser/tabs?limit=20")?.get("tabs").and_then(Value::as_array).cloned().unwrap_or_default();
 
     let permissions = api_get(&token, "/v1/permissions")?.get("permissions").and_then(Value::as_array).cloned().unwrap_or_default();
+    let browser_audit = api_get(&token, "/v1/browser/audit-summary")?
+        .get("audit").cloned().unwrap_or(Value::Null);
 
-    Ok(Dashboard { running: true, resources, tasks, events, browser_tabs, permissions })
+    Ok(Dashboard { running: true, resources, tasks, events, browser_tabs, browser_audit, permissions })
 }
 
 #[tauri::command]
