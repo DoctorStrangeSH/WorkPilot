@@ -202,8 +202,9 @@ function showAudit(snapshot) {
     snapshot.phase === "needs_attention" || snapshot.phase === "read_only" ? " error" : "");
 }
 if (chrome.storage?.local) {
-  chrome.storage.local.get("maleniaTargets").then(saved => {
+  chrome.storage.local.get(["maleniaTargets","maleniaExactGetSearch"]).then(saved => {
     const targets = saved?.maleniaTargets || {};
+    document.getElementById("exactSearch").checked = saved?.maleniaExactGetSearch === true;
     for (const role of Object.keys(RESOURCE_LABELS)) {
       if (typeof targets[role] === "string") document.getElementById(role).value = targets[role];
     }
@@ -237,7 +238,7 @@ auditButton.addEventListener("click", async () => {
     const exactGetSearch = document.getElementById("exactSearch").checked === true;
     const result = await chrome.runtime.sendMessage({type:"start_readonly_audit",targets,exactGetSearch});
     if (!result?.ok) throw new Error("start_refused");
-    await chrome.storage.local.set({maleniaTargets:targets});
+    await chrome.storage.local.set({maleniaTargets:targets,maleniaExactGetSearch:exactGetSearch});
     auditStatus.textContent = "Задача запущена. Можно закрыть окно расширения; состояние появится здесь при повторном открытии.";
     auditStatus.className = "status";
   } catch {
