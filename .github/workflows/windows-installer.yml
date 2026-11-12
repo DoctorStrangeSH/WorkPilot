@@ -98,6 +98,9 @@ jobs:
           & $agent --help | Out-Host
           if ($LASTEXITCODE -ne 0) { throw "Bundled agent smoke test failed." }
 
+      - name: Smoke-test packaged Sherlock skills and local SQLite
+        run: python packaging/smoke_test_packaged_skills.py desktop/src-tauri/resources/malenia-agent/malenia-agent.exe
+
       - name: Verify bundled agent duplicate-start protection
         run: python packaging/smoke_test_agent_instance.py desktop/src-tauri/resources/malenia-agent/malenia-agent.exe
 
