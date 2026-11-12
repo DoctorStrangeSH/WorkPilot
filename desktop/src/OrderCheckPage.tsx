@@ -42,6 +42,20 @@ export function OrderCheckPage({connected}:{connected:boolean}){
   const [preview,setPreview]=useState<Preview|null>(null);
 
   const clear=()=>{setPreview(null);setError("");};
+  const useDemo=()=>{
+    setCargoPlace("TEST-BOX-001");
+    setInventoryDate("2026-09-26");
+    setScanDate("2026-10-01T09:20");
+    setScanSc("101366");
+    setScanResult("OK");
+    setAsgardStatus("");
+    setBoxId("");
+    setHistoryChecked(false);
+    setIssuedInHistory(false);
+    setPreview(null);
+    setError("");
+  };
+
   const check=async()=>{
     setBusy(true);setError("");setPreview(null);
     try{
@@ -73,7 +87,7 @@ export function OrderCheckPage({connected}:{connected:boolean}){
     <div className="sources-notice"><ShieldCheck size={17}/><span><b>Безопасный режим.</b> Пока нет автоматического доступа к ИНВенте, DataLens или Asgard. Malenia ничего не отправляет в эти системы, не меняет строки и не сохраняет введённый номер в историю задач. Вводи сведения только из источников, к которым у тебя есть разрешённый доступ.</span></div>
     <div className="order-work-grid">
       <div className="panel order-input-card">
-        <h2>1. Строка ИНВенты</h2>
+        <div className="order-card-heading"><h2>1. Строка ИНВенты</h2><button className="secondary" type="button" onClick={useDemo} disabled={busy}>Тестовый пример</button></div>
         <label>Штрихкод грузоместа (main_partner_code_original)<input value={cargoPlace} maxLength={128} onChange={e=>{setCargoPlace(e.target.value);clear();}} placeholder="Например, штрихкод коробки" spellCheck={false}/></label>
         <label>Дата инвентаризации<input type="date" value={inventoryDate} onChange={e=>{setInventoryDate(e.target.value);clear();}}/></label>
         <h2>2. Последний скан DataLens</h2>
