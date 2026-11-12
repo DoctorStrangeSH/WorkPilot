@@ -105,6 +105,19 @@ class BlockingTokenOpener(FakeOpener):
         return super().open(request, timeout)
 
 
+class InvalidGrantOpener(FakeOpener):
+    def open(self, request, timeout=0):
+        if request.full_url == GOOGLE_TOKEN_ENDPOINT:
+            raise HTTPError(
+                request.full_url,
+                400,
+                "Bad Request",
+                {},
+                io.BytesIO(b'{"error":"invalid_grant"}'),
+            )
+        return super().open(request, timeout)
+
+
 class UnauthorizedOnceOpener(FakeOpener):
     def __init__(self):
         super().__init__()
@@ -138,7 +151,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
             time.sleep(0.02)
             status = connector.status()
 
-        self.assertEqual(status, {"connected": False, "status": "authorized", "error": None})
+        self.assertEqual(status, {"connected": False, "status": "authorized", "error": None, "client_id": CLIENT_ID})
         self.assertEqual(store.get("google-sheets-refresh-token"), "refresh-token-fixture")
         self.assertEqual(store.get("google-sheets-client-id"), CLIENT_ID)
         self.assertIsNone(store.get("google-sheets-client-secret"))
@@ -314,6 +327,27 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
                 with self.assertRaises(GoogleSheetsError):
                     connector.read_values(spreadsheet_id, range_a1)
         self.assertEqual(opener.requests, [])
+
+    def test_invalid_grant_requires_reauthorization_and_preserves_client_id(self):
+        store = FakeCredentialStore({
+            "google-sheets-refresh-token": "refresh-token-fixture",
+            "google-sheets-client-id": CLIENT_ID,
+            "google-sheets-client-secret": "client-secret-fixture",
+        })
+        connector = GoogleSheetsConnector(store, InvalidGrantOpener())
+        with self.assertRaises(GoogleSheetsError) as raised:
+            connector.read_values(SPREADSHEET_ID, "Orders!A1:B2")
+        self.assertEqual(raised.exception.code, "google_reauthorization_required")
+        self.assertEqual(
+            connector.status(),
+            {
+                "connected": False,
+                "status": "reauthorization_required",
+                "error": "google_reauthorization_required",
+                "client_id": CLIENT_ID,
+            },
+        )
+        self.assertEqual(store.get("google-sheets-refresh-token"), "refresh-token-fixture")
 
     def test_disconnect_deletes_local_credentials(self):
         store = FakeCredentialStore({
