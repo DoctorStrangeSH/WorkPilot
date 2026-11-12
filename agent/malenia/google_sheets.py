@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode, urlsplit
+from urllib.parse import parse_qs, quote, urlencode, urlsplit
 from urllib.request import (
     HTTPRedirectHandler,
     Request,
@@ -114,6 +114,30 @@ class GoogleSheetsConnector:
         handler.end_headers()
         handler.wfile.write(body)
 
+    @staticmethod
+    def _callback_bridge(handler: BaseHTTPRequestHandler) -> None:
+        # Google documents state in the redirect fragment. Fragments are not
+        # sent in HTTP requests, so this tiny same-origin page forwards only
+        # the query+fragment parameters back to the loopback listener.
+        body = b"""<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Malenia OAuth</title></head><body><p id="message">Проверяем ответ Google…</p><script>
+const params = new URLSearchParams(window.location.search);
+const fragment = new URLSearchParams(window.location.hash.slice(1));
+for (const [key, value] of fragment) { if (!params.has(key)) params.append(key, value); }
+fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:params.toString()})
+  .then(response => { document.getElementById("message").textContent = response.ok ? "Ответ получен. Вернитесь в Malenia." : "Не удалось проверить ответ. Вернитесь в Malenia."; })
+  .catch(() => { document.getElementById("message").textContent = "Не удалось связаться с Malenia. Вернитесь в приложение."; });
+</script></body></html>"""
+        handler.send_response(200)
+        handler.send_header("Content-Type", "text/html; charset=utf-8")
+        handler.send_header("Content-Length", str(len(body)))
+        handler.send_header("Cache-Control", "no-store")
+        handler.send_header("X-Content-Type-Options", "nosniff")
+        handler.send_header("Referrer-Policy", "no-referrer")
+        handler.send_header("X-Frame-Options", "DENY")
+        handler.send_header("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; connect-src 'self'")
+        handler.end_headers()
+        handler.wfile.write(body)
+
     def start_connect(self, client_id: str, client_secret: str | None = None) -> dict[str, str]:
         try:
             client_id = validate_client_id(client_id)
@@ -141,14 +165,13 @@ class GoogleSheetsConnector:
                 def log_message(self, format: str, *args: object) -> None:
                     return
 
-                def do_GET(self) -> None:
-                    attempt = session["attempt"]
+                def _valid_local_request(self, attempt: _ConnectAttempt) -> bool:
                     expected_host = f"127.0.0.1:{attempt.server.server_port}"
-                    if self.client_address[0] != "127.0.0.1" or self.headers.get("Host") != expected_host:
-                        GoogleSheetsConnector._response(self, 403, "Недопустимый локальный запрос. Вернитесь в Malenia.")
-                        return
+                    return self.client_address[0] == "127.0.0.1" and self.headers.get("Host") == expected_host
+
+                def _accept_callback(self, attempt: _ConnectAttempt, target: str) -> None:
                     try:
-                        code = parse_callback_target(self.path, attempt.state)
+                        code = parse_callback_target(target, attempt.state)
                     except GoogleOAuthError as error:
                         if "authorization was not granted" in str(error):
                             attempt.error = "authorization_denied"
@@ -161,6 +184,43 @@ class GoogleSheetsConnector:
                     attempt.code = code
                     attempt.event.set()
                     GoogleSheetsConnector._response(self, 200, "Malenia получила ответ Google. Можно закрыть эту вкладку и вернуться в приложение.")
+
+                def do_GET(self) -> None:
+                    attempt = session["attempt"]
+                    if not self._valid_local_request(attempt):
+                        GoogleSheetsConnector._response(self, 403, "Недопустимый локальный запрос. Вернитесь в Malenia.")
+                        return
+                    parsed = urlsplit(self.path)
+                    if parsed.path != "/":
+                        GoogleSheetsConnector._response(self, 404, "Неизвестный адрес.")
+                        return
+                    query = parse_qs(parsed.query, keep_blank_values=True)
+                    if "state" not in query or ("code" not in query and "error" not in query):
+                        GoogleSheetsConnector._callback_bridge(self)
+                        return
+                    self._accept_callback(attempt, self.path)
+
+                def do_POST(self) -> None:
+                    attempt = session["attempt"]
+                    if not self._valid_local_request(attempt):
+                        GoogleSheetsConnector._response(self, 403, "Недопустимый локальный запрос. Вернитесь в Malenia.")
+                        return
+                    if self.headers.get_content_type() != "application/x-www-form-urlencoded":
+                        GoogleSheetsConnector._response(self, 415, "Недопустимый формат OAuth-ответа.")
+                        return
+                    try:
+                        length = int(self.headers.get("Content-Length", "0"))
+                    except ValueError:
+                        length = 0
+                    if length < 1 or length > 8192:
+                        GoogleSheetsConnector._response(self, 413, "Слишком большой OAuth-ответ.")
+                        return
+                    try:
+                        form = self.rfile.read(length).decode("ascii")
+                    except UnicodeDecodeError:
+                        GoogleSheetsConnector._response(self, 400, "Некорректный OAuth-ответ.")
+                        return
+                    self._accept_callback(attempt, "/?" + form)
 
             server = HTTPServer(("127.0.0.1", 0), CallbackHandler)
             server.timeout = 1.0
