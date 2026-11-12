@@ -113,11 +113,13 @@ var MaleniaAutomation = (() => {
                 if (!required.every(name => head.includes(name)) || head.length > 20) continue;
                 const declared = grid.getAttribute("aria-rowcount");
                 const count = declared === null ? null : Number(declared);
-                if (declared !== null && (!Number.isInteger(count) || count < 0)) {
+                // ARIA grids frequently virtualize unseen rows. Only an
+                // explicit matching total count is acceptable evidence.
+                if (declared === null || !Number.isInteger(count) || count !== rows.length) {
                   incomplete = true; break;
                 }
                 const bodyRows = rows.slice(1);
-                if (bodyRows.length > 100 || (count !== null && count > rows.length)) {
+                if (bodyRows.length > 100) {
                   incomplete = true; break;
                 }
                 const entries = [];
