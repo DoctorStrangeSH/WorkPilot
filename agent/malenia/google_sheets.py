@@ -237,8 +237,6 @@ class GoogleSheetsConnector:
             attempt = self._attempt
             if attempt is not None and attempt.status == "authorizing":
                 return {"connected": False, "status": "authorizing", "error": None}
-            if attempt is not None and attempt.status in {"denied", "expired", "error"}:
-                return {"connected": False, "status": attempt.status, "error": attempt.error}
         try:
             store = self._credential_store()
             connected = bool(
@@ -247,7 +245,13 @@ class GoogleSheetsConnector:
             )
         except GoogleSheetsError:
             return {"connected": False, "status": "unavailable", "error": "windows_credential_store_unavailable"}
-        return {"connected": connected, "status": "connected" if connected else "not_connected", "error": None}
+        if connected:
+            return {"connected": True, "status": "connected", "error": None}
+        with self._lock:
+            attempt = self._attempt
+            if attempt is not None and attempt.status in {"denied", "expired", "error"}:
+                return {"connected": False, "status": attempt.status, "error": attempt.error}
+        return {"connected": False, "status": "not_connected", "error": None}
 
     def disconnect(self) -> dict[str, Any]:
         with self._lock:
