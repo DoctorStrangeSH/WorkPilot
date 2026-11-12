@@ -273,6 +273,15 @@ var MaleniaAutomation = (() => {
           if (options.exactGetSearch && !visitResult.table) {
             throw new Error("unmapped_search_results");
           }
+          if (key !== null) {
+            const codeField = role === "datalens" ?
+              "main_partner_code_original" : "cargo_place";
+            const column = visitResult.table.columns.indexOf(codeField);
+            if (column < 0 || visitResult.table.rows.some(row =>
+                !Array.isArray(row) || row[column] !== key)) {
+              throw new Error("unverified_search_result_identity");
+            }
+          }
           characters += visitResult.characters;
           pages += visitResult.pages;
           if (visitResult.table) {
