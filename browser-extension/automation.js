@@ -63,7 +63,8 @@ var MaleniaAutomation = (() => {
     "unmapped_paginated_table", "pagination_cycle", "pagination_limit",
     "changed_table_schema", "too_many_rows", "native_host_rejected",
     "page_timeout", "tab_closed", "unsupported_search_form",
-    "dynamic_search_ui"
+    "dynamic_search_ui", "unsupported_dynamic_search",
+    "dynamic_search_no_result_update"
   ]);
   function reasonCode(error) {
     return error instanceof Error && SAFE_FAILURE_CODES.has(error.message) ?
@@ -123,6 +124,67 @@ var MaleniaAutomation = (() => {
     await chromeApi.tabs.update(tabId, {url: target.href});
   }
 
+  async function reactiveSearch(chromeApi, tabId, role, cargo, origin) {
+    if (!["datalens", "asgard"].includes(role) ||
+        typeof cargo !== "string" || !/^[A-Za-z0-9_.-]{1,128}$/.test(cargo)) {
+      throw new Error("invalid_search");
+    }
+    const results = await chromeApi.scripting.executeScript({
+      target: {tabId},
+      func: async (resourceRole, code) => {
+        const fieldName = resourceRole === "datalens" ?
+          "main_partner_code_original" : "cargo_place";
+        // No form submission, Enter/keyboard shortcuts, clicks or scripts from the site.
+        // Accept ONLY a standalone, visible, labelled search-as-you-type field.
+        const matches = [...document.querySelectorAll(
+          'input[type="search"],input[role="searchbox"]'
+        )].filter(input => {
+          if (input.closest("form") || input.disabled || input.readOnly ||
+              input.type.toLowerCase() === "password") return false;
+          const label = (input.getAttribute("aria-label") ||
+            input.getAttribute("name") || "").trim();
+          return label === fieldName && input.getClientRects().length > 0;
+        });
+        if (matches.length !== 1) return {origin: location.origin, status: "ambiguous"};
+        const input = matches[0];
+        // Use the native setter so common controlled React/Vue inputs see the update.
+        const setter = Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype, "value")?.set;
+        if (typeof setter !== "function") {
+          return {origin: location.origin, status: "unsupported"};
+        }
+        const result = await new Promise(resolve => {
+          let settled = false, timeout;
+          const observer = new MutationObserver(() => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeout);
+            observer.disconnect();
+            resolve({origin: location.origin, status: "updated"});
+          });
+          observer.observe(document.body, {subtree: true, childList: true,
+            characterData: true});
+          timeout = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            observer.disconnect();
+            resolve({origin: location.origin, status: "unchanged"});
+          }, 6000);
+          setter.call(input, code);
+          input.dispatchEvent(new Event("input", {bubbles: true}));
+        });
+        return result;
+      },
+      args: [role, cargo]
+    });
+    const outcome = results?.[0]?.result;
+    if (!outcome || outcome.origin !== origin ||
+        outcome.status !== "updated") {
+      throw new Error(outcome?.status === "unchanged" ?
+        "dynamic_search_no_result_update" : "unsupported_dynamic_search");
+    }
+  }
+
   async function visit(chromeApi, role, url, sendNative, searchKey = null) {
     let tabId;
     try {
@@ -135,7 +197,14 @@ var MaleniaAutomation = (() => {
         if (new URL(current.url || "").origin !== new URL(url).origin) {
           throw new Error("search_origin_mismatch");
         }
-        await exactGetSearch(chromeApi, tabId, role, searchKey, new URL(url).origin);
+        try {
+          await exactGetSearch(chromeApi, tabId, role, searchKey, new URL(url).origin);
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== "dynamic_search_ui") {
+            throw error;
+          }
+          await reactiveSearch(chromeApi, tabId, role, searchKey, new URL(url).origin);
+        }
       }
       const visited = new Set();
       let expected = url;
@@ -351,5 +420,5 @@ var MaleniaAutomation = (() => {
     await onProgress(summary);
     return summary;
   }
-  return {ROLES, MAX_TEXT, MAX_PAGES, MAX_SEARCHES, normalizeTargets, origins, nextPage, exactGetSearch, reasonCode, waitLoaded, run};
+  return {ROLES, MAX_TEXT, MAX_PAGES, MAX_SEARCHES, normalizeTargets, origins, nextPage, exactGetSearch, reactiveSearch, reasonCode, waitLoaded, run};
 })();
