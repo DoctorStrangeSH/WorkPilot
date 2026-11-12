@@ -435,6 +435,23 @@ async fn install_sherlock(model: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn preview_order(
+    state: State<'_, AgentState>, order: Value, datalens_scans: Vec<Value>,
+    asgard_record: Option<Value>,
+) -> Result<Value, String> {
+    if datalens_scans.len() > 100 {
+        return Err("Допускается не более 100 записей сканов".to_string());
+    }
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        api_post_json(&token, "/v1/orders/preview",
+            serde_json::json!({"order": order, "datalens_scans": datalens_scans, "asgard_record": asgard_record}),
+            Duration::from_secs(10))
+    }).await.map_err(|_| "Не удалось проверить заказ".to_string())?
+}
+
+#[tauri::command]
 fn get_google_sheets_status(state: State<'_, AgentState>) -> Result<Value, String> {
     let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
         .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
@@ -552,7 +569,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_opener::init())
         .manage(AgentState::default())
-        .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, disconnect_google_sheets])
+        .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, disconnect_google_sheets, preview_order])
         .run(tauri::generate_context!())
         .expect("error while running Malenia");
 }
