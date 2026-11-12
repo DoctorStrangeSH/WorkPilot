@@ -8,6 +8,7 @@ type Source={id:string;title:string;source:string;excerpt:string;start?:number;e
 type Message = {role: "user" | "assistant"; content: string;sources?:Source[];answer_mode?:string;cited_source_ids?:string[];skill_ids?:string[]};
 type Status = {available: boolean; models: string[]};
 type TaskDraft = {requestId:string; title:string; description:string; submitted?:boolean};
+type SkillSuggestion = {request_id:string;title:string;description:string;instructions:string;terms:string};
 type Reply = {message: Message; model: string;sources?:Source[];answer_mode?:string;cited_source_ids?:string[];skill_ids?:string[]};
 
 export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCreated:()=>void}) {
@@ -21,6 +22,10 @@ export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCrea
   const [taskDraft,setTaskDraft]=useState<TaskDraft|null>(null);
   const [taskBusy,setTaskBusy]=useState(false);
   const [taskNotice,setTaskNotice]=useState("");
+  const [skillSuggestion,setSkillSuggestion]=useState<SkillSuggestion|null>(null);
+  const [skillBusy,setSkillBusy]=useState(false);
+  const [skillNotice,setSkillNotice]=useState("");
+  const skillPending=useRef(false);
   const [ratedSkills,setRatedSkills]=useState<Record<string,boolean>>({});
   const [feedbackNotice,setFeedbackNotice]=useState("");
   const taskPending=useRef(false);
@@ -86,6 +91,28 @@ export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCrea
       setMessages([...history,{role:"user",content:text}, {...reply.message,sources:reply.sources,answer_mode:reply.answer_mode,cited_source_ids:reply.cited_source_ids,skill_ids:reply.skill_ids}]);
     } catch(reason) {setMessages(history);setDraft(text);setError(String(reason));}
     finally {pending.current=false;setBusy(false);}
+  };
+  const suggestFrom=async(index:number)=>{
+    const answer=messages[index]?.content;
+    const request=messages[index-1]?.content;
+    if(!connected||busy||skillPending.current||!answer||!request||skillSuggestion)return;
+    skillPending.current=true;setSkillBusy(true);setSkillNotice("");
+    try{
+      const result=await invoke<{suggestion:Omit<SkillSuggestion,"request_id">;saved:false;approved:false}>(
+        "suggest_skill",{model,request:request.slice(0,1500),response:answer.slice(0,1500)});
+      setSkillSuggestion({request_id:crypto.randomUUID(),...result.suggestion});
+    }catch{setSkillNotice("Не удалось подготовить навык. Проверьте локальную модель.");}
+    finally{setSkillBusy(false);skillPending.current=false;}
+  };
+  const saveSuggestedSkill=async()=>{
+    if(!skillSuggestion||skillPending.current||!connected)return;
+    skillPending.current=true;setSkillBusy(true);setSkillNotice("");
+    try{
+      await invoke("skill_action",{action:"draft",payload:skillSuggestion});
+      setSkillSuggestion(null);
+      setSkillNotice("Навык сохранён как черновик. Откройте раздел «Навыки» и утвердите его.");
+    }catch{setSkillNotice("Не удалось сохранить черновик. Проверьте данные.");}
+    finally{setSkillBusy(false);skillPending.current=false;}
   };
   const rateSkill=async(skillId:string,helpful:boolean,key:string)=>{
     if(!connected||busy||ratedSkills[key])return;
@@ -153,10 +180,24 @@ export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCrea
           <button className="secondary" disabled={!!ratedSkills[index+":"+skillId]} onClick={()=>void rateSkill(skillId,false,index+":"+skillId)}>Не помог</button>
         </span>)}
       </div>:null}
+      {message.role==="assistant"?<button className="secondary" disabled={busy||skillBusy||!connected||!!skillSuggestion} onClick={()=>void suggestFrom(index)}>Сделать навык из ответа</button>:null}
       {message.role==="assistant" ? <button className="secondary" disabled={busy || taskBusy || !!taskDraft || !connected} onClick={()=>{setTaskNotice("");setTaskDraft({requestId:crypto.randomUUID(),title:(messages[index-1]?.content??"Задача из чата").slice(0,200),description:message.content});}}>Создать задачу из ответа</button> : <button className="secondary" disabled={busy || !!memoryDraft || !connected} onClick={()=>setMemoryDraft({id:crypto.randomUUID(),title:message.content.slice(0,120),content:message.content,kind:"memory"})}>Запомнить</button>}</article>)}
       {feedbackNotice?<p role="status" className="note">{feedbackNotice}</p>:null}
       {busy ? <p role="status">Шерлок готовит ответ… При первом запуске подготовка движка или модели может занять несколько минут.</p> : null}
     </div>
+    {skillNotice?<p role="status" className="note">{skillNotice}</p>:null}
+    {skillSuggestion?<section className="panel ai-task-review" aria-label="Предложенный навык">
+      <h2>Шерлок предлагает новый навык</h2>
+      <p>Проверьте инструкцию. Это автоматически подготовленный черновик, а не подтверждённое знание и не разрешение на действие. Номера заказов и секреты сюда не добавляйте.</p>
+      <label>Название<input maxLength={80} disabled={skillBusy} value={skillSuggestion.title} onChange={e=>setSkillSuggestion({...skillSuggestion,title:e.target.value})}/></label>
+      <label>Назначение<input maxLength={200} disabled={skillBusy} value={skillSuggestion.description} onChange={e=>setSkillSuggestion({...skillSuggestion,description:e.target.value})}/></label>
+      <label>Инструкция<textarea rows={5} maxLength={1600} disabled={skillBusy} value={skillSuggestion.instructions} onChange={e=>setSkillSuggestion({...skillSuggestion,instructions:e.target.value})}/></label>
+      <label>Ключевые слова<input maxLength={240} disabled={skillBusy} value={skillSuggestion.terms} onChange={e=>setSkillSuggestion({...skillSuggestion,terms:e.target.value})}/></label>
+      <div className="ai-controls">
+        <button className="secondary" disabled={skillBusy} onClick={()=>setSkillSuggestion(null)}>Отмена</button>
+        <button className="primary" disabled={skillBusy||!connected||![skillSuggestion.title,skillSuggestion.description,skillSuggestion.instructions,skillSuggestion.terms].every(x=>x.trim())} onClick={()=>void saveSuggestedSkill()}>Сохранить на проверку</button>
+      </div>
+    </section>:null}
     {memoryDraft?<KnowledgeEditor key={memoryDraft.id} initial={memoryDraft} connected={connected} onSaved={()=>{setMemoryDraft(null);setTaskNotice("Запись сохранена. Её можно найти и удалить в разделе «Память и знания».");}} onCancel={()=>setMemoryDraft(null)}/>:null}
     {taskNotice ? <p role="status" className="note">{taskNotice}</p> : null}
     {taskDraft ? <section className="panel ai-task-review" aria-labelledby="task-review-title"><h2 id="task-review-title">Проверьте задачу перед добавлением</h2><p>Модель может выдумывать сведения. Исправьте текст, если нужно. Подтверждение только сохраняет задачу в очереди — не запускает её выполнение.</p><label>Название<input autoFocus maxLength={200} disabled={taskBusy || taskDraft.submitted} value={taskDraft.title} onChange={e=>setTaskDraft({...taskDraft,title:e.target.value})}/></label><label>Описание<textarea rows={5} maxLength={2000} disabled={taskBusy || taskDraft.submitted} value={taskDraft.description} onChange={e=>setTaskDraft({...taskDraft,description:e.target.value})}/><small>{taskDraft.description.length}/2000{taskDraft.description.length>2000?" — сократите описание перед сохранением":""}</small></label><div><button className="secondary" disabled={taskBusy} onClick={()=>setTaskDraft(null)}>Отмена</button><button className="primary" disabled={taskBusy || !connected || !taskDraft.title.trim() || taskDraft.description.length>2000} onClick={()=>void saveTask()}>{taskBusy?"Сохраняем…":"Добавить в очередь"}</button></div></section> : null}
