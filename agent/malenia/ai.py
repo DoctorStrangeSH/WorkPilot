@@ -65,6 +65,7 @@ class OllamaClient:
         """Use local Qwen to propose a recipe for user review; never save it."""
         if (not isinstance(payload, dict)
                 or set(payload) != {"model", "request", "response"}
+                or not isinstance(payload["model"], str)
                 or payload["model"] not in ALLOWED_MODELS
                 or any(not isinstance(payload[k], str) or not payload[k].strip()
                        or len(payload[k]) > 1500 for k in ("request", "response"))):
