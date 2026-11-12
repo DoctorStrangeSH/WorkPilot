@@ -5,10 +5,10 @@ import { invoke } from "@tauri-apps/api/core";
 
 const modelLabel=(name:string)=>({"qwen3:8b":"Шерлок","qwen3:14b":"Шерлок · расширенный","qwen3:4b":"Шерлок · облегчённый","qwen3:0.6b":"Шерлок · компактный тест","qwen2.5:0.5b":"Шерлок · старый тест","qwen2.5:1.5b":"Шерлок · тест 1.5","qwen2.5:3b":"Шерлок · тест 3"}[name]??"Шерлок");
 type Source={id:string;title:string;source:string;excerpt:string;start?:number;end?:number;url?:string};
-type Message = {role: "user" | "assistant"; content: string;sources?:Source[];answer_mode?:string;cited_source_ids?:string[]};
+type Message = {role: "user" | "assistant"; content: string;sources?:Source[];answer_mode?:string;cited_source_ids?:string[];skill_ids?:string[]};
 type Status = {available: boolean; models: string[]};
 type TaskDraft = {requestId:string; title:string; description:string; submitted?:boolean};
-type Reply = {message: Message; model: string;sources?:Source[];answer_mode?:string;cited_source_ids?:string[]};
+type Reply = {message: Message; model: string;sources?:Source[];answer_mode?:string;cited_source_ids?:string[];skill_ids?:string[]};
 
 export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCreated:()=>void}) {
   const [status, setStatus] = useState<Status | null>(null);
@@ -21,6 +21,8 @@ export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCrea
   const [taskDraft,setTaskDraft]=useState<TaskDraft|null>(null);
   const [taskBusy,setTaskBusy]=useState(false);
   const [taskNotice,setTaskNotice]=useState("");
+  const [ratedSkills,setRatedSkills]=useState<Record<string,boolean>>({});
+  const [feedbackNotice,setFeedbackNotice]=useState("");
   const taskPending=useRef(false);
   const [memoryDraft,setMemoryDraft]=useState<KnowledgeDraft|null>(null);
   const [useKnowledge,setUseKnowledge]=useState(true);
@@ -81,9 +83,19 @@ export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCrea
     setMessages([...history,{role:"user",content:text}]);setDraft("");
     try {
       const reply = await invoke<Reply>("chat_ai", {model,messages:request,useKnowledge,knowledgeOnly,useWeb});
-      setMessages([...history,{role:"user",content:text}, {...reply.message,sources:reply.sources,answer_mode:reply.answer_mode,cited_source_ids:reply.cited_source_ids}]);
+      setMessages([...history,{role:"user",content:text}, {...reply.message,sources:reply.sources,answer_mode:reply.answer_mode,cited_source_ids:reply.cited_source_ids,skill_ids:reply.skill_ids}]);
     } catch(reason) {setMessages(history);setDraft(text);setError(String(reason));}
     finally {pending.current=false;setBusy(false);}
+  };
+  const rateSkill=async(skillId:string,helpful:boolean)=>{
+    if(!connected||busy||ratedSkills[skillId])return;
+    setFeedbackNotice("");
+    try{
+      await invoke("skill_action",{action:"feedback",payload:{
+        request_id:crypto.randomUUID(),skill_id:skillId,helpful}});
+      setRatedSkills(prev=>({...prev,[skillId]:true}));
+      setFeedbackNotice("Спасибо! Оценка поможет Шерлоку выбирать навыки точнее. Текст чата не сохранён.");
+    }catch{setFeedbackNotice("Не удалось сохранить оценку навыка.");}
   };
   return <section className="page ai-page" aria-labelledby="ai-title">
     <div className="page-head"><div><div className="eyebrow">ЛОКАЛЬНЫЙ ПОМОЩНИК</div><h1 id="ai-title">Ассистент Malenia</h1><p>Общайтесь с Шерлоком, разбирайте данные и готовьте рабочие планы.</p></div></div>
@@ -134,7 +146,15 @@ export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCrea
     </div>
 
     <div className="panel ai-messages" role="log" aria-live="polite" aria-label="Переписка с Шерлоком">
-      {!messages.length ? <div className="assistant-empty"><div><Sparkles size={21}/></div><b>С чего начнём?</b><p>Напишите вопрос или выберите пример выше. Можно вставить небольшой фрагмент таблицы или текста.</p></div> : messages.map((message,index)=><article className={"ai-message "+message.role} key={index}><b>{message.role==="user"?"Вы":"Шерлок"}</b><p>{message.content}</p>{message.answer_mode==="web"?<small>Режим: выдержки интернет-поиска</small>:null}{message.answer_mode==="knowledge_only"?<small>Режим: только по знаниям</small>:null}{message.sources?.length?<details className="ai-sources"><summary>Переданы модели: {message.sources.length} источников</summary>{message.sources.map(source=><div key={source.id}><b>{source.title}</b>{source.url && /^https?:\/\//.test(source.url)?<p><a href={source.url} target="_blank" rel="noopener noreferrer" onClick={event=>{event.preventDefault();void invoke("open_search_source",{url:source.url}).catch(()=>setError("Не удалось открыть источник в браузере. Скопируйте ссылку ниже."));}}>Открыть источник</a></p>:null}<small> · {source.source}{source.start!==undefined?` · символы ${source.start+1}–${source.end}`:""}{message.cited_source_ids?.includes(source.id)?" · модель сослалась на эту запись":""}</small><p>{source.excerpt}</p></div>)}</details>:null}{message.role==="assistant" ? <button className="secondary" disabled={busy || taskBusy || !!taskDraft || !connected} onClick={()=>{setTaskNotice("");setTaskDraft({requestId:crypto.randomUUID(),title:(messages[index-1]?.content??"Задача из чата").slice(0,200),description:message.content});}}>Создать задачу из ответа</button> : <button className="secondary" disabled={busy || !!memoryDraft || !connected} onClick={()=>setMemoryDraft({id:crypto.randomUUID(),title:message.content.slice(0,120),content:message.content,kind:"memory"})}>Запомнить</button>}</article>)}
+      {!messages.length ? <div className="assistant-empty"><div><Sparkles size={21}/></div><b>С чего начнём?</b><p>Напишите вопрос или выберите пример выше. Можно вставить небольшой фрагмент таблицы или текста.</p></div> : messages.map((message,index)=><article className={"ai-message "+message.role} key={index}><b>{message.role==="user"?"Вы":"Шерлок"}</b><p>{message.content}</p>{message.answer_mode==="web"?<small>Режим: выдержки интернет-поиска</small>:null}{message.answer_mode==="knowledge_only"?<small>Режим: только по знаниям</small>:null}{message.sources?.length?<details className="ai-sources"><summary>Переданы модели: {message.sources.length} источников</summary>{message.sources.map(source=><div key={source.id}><b>{source.title}</b>{source.url && /^https?:\/\//.test(source.url)?<p><a href={source.url} target="_blank" rel="noopener noreferrer" onClick={event=>{event.preventDefault();void invoke("open_search_source",{url:source.url}).catch(()=>setError("Не удалось открыть источник в браузере. Скопируйте ссылку ниже."));}}>Открыть источник</a></p>:null}<small> · {source.source}{source.start!==undefined?` · символы ${source.start+1}–${source.end}`:""}{message.cited_source_ids?.includes(source.id)?" · модель сослалась на эту запись":""}</small><p>{source.excerpt}</p></div>)}</details>:null}{message.role==="assistant"&&message.skill_ids?.length?<div className="ai-controls">
+        <small>Навык: {message.skill_ids.join(", ")}</small>
+        {message.skill_ids.map(skillId=><span key={skillId}>
+          <button className="secondary" disabled={!!ratedSkills[skillId]} onClick={()=>void rateSkill(skillId,true)}>Полезен</button>
+          <button className="secondary" disabled={!!ratedSkills[skillId]} onClick={()=>void rateSkill(skillId,false)}>Не помог</button>
+        </span>)}
+      </div>:null}
+      {message.role==="assistant" ? <button className="secondary" disabled={busy || taskBusy || !!taskDraft || !connected} onClick={()=>{setTaskNotice("");setTaskDraft({requestId:crypto.randomUUID(),title:(messages[index-1]?.content??"Задача из чата").slice(0,200),description:message.content});}}>Создать задачу из ответа</button> : <button className="secondary" disabled={busy || !!memoryDraft || !connected} onClick={()=>setMemoryDraft({id:crypto.randomUUID(),title:message.content.slice(0,120),content:message.content,kind:"memory"})}>Запомнить</button>}</article>)}
+      {feedbackNotice?<p role="status" className="note">{feedbackNotice}</p>:null}
       {busy ? <p role="status">Шерлок готовит ответ… При первом запуске подготовка движка или модели может занять несколько минут.</p> : null}
     </div>
     {memoryDraft?<KnowledgeEditor key={memoryDraft.id} initial={memoryDraft} connected={connected} onSaved={()=>{setMemoryDraft(null);setTaskNotice("Запись сохранена. Её можно найти и удалить в разделе «Память и знания».");}} onCancel={()=>setMemoryDraft(null)}/>:null}
