@@ -430,7 +430,8 @@ test('reactive search enters exact cargo in one labelled standalone searchbox', 
   }
   const chrome={
     scripting:{async executeScript({func,args}) {
-      const table={querySelectorAll:()=>[
+      const table={get innerText(){return value ? 'result for '+value : 'initial result';},
+        querySelectorAll:()=>[
         {innerText:'main_partner_code_original'},{innerText:'sc_id'},
         {innerText:'result'},{innerText:'scanned_at'}]};
       const context={document:{body:{},querySelectorAll:selector=>
@@ -521,4 +522,34 @@ test('full audit falls back from GET forms to reactive search per cargo',async()
   assert.equal(reactive,2);
   assert.equal(native,1);
   assert.equal(chrome.stats.removed,3);
+});
+
+test('unrelated result-table mutations do not count as successful reactive search',async()=>{
+  const api=runner();
+  let notify;
+  class MockInput {}
+  Object.defineProperty(MockInput.prototype,'value',{set(){}});
+  const input=new MockInput();
+  input.type='search'; input.disabled=false; input.readOnly=false;
+  input.closest=()=>null;
+  input.getAttribute=key=>key==='name'?'cargo_place':null;
+  input.getClientRects=()=>[{}];
+  input.dispatchEvent=()=>queueMicrotask(()=>notify?.());
+  const table={innerText:'same stale rows',querySelectorAll:()=>[
+    {innerText:'cargo_place'},{innerText:'status'}]};
+  class Observer{
+    constructor(fn){notify=fn;}
+    observe(){}
+    disconnect(){}
+  }
+  const chrome={scripting:{async executeScript({func,args}){
+    const document={body:{},querySelectorAll:selector=>
+      selector.includes('table,')?[table]:[input]};
+    return [{result:await vm.runInNewContext('('+func.toString()+')(...args)',
+      {document,location:{origin:'https://asgard.example'},
+        HTMLInputElement:MockInput,MutationObserver:Observer,
+        Event:class{},setTimeout,clearTimeout,args})}];
+  }}};
+  await assert.rejects(()=>api.reactiveSearch(chrome,7,'asgard','ABC-1',
+    'https://asgard.example'),/dynamic_search_unchanged_table/);
 });
