@@ -443,15 +443,19 @@ fn get_google_sheets_status(state: State<'_, AgentState>) -> Result<Value, Strin
 #[tauri::command]
 async fn connect_google_sheets(
     app: tauri::AppHandle, state: State<'_, AgentState>, client_id: String,
+    client_secret: Option<String>,
 ) -> Result<String, String> {
     if client_id.trim().len() < 20 || client_id.len() > 300 || client_id.chars().any(|c| c.is_control()) {
         return Err("Укажите Google OAuth Desktop Client ID из Google Cloud Console".to_string());
+    }
+    if client_secret.as_ref().is_some_and(|secret| secret.len() > 512 || secret.chars().any(|c| c.is_control())) {
+        return Err("Некорректный необязательный Client Secret".to_string());
     }
     let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
         .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
     let body = tauri::async_runtime::spawn_blocking(move || {
         api_post_json(&token, "/v1/integrations/google-sheets/connect",
-            serde_json::json!({"client_id": client_id}), Duration::from_secs(10))
+            serde_json::json!({"client_id": client_id, "client_secret": client_secret}), Duration::from_secs(10))
     }).await.map_err(|_| "Ошибка запуска подключения Google Sheets".to_string())??;
     let url = body.get("authorization_url").and_then(Value::as_str)
         .ok_or_else(|| "Google OAuth не вернул ссылку авторизации".to_string())?;
