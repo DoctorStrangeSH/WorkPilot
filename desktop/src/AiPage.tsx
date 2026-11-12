@@ -87,13 +87,13 @@ export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCrea
     } catch(reason) {setMessages(history);setDraft(text);setError(String(reason));}
     finally {pending.current=false;setBusy(false);}
   };
-  const rateSkill=async(skillId:string,helpful:boolean)=>{
-    if(!connected||busy||ratedSkills[skillId])return;
+  const rateSkill=async(skillId:string,helpful:boolean,key:string)=>{
+    if(!connected||busy||ratedSkills[key])return;
     setFeedbackNotice("");
     try{
       await invoke("skill_action",{action:"feedback",payload:{
         request_id:crypto.randomUUID(),skill_id:skillId,helpful}});
-      setRatedSkills(prev=>({...prev,[skillId]:true}));
+      setRatedSkills(prev=>({...prev,[key]:true}));
       setFeedbackNotice("Спасибо! Оценка поможет Шерлоку выбирать навыки точнее. Текст чата не сохранён.");
     }catch{setFeedbackNotice("Не удалось сохранить оценку навыка.");}
   };
@@ -149,8 +149,8 @@ export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCrea
       {!messages.length ? <div className="assistant-empty"><div><Sparkles size={21}/></div><b>С чего начнём?</b><p>Напишите вопрос или выберите пример выше. Можно вставить небольшой фрагмент таблицы или текста.</p></div> : messages.map((message,index)=><article className={"ai-message "+message.role} key={index}><b>{message.role==="user"?"Вы":"Шерлок"}</b><p>{message.content}</p>{message.answer_mode==="web"?<small>Режим: выдержки интернет-поиска</small>:null}{message.answer_mode==="knowledge_only"?<small>Режим: только по знаниям</small>:null}{message.sources?.length?<details className="ai-sources"><summary>Переданы модели: {message.sources.length} источников</summary>{message.sources.map(source=><div key={source.id}><b>{source.title}</b>{source.url && /^https?:\/\//.test(source.url)?<p><a href={source.url} target="_blank" rel="noopener noreferrer" onClick={event=>{event.preventDefault();void invoke("open_search_source",{url:source.url}).catch(()=>setError("Не удалось открыть источник в браузере. Скопируйте ссылку ниже."));}}>Открыть источник</a></p>:null}<small> · {source.source}{source.start!==undefined?` · символы ${source.start+1}–${source.end}`:""}{message.cited_source_ids?.includes(source.id)?" · модель сослалась на эту запись":""}</small><p>{source.excerpt}</p></div>)}</details>:null}{message.role==="assistant"&&message.skill_ids?.length?<div className="ai-controls">
         <small>Навык: {message.skill_ids.join(", ")}</small>
         {message.skill_ids.map(skillId=><span key={skillId}>
-          <button className="secondary" disabled={!!ratedSkills[skillId]} onClick={()=>void rateSkill(skillId,true)}>Полезен</button>
-          <button className="secondary" disabled={!!ratedSkills[skillId]} onClick={()=>void rateSkill(skillId,false)}>Не помог</button>
+          <button className="secondary" disabled={!!ratedSkills[index+":"+skillId]} onClick={()=>void rateSkill(skillId,true,index+":"+skillId)}>Полезен</button>
+          <button className="secondary" disabled={!!ratedSkills[index+":"+skillId]} onClick={()=>void rateSkill(skillId,false,index+":"+skillId)}>Не помог</button>
         </span>)}
       </div>:null}
       {message.role==="assistant" ? <button className="secondary" disabled={busy || taskBusy || !!taskDraft || !connected} onClick={()=>{setTaskNotice("");setTaskDraft({requestId:crypto.randomUUID(),title:(messages[index-1]?.content??"Задача из чата").slice(0,200),description:message.content});}}>Создать задачу из ответа</button> : <button className="secondary" disabled={busy || !!memoryDraft || !connected} onClick={()=>setMemoryDraft({id:crypto.randomUUID(),title:message.content.slice(0,120),content:message.content,kind:"memory"})}>Запомнить</button>}</article>)}
