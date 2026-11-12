@@ -195,6 +195,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(runtime["release"], "0.6.0")
         self.assertEqual(runtime["protocol"], 1)
         self.assertIn("task_idempotency", runtime["capabilities"])
+        self.assertIn("google_sheets_readonly", runtime["capabilities"])
 
     def test_task_retry_conflict_validation_and_legacy_compatibility(self):
         body = {"title": "Reviewed", "description": "Text",
