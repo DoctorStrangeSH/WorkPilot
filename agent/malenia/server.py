@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from .ai import OllamaClient, AIError
 from .knowledge import KnowledgeBase, KnowledgeError
+from .skills import SkillRegistry, SkillError
 from .google_sheets import GoogleSheetsConnector, GoogleSheetsError
 from .order_check import evaluate_order
 from .order_batch import preview_batch, OrderBatchError
@@ -40,8 +41,10 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                  google_sheets: GoogleSheetsConnector | None = None):
     inbox = permissions if permissions is not None else PermissionInbox(PermissionGate(store))
     knowledge = KnowledgeBase(store)
+    skills = SkillRegistry(store)
     ai_client = ai if ai is not None else OllamaClient()
     ai_client.knowledge = knowledge
+    ai_client.skills = skills
     sheets = google_sheets if google_sheets is not None else GoogleSheetsConnector()
 
     class Handler(BaseHTTPRequestHandler):
@@ -126,9 +129,12 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
 
             if parsed.path == "/v1/runtime":
                 self._send(200, {"release": "0.6.0", "protocol": 1,
-                    "capabilities": ["local_chat", "task_idempotency", "explicit_knowledge", "knowledge_only", "public_search", "google_sheets_readonly", "order_preview", "order_batch_preview"]})
+                    "capabilities": ["local_chat", "task_idempotency", "explicit_knowledge", "knowledge_only", "public_search", "google_sheets_readonly", "order_preview", "order_batch_preview", "reviewed_skills"]})
             elif parsed.path == "/v1/knowledge":
                 self._send(200, {"records": knowledge.list()})
+            elif parsed.path == "/v1/skills":
+                self._send(200, {"skills": skills.list(), "executable": False,
+                                 "automatic_weight_updates": False})
             elif parsed.path == "/v1/ai/status":
                 self._send(200, ai_client.status())
             elif parsed.path == "/v1/permissions":
@@ -282,6 +288,32 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                     self._send(200, result)
                 except KnowledgeError as error:
                     self._send(422, {"error": str(error)})
+                return
+
+            if parsed.path in ("/v1/skills/draft", "/v1/skills/approve",
+                               "/v1/skills/delete"):
+                payload = self._read_json(4096)
+                if payload is None:
+                    return
+                try:
+                    if parsed.path.endswith("/draft"):
+                        if set(payload) != {"request_id", "title", "description",
+                                           "instructions", "terms"}:
+                            raise SkillError("invalid_skill_payload")
+                        result = {"skill": skills.draft(
+                            payload["request_id"], payload["title"],
+                            payload["description"], payload["instructions"],
+                            payload["terms"])}
+                    elif set(payload) != {"id"}:
+                        raise SkillError("invalid_skill_payload")
+                    elif parsed.path.endswith("/approve"):
+                        result = {"skill": skills.approve(payload["id"])}
+                    else:
+                        result = {"deleted": skills.delete(payload["id"])}
+                except (SkillError, TypeError, KeyError):
+                    self._send(422, {"error": "invalid_skill_request"})
+                    return
+                self._send(200, result)
                 return
 
             if parsed.path == "/v1/ai/chat":
