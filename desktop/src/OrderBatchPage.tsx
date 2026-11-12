@@ -23,6 +23,20 @@ type BatchInput={
   asgard_record:{status:string;box_id?:string;extended_history_statuses?:string[]}|null;
 };
 const headers=["Грузоместо","Дата инвента","Дата скана","SC ID","Результат скана","Статус Asgard","ID коробки","История проверена","Выдан в истории"];
+const reasons:Record<string,string>={
+  successful_scan_after_inventory:"Скан после инвентаризации",
+  asgard_accepted_at_fulfillment:"Принят на ФФ",
+  asgard_issued:"Выдан",
+  asgard_in_transit_with_issued_box_history:"Выдан в расширенной истории",
+  asgard_record_required:"Нужна проверка Asgard",
+  asgard_box_id_required_for_in_transit:"Не указан ID коробки",
+  asgard_extended_history_required_for_in_transit:"Не проверена история коробки",
+  asgard_in_transit_without_confirmed_issued_history:"В истории нет «Выдан»",
+  datalens_matching_scan_has_invalid_date:"Некорректная дата скана",
+  unknown_asgard_status:"Неизвестный статус Asgard",
+  duplicate_cargo_place_and_date:"Повтор грузоместа и даты",
+};
+
 const demo=[
   ["TEST-BOX-001","26.09.2026","01.10.2026 09:20","101366","OK","","","",""],
   ["TEST-BOX-002","12.09.2026","06.09.2026 08:00","101366","OK","Принят на ФФ","","",""],
@@ -142,7 +156,7 @@ export function OrderBatchPage({connected}:{connected:boolean}){
     {batch?<div className="panel batch-results">
       <div className="panel-head"><div><h3>Сводка предложений</h3><p>Ни одна строка в исходном Excel не изменена.</p></div><button className="secondary" onClick={()=>void copy()}><ClipboardCopy size={14}/> Скопировать для Excel</button></div>
       <div className="batch-summary"><span className="green">Найдено: {batch.summary.found}</span><span className="orange">В работе: {batch.summary.in_progress}</span><span>Ручная проверка: {batch.summary.manual_review}</span><b>Всего: {batch.total}</b></div>
-      <div className="batch-table-scroll"><table><thead><tr><th>№</th><th>Грузоместо</th><th>Дата инвента</th><th>Статус</th><th>Комментарий</th><th>Причина</th></tr></thead><tbody>{batch.results.map(row=><tr key={row.index}><td>{row.source_row??row.index}</td><td>{row.cargo_place}</td><td>{row.inventory_date}</td><td><span className={"order-result-state "+row.proposal.color}>{row.proposal.proposed_status??"Ручная проверка"}</span></td><td>{row.proposal.comment??"—"}</td><td>{row.proposal.reason_code}</td></tr>)}</tbody></table></div>
+      <div className="batch-table-scroll"><table><thead><tr><th>№</th><th>Грузоместо</th><th>Дата инвента</th><th>Статус</th><th>Комментарий</th><th>Причина</th></tr></thead><tbody>{batch.results.map(row=><tr key={row.index}><td>{row.source_row??row.index}</td><td>{row.cargo_place}</td><td>{row.inventory_date}</td><td><span className={"order-result-state "+row.proposal.color}>{row.proposal.proposed_status??"Ручная проверка"}</span></td><td>{row.proposal.comment??"—"}</td><td>{reasons[row.proposal.reason_code]??"Требуется ручная проверка"}</td></tr>)}</tbody></table></div>
       <p className="batch-footnote">Это предложения, рассчитанные по вручную внесённым данным. Перед использованием проверьте соответствие сканов грузоместам и правильность источников.</p>
     </div>:null}
   </section>;
