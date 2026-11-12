@@ -339,7 +339,7 @@ See LOCAL_AI.md. main must stay unchanged and PR #2 unmerged.
   adds setup, explicit persistent memory and bounded local reference retrieval.
 
 
-## 0.5.1 source-constrained knowledge work (prepared)
+## 0.5.1 source-constrained knowledge work (verified kit)
 
 - User requested continued project improvements. Focus: exact order-code retrieval,
   relevant long-note passages, explicit search without inference, and opt-in answers
@@ -361,3 +361,33 @@ See LOCAL_AI.md. main must stay unchanged and PR #2 unmerged.
 - Next: publish feature code, run Windows CI including installed-upgrade fixture
   search/preservation, verify artifact, build 0.5.1 kit and update handoff evidence.
   Keep main at 712d0a8e1885cca402eaa4fdda041bb09b50e397 and PR #2 draft/unmerged.
+
+
+## Verified 0.5.1 distribution (2026-11-12)
+
+- Code revision 611b58023aa56edcc21ca8ffdac6210f3175f4c3, all 18 published paths
+  fetched and compared to local source. No merges to main; PR #2 remains draft.
+- All CI passed: Windows installer 43206566134, Desktop checks 43206566165,
+  Python matrix 43206566115. 114 Python / 20 Node tests, frontend, Rust, frozen
+  agent/host, Windows PowerShell 5.1 registration and real desktop single-instance
+  checks passed. Installed-upgrade test now also verifies AB-17 vs AB-170 search,
+  no-generation response for unknown AB-19, and note preservation after reinstall.
+- Artifact 13938586944 ZIP SHA256:
+  8f36f2ed094857dc74fac54ae95ae5aa92d03a9e27f684809edcb51f07185740.
+  Download verified; extracted desktop version is 0.5.1. Actual downloaded frozen
+  agent passed exact-ID retrieval, snapshot offsets, no-generation strict refusal,
+  and persistent search after restart on an ephemeral port/temporary fixture DB.
+- Actual local compact-model source probe: AB-17 answered Tokyo with only its
+  matching note/citation; AB-19 generated=false with no sources; missing phone
+  yielded the fixed insufficient-information reply after model sufficient=false.
+  This is a tiny fictional smoke probe, not an 8B/NVIDIA accuracy benchmark.
+- Prepared outputs/Malenia-0.5.1-Sherlock-Windows.zip: verified installer, updated
+  Russian instructions, explicitly fictional AB-17/AB-170 examples, original sample
+  Obsidian notes, generic manual-ID Browser Bridge and per-file SHA256 manifest.
+  ZIP contents/hash tested; no personal extension ID/directory. Setup scripts are
+  ASCII and registration hash still matches pinned approved source.
+- The agent did not replace the current PC installation (last verified 0.4.1); no model download/installation was run
+  for the remote 32 GB PC. Its actual deployment and 8B/GPU evaluation remain user
+  steps. Main must stay 712d0a8e1885cca402eaa4fdda041bb09b50e397, PR #2 unmerged.
+- Citation checks only establish that cited IDs were supplied; they do not prove
+  answers follow from source text. No autonomous actions or internet lookup added.
