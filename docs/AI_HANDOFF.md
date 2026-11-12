@@ -1,3 +1,40 @@
+# Latest handoff — 2026-11-12
+
+## User-confirmed product state
+
+- The user confirmed that Malenia 0.6.0 is installed and working on their PC (2026-11-12).
+- The user wants the application to become a simple, modern, genuinely useful personal work assistant. Keep Russian UI and the existing dark/purple visual direction.
+- The first business workflow is order verification: Google Sheets «ИНВента» → Yandex DataLens → Asgard. User is teaching the exact process and has paused adding new edge cases for now.
+- Confirmed order rules are documented in ROADMAP.md. Do not invent additional statuses or write back to the sheet yet.
+
+## Latest UX work on `feat/desktop-shell`
+
+- Current branch HEAD before this handoff update: `a08b55304563822dcaa1b5e531a658f44c613d9a`.
+- PR #2 remains draft/open and unmerged. PR #1 remains open. `main` must not be changed or merged without explicit user approval.
+- Main navigation now exposes «Ассистент» as a first-class destination instead of hiding the chat under «ИИ-модели». Navigation is grouped into workspace, knowledge/safety, and system areas.
+- Removed the separate «Поиск» navigation item because it was a placeholder; opt-in Bing search remains inside the assistant.
+- Home page no longer displays empty CPU/RAM metrics while the agent is stopped. It shows clear next steps instead. When connected, the main action opens the assistant.
+- Assistant page has a clearer readiness state, resource-access disclosure, collapsed advanced controls, and quick-start prompts. Quick-start prompts only populate the composer; they do not send anything.
+- Task queue wording explicitly states that tasks are saved locally but are not automatically executed.
+- Added UI regression coverage in `tests/ai_ui.test.cjs` and `tests/navigation_ui.test.cjs`; Desktop checks workflow runs the navigation test.
+- UX commits: `6ec48ba`, `3280383`, `f98e339`, `35765c4`, `cb6e997`, `0f3f7f4`, `07f9c39`, plus roadmap update `a08b553`.
+
+## Truthful capability boundaries
+
+- The task queue persists requests but does not execute them.
+- Browser Bridge is manual-share metadata only; it does not read page DOM, screenshots, arbitrary tabs, cookies, passwords, or browser history.
+- Google Drive access in ChatGPT is not an OAuth connection for Malenia. Malenia still needs its own explicit read-only Google Sheets integration.
+- DataLens and Asgard are not yet directly integrated into Malenia.
+- Do not present decorative placeholders as working connectors or skills.
+
+## Next actions
+
+1. Wait for Desktop checks / Windows installer / Python CI on the latest branch head and fix any failures before claiming the UX refresh is verified.
+2. Update PR #2 description with the UX changes and CI evidence; keep it draft.
+3. Ask the user to test the refreshed build and report usability friction.
+4. Then implement a read-only Google Sheets OAuth adapter for Malenia, followed by a safe, explicitly permitted read-only browser adapter for DataLens and Asgard.
+5. Build the order-check workflow in dry-run mode first. No sheet edits, order status changes, ticket creation, or other write actions until separately approved.
+
 # Malenia — AI handoff
 
 Last updated: 2026-11-12
