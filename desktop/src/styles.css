@@ -139,3 +139,25 @@ body{min-width:820px}
 .source-card>small{margin-top:auto;color:#a6a0d4;font-size:9px;line-height:1.5}
 .source-action{align-self:flex-start;margin-top:12px;padding:8px 10px;font-size:9px}
 @media(max-width:1000px){.sources-grid{grid-template-columns:1fr}}
+
+
+/* Google Sheets read-only onboarding */
+.google-source-card{grid-column:1/-1;min-height:unset}
+.google-connect-form,.google-read-form{display:grid;gap:10px;margin-top:12px}
+.google-connect-form label,.google-read-form label{display:grid;gap:6px;color:#aeb8c8;font-size:10px}
+.google-connect-form input,.google-read-form input{width:100%;min-width:0;padding:10px 11px;border:1px solid #343d50;border-radius:8px;background:#0e141e;color:#e4eaf4;font-size:10px;outline:none}
+.google-connect-form input:focus,.google-read-form input:focus{border-color:#897bd3;box-shadow:0 0 0 2px #897bd322}
+.google-connect-form input::placeholder,.google-read-form input::placeholder{color:#647187}
+.google-connect-form small,.google-read-form small,.source-help{color:#8996aa;font-size:9px;line-height:1.6}
+.google-actions{display:flex;gap:9px;flex-wrap:wrap}
+.google-actions button,.google-connect-form button{align-self:flex-start}
+.sheet-preview{margin-top:15px;padding:12px;border:1px solid #30394a;border-radius:10px;background:#0e141d}
+.sheet-preview-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
+.sheet-preview-head b{color:#dfe5ef;font-size:10px}
+.sheet-preview-head small,.sheet-preview>small{color:#7f8ca0;font-size:8px}
+.sheet-preview-scroll{max-height:260px;overflow:auto;border:1px solid #2b3545;border-radius:7px}
+.sheet-preview table{width:100%;border-collapse:collapse;font-size:9px}
+.sheet-preview td{padding:7px 9px;border-right:1px solid #283244;border-bottom:1px solid #283244;color:#c2cbd9;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis}
+.sheet-preview tr:first-child td{background:#1b2231;color:#e4e9f2;font-weight:600}
+.sheet-preview>p{color:#929fb2;font-size:9px}
+.sheet-preview>small{display:block;margin-top:8px}
