@@ -118,6 +118,26 @@ class LocalApiTests(unittest.TestCase):
         self.assertNotIn("cargo_place", json.dumps(report))
         self.assertEqual(set(report["audit"]), {"checked_at", "total", "summary", "read_only", "source"})
 
+    def test_skill_suggestion_is_local_unsaved_and_authenticated(self):
+        from unittest.mock import patch
+        expected = {"title": "Обработка документов",
+                    "description": "Проверка текста документа",
+                    "instructions": "Проверяй цель и структуру перед ответом",
+                    "terms": "документ письмо текст"}
+        payload = {"model": "qwen3:8b", "request": "Напиши документ",
+                   "response": "Сначала проверьте структуру"}
+        self.assertEqual(self.api("/v1/skills/suggest", payload,
+                                  authenticated=False)[0], 401)
+        with patch.object(self.ai, "suggest_skill",
+                          return_value={"suggestion": expected, "saved": False,
+                                        "approved": False, "local_only": True}) as generator:
+            code, result = self.api("/v1/skills/suggest", payload)
+            self.assertEqual(code, 200)
+            self.assertFalse(result["saved"])
+            self.assertFalse(result["approved"])
+            generator.assert_called_once_with(payload)
+        self.assertEqual(len(self.api("/v1/skills")[1]["skills"]), 4)
+
     def test_skill_catalog_drafts_approval_and_feedback_require_auth(self):
         from uuid import uuid4
         code, initial = self.api("/v1/skills")
