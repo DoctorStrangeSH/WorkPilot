@@ -81,6 +81,27 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(state["id"], item)
         return f"/v1/permissions/{item}/decision", state["binding"]
 
+    def test_desktop_can_request_one_browser_audit_with_authenticated_status(self):
+        self.assertEqual(self.api("/v1/browser/audit-request", {})[0], 202)
+        code, payload = self.api("/v1/browser/audit-job")
+        self.assertEqual(code, 200)
+        self.assertEqual(payload["job"]["status"], "pending")
+        self.assertEqual(self.api("/v1/browser/audit-request", {})[0], 409)
+        self.assertEqual(self.api("/v1/browser/audit-job",
+                                  authenticated=False)[0], 401)
+        self.assertEqual(self.api("/v1/browser/audit-request", {},
+                                  authenticated=False)[0], 401)
+        self.assertEqual(self.api("/v1/browser/audit-request",
+                                  {"url": "https://example.com"})[0], 422)
+        self.assertTrue(self.store.claim_browser_audit())
+        self.assertEqual(self.api("/v1/browser/audit-job")[1]["job"]["status"],
+                         "running")
+        self.assertTrue(self.store.finish_browser_audit(
+            payload["job"]["job_id"], True))
+        self.assertEqual(self.api("/v1/browser/audit-job")[1]["job"]["status"],
+                         "completed")
+        self.assertEqual(self.api("/v1/browser/audit-request", {})[0], 202)
+
     def test_browser_audit_summary_requires_auth_and_contains_only_counts(self):
         code, initial = self.api("/v1/browser/audit-summary")
         self.assertEqual(code, 200)
