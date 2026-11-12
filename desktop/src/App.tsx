@@ -17,7 +17,7 @@ type Resources = { total_memory_bytes:number; available_memory_bytes:number; use
 type Dashboard = { running:boolean; resources:Resources; tasks:Task[]; events:EventItem[]; browser_tabs:BrowserTab[]; permissions:PermissionRequest[]; };
 type Page = "overview"|"tasks"|"browser"|"search"|"ai"|"settings"|"permissions"|"knowledge";
 
-const labels:Record<Page,string>={overview:"Главная",tasks:"Задания",browser:"Браузер",search:"Поиск",ai:"ИИ-модели",settings:"Настройки",permissions:"Разрешения",knowledge:"Память и знания"};
+const labels:Record<Page,string>={overview:"Главная",tasks:"Задания",browser:"Браузер",search:"Поиск",ai:"Ассистент",settings:"Настройки",permissions:"Разрешения",knowledge:"Память и знания"};
 const bytes=(n:number)=>n ? (n/1024/1024/1024).toFixed(1)+" ГБ" : "—";
 const time=(v:string)=>{try{return new Intl.DateTimeFormat("ru-RU",{hour:"2-digit",minute:"2-digit"}).format(new Date(v));}catch{return v;}};
 
@@ -63,14 +63,17 @@ export default function App(){
       <div className="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
       <nav>
         <Nav icon={<LayoutDashboard/>} label="Главная" active={page==="overview"} onClick={()=>setPage("overview")}/>
+        <Nav icon={<Sparkles/>} label="Ассистент" active={page==="ai"} onClick={()=>setPage("ai")}/>
         <Nav icon={<ListTodo/>} label="Задания" active={page==="tasks"} count={data?.tasks.length} onClick={()=>setPage("tasks")}/>
         <Nav icon={<Globe2/>} label="Браузер" active={page==="browser"} onClick={()=>setPage("browser")}/>
-        <Nav icon={<FileSearch/>} label="Поиск" active={page==="search"} onClick={()=>setPage("search")}/>
+      </nav>
+      <div className="nav-label separated">ЗНАНИЯ И БЕЗОПАСНОСТЬ</div>
+      <nav>
         <Nav icon={<Database/>} label="Память и знания" active={page==="knowledge"} onClick={()=>setPage("knowledge")}/>
-          <Nav icon={<BrainCircuit/>} label="ИИ-модели" active={page==="ai"} onClick={()=>setPage("ai")}/>
+        <Nav icon={<ShieldCheck/>} label="Разрешения" active={page==="permissions"} count={data?.permissions.filter(p=>p.status==="pending").length} onClick={()=>setPage("permissions")}/>
       </nav>
       <div className="nav-label separated">СИСТЕМА</div>
-      <nav><Nav icon={<ShieldCheck/>} label="Разрешения" active={page==="permissions"} count={data?.permissions.filter(p=>p.status==="pending").length} onClick={()=>setPage("permissions")}/><Nav icon={<Settings2/>} label="Настройки" active={page==="settings"} onClick={()=>setPage("settings")}/></nav>
+      <nav><Nav icon={<Settings2/>} label="Настройки" active={page==="settings"} onClick={()=>setPage("settings")}/></nav>
       <div className="side-spacer"/>
       <div className="privacy"><div><ShieldCheck size={17}/></div><b>Данные остаются локально</b><p>Ядро работает на этом компьютере. Секреты браузера не считываются.</p><small><LockKeyhole size={11}/> LOCAL-FIRST</small></div>
       <div className="user-row"><div className="user-avatar">M</div><div><b>Пользователь</b><small>Личный агент</small></div><MoreHorizontal size={18}/></div>
@@ -83,17 +86,20 @@ export default function App(){
         {notice&&<div className="alert success"><Check size={15}/>{notice}<button onClick={()=>setNotice("")}><X size={14}/></button></div>}
 
         {page==="overview"&&<>
-          <div className="welcome"><div><div className="eyebrow"><Sparkles size={13}/> ВАШ ЛОКАЛЬНЫЙ РАБОЧИЙ ПОМОЩНИК</div><h1>Добро пожаловать в Malenia</h1><p>Управляйте задачами, ресурсами и рабочими инструментами из одного места.</p></div><div className="date-chip"><Clock3 size={14}/>{new Intl.DateTimeFormat("ru-RU",{dateStyle:"long"}).format(new Date())}</div></div>
+          <div className="welcome"><div><div className="eyebrow"><Sparkles size={13}/> ВАШ ЛОКАЛЬНЫЙ РАБОЧИЙ ПОМОЩНИК</div><h1>Ваш рабочий центр</h1><p>Задачи, ассистент и рабочие инструменты — в одном месте.</p></div><div className="date-chip"><Clock3 size={14}/>{new Intl.DateTimeFormat("ru-RU",{dateStyle:"long"}).format(new Date())}</div></div>
           <section className="hero">
-            <div className="hero-copy"><div className="hero-kicker"><i/> MALENIA CORE</div><h2>{connected?"Я на связи. Чем займёмся?":"Подключим вашего помощника?"}</h2><p>{connected?"Локальное ядро готово принимать задачи. Сейчас доступны очередь и контроль ресурсов.":"Запустите локальный агент, чтобы управлять задачами и видеть состояние системы."}</p><div className="hero-buttons">{!connected?<button className="primary" onClick={runAgent} disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<Play size={15}/>}Запустить агента</button>:<button className="danger" onClick={stopAgent} disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<Square size={14}/>}Остановить агента</button>}{connected&&<button className="secondary" onClick={()=>setComposer(true)}><Plus size={15}/>Новая задача</button>}</div></div>
+            <div className="hero-copy"><div className="hero-kicker"><i/> MALENIA CORE</div><h2>{connected?"Шерлок готов помочь":"Подключим вашего помощника?"}</h2><p>{connected?"Откройте ассистента, чтобы задать вопрос, разобрать текст или составить план.":"Запустите локальное ядро. Затем откройте ассистента и настройте Шерлока."}</p><div className="hero-buttons">{!connected?<button className="primary" onClick={runAgent} disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<Play size={15}/>}Запустить агента</button>:<button className="primary" onClick={()=>setPage("ai")}><Sparkles size={15}/>Открыть ассистента</button>}{!connected?<button className="secondary" onClick={()=>setPage("ai")}><BrainCircuit size={15}/>Настроить Шерлока</button>:<button className="secondary" onClick={()=>setPage("browser")}><Globe2 size={15}/>Браузер</button>}</div></div>
             <div className="hero-graphic"><div className="ring ring1"/><div className="ring ring2"/><div className="core"><BrainCircuit size={54}/></div><span className="orbit o1"><Activity size={15}/></span><span className="orbit o2"><Database size={15}/></span><span className="orbit o3"><Globe2 size={15}/></span></div>
           </section>
-          <section className="metrics">
-            <Metric icon={<MemoryStick/>} label="Оперативная память" value={data?data.resources.used_memory_percent.toFixed(1)+"%":"—"} detail={data?bytes(data.resources.available_memory_bytes)+" свободно из "+bytes(data.resources.total_memory_bytes):"Ожидает подключения"} tone={mode==="emergency"?"red":mode==="economy"?"amber":"green"} progress={data?.resources.used_memory_percent}/>
-            <Metric icon={<Cpu/>} label="Загрузка процессора" value={data?data.resources.cpu_usage_percent.toFixed(1)+"%":"—"} detail={data?data.resources.logical_processors+" логических процессоров":"Ожидает подключения"} tone="violet" progress={data?.resources.cpu_usage_percent}/>
-            <Metric icon={<ListTodo/>} label="Задачи в очереди" value={String(data?.tasks.filter(t=>t.status==="pending").length??0)} detail="Ожидают выполнения" tone="blue"/>
-            <Metric icon={<Activity/>} label="Режим ресурсов" value={modeLabel} detail={data?"Параллельность: "+data.resources.recommended_parallel_jobs:"Ожидает подключения"} tone={mode==="emergency"?"red":mode==="economy"?"amber":"green"}/>
-          </section>
+          {connected?<section className="metrics">
+            <Metric icon={<MemoryStick/>} label="Оперативная память" value={data?data.resources.used_memory_percent.toFixed(1)+"%":"—"} detail={data?bytes(data.resources.available_memory_bytes)+" свободно из "+bytes(data.resources.total_memory_bytes):"Данные пока недоступны"} tone={mode==="emergency"?"red":mode==="economy"?"amber":"green"} progress={data?.resources.used_memory_percent}/>
+            <Metric icon={<Cpu/>} label="Загрузка процессора" value={data?data.resources.cpu_usage_percent.toFixed(1)+"%":"—"} detail={data?data.resources.logical_processors+" логических процессоров":"Данные пока недоступны"} tone="violet" progress={data?.resources.cpu_usage_percent}/>
+            <Metric icon={<ListTodo/>} label="Задачи в очереди" value={String(data?.tasks.filter(t=>t.status==="pending").length??0)} detail="Сохранены, но ещё не выполняются автоматически" tone="blue"/>
+            <Metric icon={<Activity/>} label="Режим ресурсов" value={modeLabel} detail={data?"Параллельность: "+data.resources.recommended_parallel_jobs:"Данные пока недоступны"} tone={mode==="emergency"?"red":mode==="economy"?"amber":"green"}/>
+          </section>:<section className="setup-steps" aria-label="Первые шаги">
+            <div className="setup-step"><span>1</span><div><b>Запустите локальное ядро</b><p>Агент работает на этом компьютере и хранит данные локально.</p></div></div>
+            <div className="setup-step"><span>2</span><div><b>Откройте ассистента</b><p>Настройте модель Шерлок и начните диалог.</p></div></div>
+          </section>}
           <section className="lower">
             <div className="panel"><div className="panel-head"><div><h3>Последние задания</h3><p>Локальная очередь Malenia</p></div><button className="link-btn" onClick={()=>setPage("tasks")}>Все задания <ArrowUpRight size={14}/></button></div><TaskList tasks={(data?.tasks??[]).slice(0,5)} onCancel={cancelTask}/></div>
             <div className="panel"><div className="panel-head"><div><h3>Активность</h3><p>Последние события агента</p></div><span className="live">● LIVE</span></div>{data?.events.length?<div className="events">{data.events.slice(0,6).map(e=><div className="event" key={e.id}><span><Check size={12}/></span><div><b>{e.message}</b><small>{time(e.created_at)}</small></div></div>)}</div>:<Empty title="Нет событий" text="Здесь появится история действий."/>}</div>
