@@ -184,7 +184,9 @@ const RESOURCE_LABELS = {inventory:"ИНВента",datalens:"DataLens",asgard:"
 function showAudit(snapshot) {
   if (!snapshot || typeof snapshot !== "object") return;
   const parts = (snapshot.results || []).map(item =>
-    RESOURCE_LABELS[item.role] + ": " + (item.status === "read" ? "прочитано" : "нужна проверка"));
+    RESOURCE_LABELS[item.role] + ": " + (item.status === "read" ?
+      "прочитано" + (Number.isInteger(item.pages) ? " (" + item.pages + " стр.)" : "") :
+      "нужна проверка"));
   const phase = snapshot.phase === "reconciled" ? "Сверка таблиц завершена (только предложения)." :
     snapshot.phase === "read_only" ? "Страницы прочитаны, но таблицы не сопоставлены. Требуется настройка структуры сайтов." :
     snapshot.phase === "needs_attention" ? "Обход завершён с ошибками." :
