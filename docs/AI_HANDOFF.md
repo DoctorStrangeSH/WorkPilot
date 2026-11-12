@@ -287,7 +287,7 @@ See LOCAL_AI.md. main must stay unchanged and PR #2 unmerged.
 - main must remain 712d0a8e1885cca402eaa4fdda041bb09b50e397; PR #2 draft/unmerged.
 
 
-## 0.5.0 Sherlock and explicit knowledge (in development)
+## 0.5.0 Sherlock and explicit knowledge (verified target-PC kit)
 
 - User approved continuing model/memory/knowledge work, then requested Sherlock
   branding and a stronger model for a DIFFERENT 32 GB NVIDIA PC. Exact GPU/VRAM
@@ -308,3 +308,32 @@ See LOCAL_AI.md. main must stay unchanged and PR #2 unmerged.
 - See LOCAL_AI.md for limits/architecture and THIRD_PARTY_MODELS.md for actual IDs
   and upstream license links. Next: Windows CI, verified target-PC kit, then actual
   user-machine quality/performance evaluation before claiming an improvement.
+
+
+## Verified Sherlock 0.5.0 target-PC distribution (2026-11-12)
+
+- Final code revision 5fa2711472516e35b10462d8c184aa5fa47cac1c. Published 19
+  changed files were fetched and compared; final preference-prompt change also
+  fetched and compared. Confirmed memory preferences are distinguished from note
+  data; neither grants tool/action/file permissions.
+- Successful CI: Windows installer 43202735277, Desktop checks 43202733579,
+  Python matrix 43202733675. 104 Python and 18 Node tests, frontend/Rust, frozen
+  agent/native host, Windows PowerShell 5.1 registration, desktop single instance
+  and installed-upgrade hash/lock/repair/preserved-task-and-knowledge tests passed.
+- Installer artifact 13935179133; artifact ZIP SHA256
+  91a1bd4a7654bd5e54dc3fffb5829f202247f7e7162d1ef28ed9445fc34aa2cf.
+  Download verified before extracting. Packaged desktop reports 0.5.0. Downloaded
+  frozen agent was separately started on an ephemeral port with temporary data:
+  runtime capability/version, idempotent confirmed memory, sample Markdown import,
+  persistence after restart and deletion all passed. Only fixture processes stopped.
+- Prepared outputs/Malenia-0.5.0-Sherlock-Windows.zip with verified installer,
+  Russian start guide, sample Obsidian folder, optional generic Browser Bridge
+  setup/extension and SHA256 manifest. No personal extension ID or user directory.
+  Full official local runtime and large model weights are downloaded on target PC,
+  not embedded. Official model manifests confirmed 8B ~4.87 GiB, 4B ~2.33 GiB,
+  14B ~8.64 GiB. No 8B/14B weights were downloaded on the development PC.
+- Current computer's installed 0.4.1 was NOT replaced. Target second-PC installation,
+  actual 8B quality/latency and NVIDIA offload remain unverified and require that PC.
+  Do not describe this kit as an already installed/benchmarked stronger model.
+- Internet fact search and autonomous actions remain unimplemented. This iteration
+  adds setup, explicit persistent memory and bounded local reference retrieval.
