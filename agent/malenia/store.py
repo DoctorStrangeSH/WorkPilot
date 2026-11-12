@@ -84,6 +84,16 @@ class TaskStore:
                     updated_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS browser_audit_progress (
+                    id INTEGER PRIMARY KEY CHECK (id=1),
+                    job_id TEXT NOT NULL,
+                    current_role TEXT,
+                    completed_sources INTEGER NOT NULL DEFAULT 0,
+                    attention_sources INTEGER NOT NULL DEFAULT 0,
+                    failed_role TEXT,
+                    updated_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS browser_audit_summary (
                     id INTEGER PRIMARY KEY CHECK (id = 1),
                     checked_at TEXT NOT NULL,
@@ -277,10 +287,17 @@ class TaskStore:
         with self._session() as db:
             self._expire_browser_audit(db)
             row = db.execute(
-                "SELECT job_id, status, created_at, updated_at "
-                "FROM browser_audit_job WHERE id=1"
+                """SELECT j.job_id,j.status,j.created_at,j.updated_at,
+                          p.current_role,p.completed_sources,p.attention_sources,p.failed_role
+                   FROM browser_audit_job j LEFT JOIN browser_audit_progress p
+                   ON p.id=1 AND p.job_id=j.job_id WHERE j.id=1"""
             ).fetchone()
-        return dict(row) if row else None
+        if row is None:
+            return None
+        result = dict(row)
+        result["completed_sources"] = result["completed_sources"] or 0
+        result["attention_sources"] = result["attention_sources"] or 0
+        return result
 
     def request_browser_audit(self) -> dict[str, Any]:
         """Single bounded browser audit requested through the authenticated desktop API."""
@@ -303,6 +320,16 @@ class TaskStore:
                    created_at=excluded.created_at,created_unix=excluded.created_unix,
                    updated_at=excluded.updated_at""",
                 (job_id, now, time.time(), now),
+            )
+            db.execute(
+                """INSERT INTO browser_audit_progress
+                   (id,job_id,current_role,completed_sources,attention_sources,failed_role,updated_at)
+                   VALUES (1,?,NULL,0,0,NULL,?)
+                   ON CONFLICT(id) DO UPDATE SET
+                   job_id=excluded.job_id,current_role=NULL,
+                   completed_sources=0,attention_sources=0,failed_role=NULL,
+                   updated_at=excluded.updated_at""",
+                (job_id, now),
             )
         return {"job_id": job_id, "status": "pending", "created_at": now,
                 "updated_at": now}
@@ -337,3 +364,44 @@ class TaskStore:
                 ("completed" if succeeded else "failed", _now(), job_id),
             )
             return cursor.rowcount == 1
+
+    def update_browser_audit_progress(
+        self, job_id: str, current_role: str | None, completed_sources: int,
+        attention_sources: int, failed_role: str | None,
+    ) -> bool:
+        """Accept only coarse progress from the active claimed job.
+
+        No URLs, codes, source rows, snippets or browser exceptions are stored.
+        """
+        roles = {"inventory", "datalens", "asgard"}
+        if (not isinstance(job_id, str) or len(job_id) != 36
+                or current_role not in roles | {None}
+                or failed_role not in roles | {None}
+                or type(completed_sources) is not int or
+                type(attention_sources) is not int or
+                not 0 <= attention_sources <= completed_sources <= 3):
+            return False
+        with self._session() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._expire_browser_audit(db)
+            active = db.execute(
+                "SELECT job_id,status FROM browser_audit_job WHERE id=1"
+            ).fetchone()
+            if active is None or active["job_id"] != job_id or active["status"] != "running":
+                return False
+            prior = db.execute(
+                "SELECT completed_sources,attention_sources FROM browser_audit_progress "
+                "WHERE id=1 AND job_id=?", (job_id,),
+            ).fetchone()
+            if prior is None or completed_sources < prior["completed_sources"] or (
+                attention_sources < prior["attention_sources"]):
+                return False
+            db.execute(
+                """UPDATE browser_audit_progress
+                   SET current_role=?,completed_sources=?,attention_sources=?,
+                       failed_role=?,updated_at=?
+                   WHERE id=1 AND job_id=?""",
+                (current_role, completed_sources, attention_sources,
+                 failed_role, _now(), job_id),
+            )
+        return True
