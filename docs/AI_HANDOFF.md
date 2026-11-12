@@ -1,3 +1,16 @@
+## 2026-11-12 — batch order preview and Excel copy
+
+- User asked to continue improving Malenia, without setting up personal Gmail OAuth now.
+- Feature branch: `feat/desktop-shell`, head at this handoff: `7c015267494e6ad64211436c80c9ffe12967921a`. PR #2 remains draft. `main` unchanged.
+- Implemented `agent/malenia/order_batch.py`: pure bounded `preview_batch(rows)`, max 100 rows and 100 scans per row, no persistence or external fetch, uses existing confirmed `evaluate_order` rules. All occurrences of duplicate cargo_place + inventory_date are manually reviewed, rather than trusting either duplicate.
+- Local API `POST /v1/orders/batch-preview` is authenticated and limited to 128KiB JSON. Tauri command `preview_order_batch` exposes this only to local UI.
+- Added `desktop/src/OrderBatchPage.tsx` and nav item «Список заказов». The user pastes 2–9 TAB-delimited columns copied from Excel (cargo-place, inventory date, scan time, SC ID, scan result, Asgard status, box ID, history confirmed, issued in history). Scan with a timestamp requires **explicit SC ID and result**; no inferred OK. Unknown Asgard statuses are manually reviewed. Dates accept ISO or DD.MM.YYYY, scan times include HH:MM. Supports 100 rows, synthetic examples.
+- After processing, shows status counts and per-row proposals. «Скопировать для Excel» copies a TSV report to clipboard on user action only. `safeCell` prevents spreadsheet formula injection by text-escaping cells beginning with =,+,-,@. Data never goes to SQLite or corporate services and never modifies the user's Excel/ИНВента. Data resides only in the current UI memory until copied.
+- Added unit tests `tests/test_order_batch.py`, authenticated API tests in `tests/test_server.py`, UI tests in `tests/navigation_ui.test.cjs`.
+- On code commit `b148b7c`, Python CI passed (run `43253546201`). On preceding commit `b148b7c`, frontend build and Node regression tests passed in Desktop run `43253545944`, while Tauri host check continued. Latest code commit `7c015267494e6ad64211436c80c9ffe12967921a` hardens UI validation so scan date without SC ID/result fails closed. CI for latest code still pending; do not claim final installer complete until passing Desktop/Windows runs.
+- Google OAuth setup remains deferred. DataLens/Asgard browser access and automatic writeback are NOT implemented. Next safety check: verify latest CI and Windows installer, then consider optional import from local XLSX/CSV (only if user wants) and a real persistent result-history feature only with explicit privacy design.
+- Documentation details: `docs/ROADMAP.md` stage 10. PR #2 must remain draft/unmerged until user review.
+
 ## 2026-11-12 — OAuth postponed, offline order workbench started
 
 - User said: «Давай попозже это сделаем:) Продолжай улучшать программу». **Do not ask them to configure Google Cloud or OAuth now.**
