@@ -55,6 +55,27 @@ class TaskStoreTests(unittest.TestCase):
         second = self.store.create_task("Same")
         self.assertNotEqual(first["id"], second["id"])
 
+    def test_browser_audit_claim_is_atomic_and_expired_jobs_are_not_replayed(self):
+        first = self.store.request_browser_audit()
+        with self.assertRaises(SubmissionConflict):
+            self.store.request_browser_audit()
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            claims = list(pool.map(lambda _: self.store.claim_browser_audit(), range(12)))
+        claimed = [item for item in claims if item]
+        self.assertEqual(len(claimed), 1)
+        self.assertEqual(claimed[0]["job_id"], first["job_id"])
+        self.assertFalse(self.store.finish_browser_audit("not-the-job", True))
+        self.assertTrue(self.store.finish_browser_audit(first["job_id"], False))
+        self.assertEqual(self.store.latest_browser_audit_job()["status"], "failed")
+        second = self.store.request_browser_audit()
+        self.assertNotEqual(first["job_id"], second["job_id"])
+        with self.store._session() as db:
+            db.execute("UPDATE browser_audit_job SET created_unix=0 WHERE id=1")
+        self.assertEqual(self.store.latest_browser_audit_job()["status"], "expired")
+        self.assertIsNone(self.store.claim_browser_audit())
+        self.assertFalse(self.store.finish_browser_audit(second["job_id"], True))
+        self.assertEqual(self.store.latest_browser_audit_job()["status"], "expired")
+
     def test_unknown_task_returns_none(self):
         self.assertIsNone(self.store.get_task("not-a-real-id"))
         self.assertIsNone(self.store.cancel_task("not-a-real-id"))
