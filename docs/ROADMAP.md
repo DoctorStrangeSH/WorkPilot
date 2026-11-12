@@ -1,6 +1,6 @@
 # Malenia — дорожная карта
 
-Статус на 2026-11-12: реализация Malenia 0.6.0 находится в `feat/desktop-shell`; PR #2 остаётся draft и не слит. PR #1 — фундамент Runtime — также открыт. `main` намеренно не изменяется. Этапы отмечаются выполненными только после реализации и проверок. UX и Google Sheets UI прошли frontend build и Node regression tests на коммите `0642cdd`; Python CI прошёл на Python 3.11/3.12/3.13 (157 тестов в каждой матрице, включая order rules, OAuth, Sheets connector и API). Tauri host/Rust check прошёл на коммите `b355208`; Windows Credential Manager integration test и installer на последних коммитах ещё требуют завершения Desktop/Windows CI. Не объявлять весь PR зелёным до финальных прогонов.
+Статус на 2026-11-12: реализация Malenia 0.6.0 находится в `feat/desktop-shell`; PR #2 остаётся draft и не слит. PR #1 — фундамент Runtime — также открыт. `main` намеренно не изменяется. Этапы отмечаются выполненными только после реализации и проверок. Предыдущая базовая версия UX/Google Sheets UI прошла frontend build и Node regression tests на коммите `0642cdd`; Python CI прошёл 157 тестов на Python 3.11/3.12/3.13 до последних optional-secret/fragment-callback тестов. Tauri host/Rust check прошёл на коммите `b355208`. Для кода на `bd157e1` текущие проверки: Python run `43237513372` queued, Desktop run `43237513501` queued, Windows installer run `43237513420` in progress. Не объявлять весь PR зелёным до завершения этих прогонов.
 
 ## Этап 0 — Основа репозитория
 - [x] Зафиксировать продуктовые требования, архитектуру, решения и безопасность.
@@ -166,13 +166,15 @@ Browser Bridge пока передаёт только вручную выбра�
 - [x] Добавить unit-тесты для совпадений, исключения чужих СЦ/неуспешных сканов, границы даты, каждого известного статуса и неполных данных.
 - [x] Подготовить Windows Credential Manager vault для именованных integration secrets; без plaintext fallback, с изолированными unit-тестами и Windows integration test.
 - [x] Реализовать Google OAuth Desktop flow: PKCE S256, одноразовый state, случайный loopback port на 127.0.0.1, callback validation, token exchange/refresh и строгий exact-scope check.
+- [x] Поддержать Google loopback callback, где state приходит в query или fragment; для fragment используется статическая same-origin страница без внешних ресурсов.
+- [x] Поддержать необязательный Desktop Client Secret только для проектов, которые требуют его при token exchange; если введён, он хранится в Credential Manager и не считается защищённым секретом.
 - [x] Реализовать Windows Credential Manager для refresh token; access token остаётся в памяти, plaintext fallback отсутствует.
 - [x] Реализовать локальные API endpoints и Tauri commands для подключения, статуса, отключения и GET-only чтения одного spreadsheet ID + A1 range.
 - [x] Добавить UI подключения Google Sheets: пользователь вводит Client ID, подтверждает OAuth в системном браузере, указывает ID/диапазон; источник помечается подключённым только после успешного чтения диапазона.
 - [x] Ограничить ответ чтения 2 MiB, 1 000 строк и 50 000 ячеек; не добавлять write endpoints.
-- [x] Python tests: 157 тестов прошли на Python 3.11/3.12/3.13 (run 43235942347).
+- [x] Базовый Python CI: 157 тестов прошли на Python 3.11/3.12/3.13 (run 43235942347); расширенные тесты optional-secret и callback fragment ожидают текущий CI run `43237513372`.
 - [ ] Проверить Windows Credential Manager integration test в Windows Desktop CI и собрать/проверить installer на актуальном HEAD.
-- [ ] Пользователь создаёт Google OAuth Desktop Client ID, включает Sheets API, настраивает consent screen/Test users и самостоятельно подтверждает доступ. Client Secret не требуется.
+- [ ] Пользователь создаёт Google OAuth Desktop Client ID, включает Sheets API, настраивает consent screen/Test users и самостоятельно подтверждает доступ. Client Secret необязателен; если Google конкретного проекта потребует его, вводить только в локальном UI.
 - [ ] Подключить выбранную таблицу ИНВенты, подтвердить реальный Spreadsheet ID, вкладку и диапазон; после успешного read проверить нормализацию колонок.
 - [ ] Только после permission review подключить чтение выбранных вкладок DataLens и Asgard.
 - [ ] Собрать dry-run отчёт по заказам с доказательствами и очередью ручной проверки.
