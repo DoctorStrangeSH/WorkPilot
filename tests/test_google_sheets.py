@@ -3,7 +3,7 @@ import json
 import time
 import unittest
 from urllib.error import HTTPError
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import urlopen
 
 from malenia.google_oauth import GOOGLE_SHEETS_READONLY_SCOPE, GOOGLE_TOKEN_ENDPOINT
@@ -171,6 +171,38 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         while connector.status()["status"] == "authorizing" and time.monotonic() < deadline:
             time.sleep(0.02)
         self.assertEqual(connector.status()["status"], "authorized")
+
+    def test_loopback_callback_bridge_recovers_state_from_url_fragment(self):
+        store = FakeCredentialStore()
+        connector = GoogleSheetsConnector(store, FakeOpener(), callback_timeout=30)
+        result = connector.start_connect(CLIENT_ID)
+        query = parse_qs(urlsplit(result["authorization_url"]).query)
+        redirect_uri = query["redirect_uri"][0]
+        state = query["state"][0]
+
+        # URL fragments are not sent in the HTTP request; the local static
+        # bridge page forwards query + fragment parameters with same-origin POST.
+        callback = redirect_uri + "/?code=fragment-state-code#state=" + state
+        with urlopen(callback, timeout=3) as response:
+            page = response.read().decode("utf-8")
+            self.assertIn("URLSearchParams", page)
+            self.assertIn('fetch("/",', page)
+
+        body = urlencode({"code": "fragment-state-code", "state": state}).encode("ascii")
+        request = __import__("urllib.request", fromlist=["Request"]).Request(
+            redirect_uri + "/",
+            data=body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST",
+        )
+        with urlopen(request, timeout=3) as response:
+            self.assertEqual(response.status, 200)
+
+        deadline = time.monotonic() + 3
+        while connector.status()["status"] == "authorizing" and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertEqual(connector.status()["status"], "authorized")
+        self.assertEqual(store.get("google-sheets-refresh-token"), "refresh-token-fixture")
 
     def test_user_denial_never_persists_tokens(self):
         store = FakeCredentialStore()
