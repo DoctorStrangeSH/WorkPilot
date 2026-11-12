@@ -5,8 +5,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { PermissionsPage, type PermissionRequest, type PermissionDecision } from "./PermissionsPage";
 import {
   Activity, ArrowUpRight, BrainCircuit, Check, ChevronDown, CircleHelp,
-  Clock3, Cpu, Database, FileSearch, Globe2, LayoutDashboard, ListTodo,
-  LoaderCircle, LockKeyhole, MemoryStick, MoreHorizontal, Play, Plus,
+  Clock3, Cpu, Database, Globe2, LayoutDashboard, ListTodo,
+  LoaderCircle, LockKeyhole, MemoryStick, MoreHorizontal, Play, Plus, Plug,
   Search, Settings2, ShieldCheck, Sparkles, Square, X
 } from "lucide-react";
 
@@ -15,9 +15,9 @@ type EventItem = { id:number; event_type:string; message:string; created_at:stri
 type BrowserTab = { id:string; url:string; title:string; shared_at:string; };
 type Resources = { total_memory_bytes:number; available_memory_bytes:number; used_memory_percent:number; logical_processors:number; cpu_usage_percent:number; mode:"normal"|"economy"|"emergency"; recommended_parallel_jobs:number; };
 type Dashboard = { running:boolean; resources:Resources; tasks:Task[]; events:EventItem[]; browser_tabs:BrowserTab[]; permissions:PermissionRequest[]; };
-type Page = "overview"|"tasks"|"browser"|"search"|"ai"|"settings"|"permissions"|"knowledge";
+type Page = "overview"|"tasks"|"browser"|"sources"|"ai"|"settings"|"permissions"|"knowledge";
 
-const labels:Record<Page,string>={overview:"Главная",tasks:"Задания",browser:"Браузер",search:"Поиск",ai:"Ассистент",settings:"Настройки",permissions:"Разрешения",knowledge:"Память и знания"};
+const labels:Record<Page,string>={overview:"Главная",tasks:"Задания",browser:"Браузер",sources:"Источники",ai:"Ассистент",settings:"Настройки",permissions:"Разрешения",knowledge:"Память и знания"};
 const bytes=(n:number)=>n ? (n/1024/1024/1024).toFixed(1)+" ГБ" : "—";
 const time=(v:string)=>{try{return new Intl.DateTimeFormat("ru-RU",{hour:"2-digit",minute:"2-digit"}).format(new Date(v));}catch{return v;}};
 
@@ -66,6 +66,7 @@ export default function App(){
         <Nav icon={<Sparkles/>} label="Ассистент" active={page==="ai"} onClick={()=>setPage("ai")}/>
         <Nav icon={<ListTodo/>} label="Задания" active={page==="tasks"} count={data?.tasks.length} onClick={()=>setPage("tasks")}/>
         <Nav icon={<Globe2/>} label="Браузер" active={page==="browser"} onClick={()=>setPage("browser")}/>
+        <Nav icon={<Plug/>} label="Источники" active={page==="sources"} onClick={()=>setPage("sources")}/>
       </nav>
       <div className="nav-label separated">ЗНАНИЯ И БЕЗОПАСНОСТЬ</div>
       <nav>
@@ -110,7 +111,7 @@ export default function App(){
 
         {page==="permissions"&&<PermissionsPage requests={data?.permissions??[]} connected={connected} busy={busy} onDecide={decidePermission}/>}
         {page==="browser"&&<BrowserPage tabs={data?.browser_tabs??[]} connected={connected}/>}
-        {page==="search"&&<Coming icon={<FileSearch/>} title="Универсальный поиск" text="Здесь появится поиск по рабочим ресурсам, трекерам и фотографиям. Источники подключаются отдельными адаптерами."/>}
+        {page==="sources"&&<SourcesPage tabs={data?.browser_tabs??[]} onOpenBrowser={()=>setPage("browser")}/>}
         {page==="knowledge"&&<KnowledgePage connected={connected}/>}
         {page==="ai"&&<AiPage connected={connected} onTaskCreated={()=>void refresh()}/>}
         {page==="settings"&&<section className="page"><div className="page-head"><div><div className="eyebrow">КОНФИГУРАЦИЯ</div><h1>Настройки</h1><p>Состояние локальной среды и параметры запуска.</p></div></div><div className="settings-grid"><Setting icon={<Database/>} title="Локальный агент" text="Python Runtime слушает только localhost." value={connected?"Запущен":"Остановлен"} action={<button className={connected?"danger":"primary"} onClick={connected?stopAgent:runAgent} disabled={busy}>{connected?<Square size={14}/>:<Play size={14}/>} {connected?"Остановить":"Запустить"}</button>}/><Setting icon={<ShieldCheck/>} title="Приватность" text="Секреты браузера не извлекаются. API доступен только локально." value="Local-first"/><Setting icon={<Cpu/>} title="Среда разработки" text="Windows · Python 3.11+ · SQLite · Tauri 2" value="Версия 0.6.0"/><Setting icon={<Globe2/>} title="Будущие подключения" text="Ручная передача вкладок Яндекс Браузера доступна через Browser Bridge. Шерлок поддерживает локальную модель и включаемый интернет-поиск." value="Доступны"/></div></section>}
@@ -136,5 +137,17 @@ function BrowserPage({tabs,connected}:{tabs:BrowserTab[];connected:boolean}){
     <div className="note"><CircleHelp size={15}/>Native Messaging работает только после регистрации расширения и хоста. Поддержка проверяется на установленной версии Яндекс Браузера; автоматический доступ к вкладкам не включён.</div>
   </section>;
 }
-function Coming({icon,title,text}:{icon:ReactNode;title:string;text:string}){return <div className="coming"><div>{icon}</div><small>СЛЕДУЮЩИЙ ЭТАП РАЗРАБОТКИ</small><h1>{title}</h1><p>{text}</p><span>Модуль пока не подключён</span></div>;}
+
+function SourcesPage({tabs,onOpenBrowser}:{tabs:BrowserTab[];onOpenBrowser:()=>void}){
+  return <section className="page sources-page">
+    <div className="page-head"><div><div className="eyebrow">РАБОЧИЕ ПОДКЛЮЧЕНИЯ</div><h1>Источники</h1><p>Здесь будет видно, к каким рабочим системам Malenia действительно имеет доступ.</p></div></div>
+    <div className="sources-notice"><ShieldCheck size={17}/><span>Доступ ChatGPT к вашим сервисам не переносится в Malenia. Каждый источник подключается отдельно, с минимальными разрешениями. Пока все рабочие интеграции доступны только после отдельной настройки.</span></div>
+    <div className="sources-grid">
+      <article className="panel source-card"><div className="source-card-top"><span className="source-icon sheets"><Database size={19}/></span><span className="source-state pending">Не подключён</span></div><h2>Google Sheets · ИНВента</h2><p>Отдельное read-only подключение к таблицам из приложения ещё не настроено. Подключение Google Drive в ChatGPT не даёт Malenia доступ к таблице.</p><small>Следующий шаг: OAuth только для чтения.</small></article>
+      <article className="panel source-card"><div className="source-card-top"><span className="source-icon datalens"><Activity size={19}/></span><span className="source-state pending">Не подключён</span></div><h2>Yandex DataLens</h2><p>Дашборд пока не читается приложением. Сначала будет реализовано чтение выбранной авторизованной вкладки или официального API.</p><small>Следующий шаг: read-only доступ и проверка разрешений.</small></article>
+      <article className="panel source-card"><div className="source-card-top"><span className="source-icon asgard"><Globe2 size={19}/></span><span className="source-state pending">Не подключён</span></div><h2>Asgard</h2><p>Рабочая сессия остаётся в Яндекс Браузере. Malenia пока не читает статусы или историю коробок на этой странице.</p><small>Следующий шаг: разрешённое чтение выбранной страницы.</small></article>
+      <article className="panel source-card"><div className="source-card-top"><span className="source-icon browser"><Plug size={19}/></span><span className="source-state ${tabs.length ? 'ready' : 'pending'}">{tabs.length ? `Передано вкладок: ${tabs.length}` : "Ожидает передачи"}</span></div><h2>Browser Bridge</h2><p>Передаёт только заголовок и очищенный URL вкладки, которой вы поделились вручную. Содержимое страницы, DOM, cookies и история браузера не читаются.</p><small>Можно открыть список вручную переданных вкладок.</small><button className="secondary source-action" onClick={onOpenBrowser}>Открыть Browser Bridge <ArrowUpRight size={14}/></button></article>
+    </div>
+  </section>;
+}
 function Setting({icon,title,text,value,action}:{icon:ReactNode;title:string;text:string;value:string;action?:ReactNode}){return <div className="panel setting"><div className="setting-icon">{icon}</div><h3>{title}</h3><p>{text}</p><div className="setting-bottom"><b>{value}</b>{action}</div></div>;}
