@@ -271,25 +271,28 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
             payload = self._post_form(GOOGLE_TOKEN_ENDPOINT, token_fields, _MAX_TOKEN_RESPONSE_BYTES)
             validated = validate_token_response(payload)
             store = self._credential_store()
-            # Store the refresh token first. If storing the public client ID fails,
-            # remove the token so the pair cannot be left half-configured.
-            store.set(_REFRESH_TOKEN_KEY, str(validated["refresh_token"]))
-            try:
-                store.set(_CLIENT_ID_KEY, attempt.client_id)
-                if attempt.client_secret:
-                    store.set(_CLIENT_SECRET_KEY, attempt.client_secret)
-                else:
-                    store.delete(_CLIENT_SECRET_KEY)
-            except Exception:
-                store.delete(_REFRESH_TOKEN_KEY)
-                store.delete(_CLIENT_ID_KEY)
-                store.delete(_CLIENT_SECRET_KEY)
-                raise
             with self._lock:
+                if attempt.cancelled:
+                    attempt.status = "cancelled"
+                    return
+                # Serialize persistence with disconnect so a late OAuth callback
+                # cannot recreate credentials after the user disconnects.
+                store.set(_REFRESH_TOKEN_KEY, str(validated["refresh_token"]))
+                try:
+                    store.set(_CLIENT_ID_KEY, attempt.client_id)
+                    if attempt.client_secret:
+                        store.set(_CLIENT_SECRET_KEY, attempt.client_secret)
+                    else:
+                        store.delete(_CLIENT_SECRET_KEY)
+                except Exception:
+                    store.delete(_REFRESH_TOKEN_KEY)
+                    store.delete(_CLIENT_ID_KEY)
+                    store.delete(_CLIENT_SECRET_KEY)
+                    raise
                 self._access_token = str(validated["access_token"])
                 self._access_expires_at = self._clock() + int(validated["expires_in"]) - 60
-            attempt.status = "connected"
-            attempt.error = None
+                attempt.status = "connected"
+                attempt.error = None
         except GoogleOAuthError:
             attempt.status = "error"
             attempt.error = "oauth_response_invalid"
@@ -341,12 +344,13 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
                 attempt.cancelled = True
                 attempt.status = "cancelled"
                 attempt.event.set()
+            self._attempt = None
             self._access_token = None
             self._access_expires_at = 0.0
-        store = self._credential_store()
-        refresh_deleted = store.delete(_REFRESH_TOKEN_KEY)
-        client_deleted = store.delete(_CLIENT_ID_KEY)
-        secret_deleted = store.delete(_CLIENT_SECRET_KEY)
+            store = self._credential_store()
+            refresh_deleted = store.delete(_REFRESH_TOKEN_KEY)
+            client_deleted = store.delete(_CLIENT_ID_KEY)
+            secret_deleted = store.delete(_CLIENT_SECRET_KEY)
         return {
             "connected": False,
             "status": "not_connected",
