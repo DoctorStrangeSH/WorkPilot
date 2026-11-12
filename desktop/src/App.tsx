@@ -232,10 +232,10 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
           </div>:
           <div className="google-read-form">
             <label>ID таблицы
-              <input value={spreadsheetId} onChange={e=>setSpreadsheetId(e.target.value)} maxLength={256} placeholder="ID между /d/ и /edit в ссылке Google Sheets" disabled={busy}/>
+              <input value={spreadsheetId} onChange={e=>{setSpreadsheetId(e.target.value);setSheetData(null);setVerifiedKey(null);}} maxLength={256} placeholder="ID между /d/ и /edit в ссылке Google Sheets" disabled={busy}/>
             </label>
             <label>Диапазон ячеек
-              <input value={range} onChange={e=>setRange(e.target.value)} maxLength={200} placeholder="Например: Лист1!A1:Z100" disabled={busy}/>
+              <input value={range} onChange={e=>{setRange(e.target.value);setSheetData(null);setVerifiedKey(null);}} maxLength={200} placeholder="Например: Лист1!A1:Z100" disabled={busy}/>
             </label>
             <div className="google-actions">
               <button className="primary" disabled={busy||!spreadsheetId.trim()||!range.trim()} onClick={()=>void readSheet()}>{busy?"Читаем…":"Прочитать диапазон"}</button>
