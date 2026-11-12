@@ -53,3 +53,10 @@ DataLens adapter должен передавать исходное поле `ma
 6. Сверить полученные строки с пользователем, затем построить read-only dry-run отчёт. Запись результатов в ИНВенту — отдельная функция, запрещённая до нового явного согласования.
 
 OAuth credentials (Client ID) пользователь должен создать в своём Google Cloud проекте и передать приложению через локальный экран настройки. Не добавлять credentials в Git и не просить пользователя присылать refresh token.
+
+
+## Официальные ссылки Google для OAuth этапа
+
+- [OAuth 2.0 для Desktop Apps](https://developers.google.com/identity/protocols/oauth2/native-app) — desktop client является public client; Google рекомендует PKCE и поддерживает loopback redirect для desktop apps.
+- [Scopes Google Sheets API](https://developers.google.com/workspace/sheets/api/scopes) — `spreadsheets.readonly` позволяет просматривать таблицы и классифицируется Google как sensitive scope.
+- [Миграция loopback IP flow](https://developers.google.com/identity/protocols/oauth2/resources/loopback-migration) — loopback flow остаётся поддерживаемым для desktop OAuth clients.
