@@ -362,3 +362,31 @@ test('browser GET-search extractor only accepts an unambiguous read-only form', 
     ()=>api.exactGetSearch(chrome,7,'datalens','SECRET?','https://analytics.example'),
     /invalid_search/);
 });
+
+test('progress reports a stable safe reason code, never raw URLs or browser errors', async () => {
+  const api=runner();
+  const chrome=fakeBrowser('https://login.example/auth?token=SECRET');
+  const reports=[];
+  const result=await api.run(chrome,{
+    inventory:'https://inventory.example/orders',
+    datalens:'https://analytics.example/orders',
+    asgard:'https://asgard.example/orders'
+  },async()=>{throw Error('should not send');},async data=>reports.push(data));
+  assert.equal(result.phase,'needs_attention');
+  assert.equal(result.results[0].reason,'navigation_outside_allowed_origin');
+  assert.ok(reports.every(data=>!JSON.stringify(data).includes('SECRET')));
+  assert.ok(reports.every(data=>!JSON.stringify(data).includes('login.example')));
+});
+
+test('unexpected browser errors are reduced to generic safe reason', async () => {
+  const api=runner();
+  const chrome=fakeBrowser();
+  chrome.scripting.executeScript=async()=>{throw new Error('Failed URL https://secret.example/?token=SENSITIVE');};
+  const result=await api.run(chrome,{
+    inventory:'https://inventory.example/orders',
+    datalens:'https://analytics.example/orders',
+    asgard:'https://asgard.example/orders'
+  },async()=>{throw Error('should not send');},async()=>{});
+  assert.equal(result.results[0].reason,'site_or_browser_error');
+  assert.ok(!JSON.stringify(result).includes('SENSITIVE'));
+});
