@@ -39,7 +39,7 @@ class GoogleOAuthProtocolTests(unittest.TestCase):
         self.assertIsNone(validate_client_secret(None))
         self.assertIsNone(validate_client_secret(""))
         self.assertEqual(validate_client_secret("GOCSPX-fixture-secret"), "GOCSPX-fixture-secret")
-        for value in ("contains space", "bad\\nsecret", "x" * 513):
+        for value in ("contains space", "bad" + chr(10) + "secret", "x" * 513):
             with self.subTest(value=value), self.assertRaises(GoogleOAuthError):
                 validate_client_secret(value)
 
