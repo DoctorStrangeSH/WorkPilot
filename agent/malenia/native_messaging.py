@@ -122,8 +122,14 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
             result = reconcile_tables(payload.get("snapshots"))
         except (SiteSnapshotError, ValueError, TypeError):
             return {**response, "ok": False, "error": "unmapped_or_invalid_site_tables"}
+        # Source snapshots stay ephemeral. Save only aggregate counts so the
+        # desktop dashboard can show the latest completed audit.
+        try:
+            store.record_browser_audit_summary(result["total"], result["summary"])
+        except (sqlite3.Error, OSError, ValueError):
+            return {**response, "ok": False, "error": "audit_summary_unavailable"}
         return {**response, "ok": True, "type": "site_tables_reconciled",
-                **result, "persisted": False}
+                **result, "persisted": False, "aggregate_persisted": True}
 
     if message_type == "inspect_active_page":
         # Validate a user-initiated rendered-text snapshot without retaining it.
