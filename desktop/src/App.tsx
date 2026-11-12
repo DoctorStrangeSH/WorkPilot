@@ -176,15 +176,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
       setClientSecret("");
       setSheetNotice(message);
       await refreshSheetsStatus();
-    }catch(error){
-      const message=String(error);
-      setSheetError(message);
-      if(message.includes("google_reauthorization_required")){
-        setSheetsStatus({connected:false,status:"reauthorization_required",error:"google_reauthorization_required"});
-        setVerifiedKey(null);
-        setSheetData(null);
-      }
-    }
+    }catch(error){setSheetError(String(error));}
     finally{setBusy(false);}
   };
   const disconnectSheets=async()=>{
@@ -207,7 +199,15 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
       setSheetData(result);
       setVerifiedKey(spreadsheetId.trim()+"|"+range.trim());
       setSheetNotice("Диапазон прочитан. Никаких изменений в таблицу не внесено.");
-    }catch(error){setSheetError(String(error));}
+    }catch(error){
+      const message=String(error);
+      setSheetError(message);
+      if(message.includes("google_reauthorization_required")){
+        setSheetsStatus({connected:false,status:"reauthorization_required",error:"google_reauthorization_required"});
+        setVerifiedKey(null);
+        setSheetData(null);
+      }
+    }
     finally{setBusy(false);}
   };
 
