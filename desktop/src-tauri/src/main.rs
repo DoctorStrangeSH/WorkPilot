@@ -435,6 +435,22 @@ async fn install_sherlock(model: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn preview_order_batch(
+    state: State<'_, AgentState>, rows: Vec<Value>,
+) -> Result<Value, String> {
+    if rows.is_empty() || rows.len() > 100 {
+        return Err("Пакет должен содержать от 1 до 100 строк".to_string());
+    }
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        api_post_json(&token, "/v1/orders/batch-preview",
+            serde_json::json!({"rows": rows}),
+            Duration::from_secs(15))
+    }).await.map_err(|_| "Не удалось выполнить пакетную проверку".to_string())?
+}
+
+#[tauri::command]
 async fn preview_order(
     state: State<'_, AgentState>, order: Value, datalens_scans: Vec<Value>,
     asgard_record: Option<Value>,
@@ -569,7 +585,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_opener::init())
         .manage(AgentState::default())
-        .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, disconnect_google_sheets, preview_order])
+        .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, disconnect_google_sheets, preview_order, preview_order_batch])
         .run(tauri::generate_context!())
         .expect("error while running Malenia");
 }
