@@ -94,6 +94,7 @@ class GoogleSheetsConnector:
         self._attempt: _ConnectAttempt | None = None
         self._access_token: str | None = None
         self._access_expires_at = 0.0
+        self._reauthorization_required = False
 
     def _credential_store(self):
         if self._store is None:
@@ -144,7 +145,10 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
             client_secret = validate_client_secret(client_secret)
         except GoogleOAuthError as error:
             raise GoogleSheetsError("invalid_google_oauth_client_id") from error
-        self._credential_store()
+        store = self._credential_store()
+        if client_secret is None and store.get(_CLIENT_ID_KEY) == client_id:
+            # Reuse an optional secret already stored for this same public client.
+            client_secret = store.get(_CLIENT_SECRET_KEY)
 
         with self._lock:
             old = self._attempt
@@ -291,6 +295,7 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
                     raise
                 self._access_token = str(validated["access_token"])
                 self._access_expires_at = self._clock() + int(validated["expires_in"]) - 60
+                self._reauthorization_required = False
                 attempt.status = "connected"
                 attempt.error = None
         except GoogleOAuthError:
@@ -318,19 +323,25 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
             attempt = self._attempt
             if attempt is not None and attempt.status == "authorizing":
                 return {"connected": False, "status": "authorizing", "error": None}
+            reauthorization_required = self._reauthorization_required
         try:
             store = self._credential_store()
-            connected = bool(
-                store.get(_REFRESH_TOKEN_KEY)
-                and store.get(_CLIENT_ID_KEY)
-            )
+            client_id = store.get(_CLIENT_ID_KEY)
+            connected = bool(store.get(_REFRESH_TOKEN_KEY) and client_id)
         except GoogleSheetsError:
             return {"connected": False, "status": "unavailable", "error": "windows_credential_store_unavailable"}
+        if reauthorization_required:
+            return {
+                "connected": False,
+                "status": "reauthorization_required",
+                "error": "google_reauthorization_required",
+                "client_id": client_id,
+            }
         if connected:
             # A stored OAuth grant is not yet a verified source connection.
             # The UI marks a selected spreadsheet as connected only after a
             # successful read of its explicitly selected range.
-            return {"connected": False, "status": "authorized", "error": None}
+            return {"connected": False, "status": "authorized", "error": None, "client_id": client_id}
         with self._lock:
             attempt = self._attempt
             if attempt is not None and attempt.status in {"denied", "expired", "error"}:
@@ -347,6 +358,7 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
             self._attempt = None
             self._access_token = None
             self._access_expires_at = 0.0
+            self._reauthorization_required = False
             store = self._credential_store()
             refresh_deleted = store.delete(_REFRESH_TOKEN_KEY)
             client_deleted = store.delete(_CLIENT_ID_KEY)
@@ -379,9 +391,22 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
         except HTTPError as error:
             status = int(error.code)
             try:
+                raw_error = error.read(_MAX_TOKEN_RESPONSE_BYTES + 1)
+            except Exception:
+                raw_error = b""
+            try:
                 error.close()
             except Exception:
                 pass
+            error_code = None
+            try:
+                parsed_error = json.loads(raw_error.decode("utf-8"))
+                if isinstance(parsed_error, dict):
+                    error_code = parsed_error.get("error")
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                pass
+            if error_code == "invalid_grant":
+                raise GoogleSheetsError("google_reauthorization_required", status) from error
             raise GoogleSheetsError("google_request_failed", status) from error
         except URLError as error:
             raise GoogleSheetsError("google_network_unavailable") from error
@@ -409,7 +434,15 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
         client_secret = store.get(_CLIENT_SECRET_KEY)
         if client_secret:
             refresh_fields["client_secret"] = client_secret
-        payload = self._post_form(GOOGLE_TOKEN_ENDPOINT, refresh_fields, _MAX_TOKEN_RESPONSE_BYTES)
+        try:
+            payload = self._post_form(GOOGLE_TOKEN_ENDPOINT, refresh_fields, _MAX_TOKEN_RESPONSE_BYTES)
+        except GoogleSheetsError as error:
+            if error.code == "google_reauthorization_required":
+                with self._lock:
+                    self._reauthorization_required = True
+                    self._access_token = None
+                    self._access_expires_at = 0.0
+            raise
         try:
             validated = validate_refresh_response(payload)
         except GoogleOAuthError as error:
