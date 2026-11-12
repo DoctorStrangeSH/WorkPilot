@@ -5,6 +5,7 @@
   "description": "Share the active browser tab with Malenia only when you click the extension.",
   "permissions": [
     "activeTab",
+    "scripting",
     "nativeMessaging"
   ],
   "action": {
