@@ -143,6 +143,7 @@ type GoogleSheetsData = {range:string;majorDimension:string;values:(string|numbe
 
 function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected:boolean;onOpenBrowser:()=>void}){
   const [clientId,setClientId]=useState("");
+  const [clientSecret,setClientSecret]=useState("");
   const [sheetsStatus,setSheetsStatus]=useState<GoogleSheetsStatus>({connected:false,status:"not_connected",error:null});
   const [spreadsheetId,setSpreadsheetId]=useState("");
   const [range,setRange]=useState("A1:Z100");
@@ -170,7 +171,8 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
   const connectSheets=async()=>{
     setBusy(true);setSheetError("");setSheetNotice("");
     try{
-      const message=await invoke<string>("connect_google_sheets",{clientId:clientId.trim()});
+      const message=await invoke<string>("connect_google_sheets",{clientId:clientId.trim(),clientSecret:clientSecret.trim()||null});
+      setClientSecret("");
       setSheetNotice(message);
       await refreshSheetsStatus();
     }catch(error){setSheetError(String(error));}
@@ -227,8 +229,11 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
             <label>Google OAuth Desktop Client ID
               <input value={clientId} onChange={e=>setClientId(e.target.value)} maxLength={300} autoComplete="off" spellCheck={false} placeholder="…apps.googleusercontent.com" disabled={!connected||busy}/>
             </label>
+            <label>Client Secret <span className="source-optional">необязательно</span>
+              <input type="password" value={clientSecret} onChange={e=>setClientSecret(e.target.value)} maxLength={512} autoComplete="off" spellCheck={false} placeholder="Оставь пустым, если Google не требует" disabled={!connected||busy}/>
+            </label>
             <button className="primary source-action" disabled={!connected||busy||!clientId.trim()||sheetsStatus.status==="authorizing"} onClick={()=>void connectSheets()}>{busy?"Подключаем…":"Подключить Google"}</button>
-            <small>Client ID создаётся в Google Cloud Console для приложения типа Desktop. Включи Google Sheets API и добавь свой аккаунт в Test users, если экран согласия находится в режиме Testing. Client Secret не нужен. После нажатия откроется системный браузер, где ты сам подтвердишь доступ.</small>
+            <small>Создай OAuth client типа Desktop и включи Google Sheets API. Если consent screen в режиме Testing, добавь свой аккаунт в Test users. Desktop-приложения являются public clients: Google указывает, что Client Secret необязателен и не может считаться защищённым секретом. Если конкретный проект требует его при обмене токена, введи его здесь — он сохранится только в Windows Credential Manager. Не отправляй его в чат.</small>
           </div>:
           <div className="google-read-form">
             <label>ID таблицы
