@@ -65,3 +65,17 @@ are validated, not factual correctness. Reply `answer_mode` is `general`, `knowl
 or `web`; `local_only` is false after external search, although inference remains local.
 No results returns `generated=false`; network/parse failures return `web_*` errors.
 GET `/v1/runtime` release is `0.6.0` and includes `public_search` capability.
+
+
+## Google Sheets — read-only integration preview
+
+All routes below require the local bearer token and a loopback Host header.
+
+- `GET /v1/integrations/google-sheets/status` — connection state only; never returns tokens.
+- `POST /v1/integrations/google-sheets/connect` — JSON `{"client_id":"...apps.googleusercontent.com"}`. Starts a Desktop OAuth flow and returns a short-lived authorization URL to the trusted Tauri host. Tauri opens it in the system browser. The local callback binds only to `127.0.0.1`, validates one-use state and PKCE S256, and accepts only the exact Sheets read-only scope.
+- `POST /v1/integrations/google-sheets/read` — JSON `{"spreadsheet_id":"...","range":"Sheet1!A1:Z100"}`. Performs one GET request to the Google Sheets values API. Limits the response to 2 MiB, 1,000 rows and 50,000 cells.
+- `POST /v1/integrations/google-sheets/disconnect` — JSON `{}`. Deletes local refresh-token and client-ID credentials. It does not revoke the Google grant; the user can revoke it in Google Account settings.
+
+The only requested scope is `https://www.googleapis.com/auth/spreadsheets.readonly`. No Google Drive scope, Sheets write scope, listing of all Drive files, cell updates, comments, status changes or write endpoints exist. Refresh tokens are stored only in Windows Credential Manager. Access tokens remain in process memory. The client ID is public application metadata, not a secret.
+
+The user must create a Google OAuth Desktop client, enable the Sheets API, configure the consent screen/test user, and explicitly approve access in the system browser. Until a user authorizes and Malenia successfully reads a selected spreadsheet/range, the source must not be shown as connected. The OAuth flow and API are implemented in the feature branch; real-account authorization and a target-PC smoke test remain outstanding.
