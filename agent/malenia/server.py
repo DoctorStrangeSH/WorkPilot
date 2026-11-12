@@ -5,6 +5,7 @@ from __future__ import annotations
 import hmac
 import json
 import re
+import sqlite3
 import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
@@ -150,6 +151,8 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                 except ValueError:
                     limit = 50
                 self._send(200, {"events": store.list_events(limit)})
+            elif parsed.path == "/v1/browser/audit-job":
+                self._send(200, {"job": store.latest_browser_audit_job()})
             elif parsed.path == "/v1/browser/audit-summary":
                 self._send(200, {"audit": store.latest_browser_audit_summary(),
                                  "source_records_persisted": False})
@@ -167,6 +170,24 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
             if not self._require_access():
                 return
             parsed = urlsplit(self.path)
+
+            if parsed.path == "/v1/browser/audit-request":
+                payload = self._read_json(1024)
+                if payload is None:
+                    return
+                if payload:
+                    self._send(422, {"error": "invalid_audit_request"})
+                    return
+                try:
+                    job = store.request_browser_audit()
+                except SubmissionConflict:
+                    self._send(409, {"error": "browser_audit_already_active"})
+                    return
+                except sqlite3.Error:
+                    self._send(503, {"error": "audit_job_unavailable"})
+                    return
+                self._send(202, {"job": job, "read_only": True})
+                return
 
             if parsed.path == "/v1/orders/batch-preview":
                 payload = self._read_json(128 * 1024)
