@@ -48,7 +48,7 @@ DataLens adapter должен передавать исходное поле `ma
 1. Настроить отдельный Google OAuth Desktop client для Malenia. Desktop client является public client: использовать PKCE; не считать client secret секретом, который можно защитить в приложении.
 2. Запрашивать только `https://www.googleapis.com/auth/spreadsheets.readonly`. Этот scope read-only, но Google классифицирует его как sensitive; до публичного распространения может потребоваться проверка OAuth consent screen.
 3. Открывать системный браузер и использовать loopback redirect на случайном локальном порту; проверять одноразовый `state` и PKCE verifier.
-4. Хранить refresh token только в системном хранилище секретов Windows; не помещать токены в SQLite, конфигурацию, логи или frontend.
+4. Хранить refresh token только в системном хранилище секретов Windows; не помещать токены в SQLite, конфигурацию, логи или frontend. Для этого уже подготовлен `WindowsCredentialStore` в `agent/malenia/secret_store.py`; OAuth пока не подключён.
 5. Начать с явного выбора одного Spreadsheet ID и диапазона, только GET запросы Sheets API. Не добавлять Google Drive write scope, Sheets write scope, изменения/создания таблиц.
 6. Сверить полученные строки с пользователем, затем построить read-only dry-run отчёт. Запись результатов в ИНВенту — отдельная функция, запрещённая до нового явного согласования.
 
