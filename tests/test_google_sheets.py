@@ -1,6 +1,7 @@
 import io
 import json
 import time
+import threading
 import unittest
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlencode, urlsplit
@@ -80,6 +81,28 @@ class FakeOpener:
                 raise AssertionError("Missing bearer access token")
             return FakeResponse(self.sheet_payload)
         raise AssertionError("Unexpected outbound request")
+
+
+class BlockingTokenOpener(FakeOpener):
+    def __init__(self):
+        super().__init__()
+        self.exchange_started = threading.Event()
+        self.release_exchange = threading.Event()
+
+    def open(self, request, timeout=0):
+        if request.full_url == GOOGLE_TOKEN_ENDPOINT:
+            form = parse_qs(request.data.decode("ascii"))
+            if form.get("grant_type") == ["authorization_code"]:
+                self.exchange_started.set()
+                self.release_exchange.wait(3)
+                return FakeResponse({
+                    "access_token": "access-token-fixture",
+                    "refresh_token": "refresh-token-fixture",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                    "scope": GOOGLE_SHEETS_READONLY_SCOPE,
+                })
+        return super().open(request, timeout)
 
 
 class UnauthorizedOnceOpener(FakeOpener):
@@ -203,6 +226,26 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
             time.sleep(0.02)
         self.assertEqual(connector.status()["status"], "authorized")
         self.assertEqual(store.get("google-sheets-refresh-token"), "refresh-token-fixture")
+
+    def test_disconnect_during_token_exchange_cannot_resurrect_credentials(self):
+        store = FakeCredentialStore()
+        opener = BlockingTokenOpener()
+        connector = GoogleSheetsConnector(store, opener, callback_timeout=30)
+        result = connector.start_connect(CLIENT_ID)
+        attempt_thread = connector._attempt.thread
+        query = parse_qs(urlsplit(result["authorization_url"]).query)
+        redirect_uri = query["redirect_uri"][0]
+        callback = redirect_uri + "/?code=authorization-code-fixture&state=" + query["state"][0]
+        with urlopen(callback, timeout=3):
+            pass
+        self.assertTrue(opener.exchange_started.wait(3))
+
+        connector.disconnect()
+        opener.release_exchange.set()
+        attempt_thread.join(timeout=3)
+        self.assertFalse(attempt_thread.is_alive())
+        self.assertEqual(store.values, {})
+        self.assertEqual(connector.status()["status"], "not_connected")
 
     def test_user_denial_never_persists_tokens(self):
         store = FakeCredentialStore()
