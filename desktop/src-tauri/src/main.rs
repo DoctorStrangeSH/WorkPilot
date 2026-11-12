@@ -88,6 +88,7 @@ fn api_post_json(token: &str, path: &str, payload: Value, timeout: Duration) -> 
             "windows_credential_store_unavailable" => "Хранилище секретов Windows недоступно. Токены не будут сохранены в обычных файлах.".to_string(),
             "invalid_google_oauth_client_id" => "Проверьте формат Google OAuth Desktop Client ID.".to_string(),
             "google_sheets_not_connected" => "Сначала подключите Google Sheets.".to_string(),
+            "google_reauthorization_required" => "[google_reauthorization_required] Доступ Google истёк или был отозван. Подключите Google Sheets заново.".to_string(),
             "invalid_spreadsheet_id" => "Некорректный ID таблицы Google Sheets.".to_string(),
             "invalid_spreadsheet_range" => "Проверьте диапазон ячеек (например, Orders!A1:Z100).".to_string(),
             _ => format!("Google Sheets: {code}"),
