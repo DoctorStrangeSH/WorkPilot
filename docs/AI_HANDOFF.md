@@ -31,7 +31,7 @@ Last updated: 2026-11-12
 ## Verification state
 
 - Local: 24 Python tests passed, nine Node popup tests passed, frontend production build passed, and Windows PowerShell 5.1 new-namespace registration/discovery checks passed with isolated fixtures.
-- Full-namespace Rust compilation, frozen agent/desktop duplicate-start smoke tests and NSIS build still require the next CI result. Do not claim these runtime checks passed until that result is read.
+- Full-namespace CI passed on revision `bf9cfd6f80c980ea0bb8d0353fad9317506916ed`: Windows installer `43170856310` compiled Rust, exercised the frozen agent against duplicate/foreign listeners, passed the native host and registration smoke tests, built NSIS, and passed two-launch testing of the actual `Malenia.exe` before uploading both artifacts. Desktop checks `43170856302`, Python tests `43170856214` and Windows PowerShell 5.1 registration `43170776704` also passed. This is CI runtime verification, not a claim of installation on the user's PC.
 - The previously installed build's tab sharing was user-confirmed; the new full-namespace build has not been installed or end-to-end shared on the user's PC.
 
 ## Updating the user's PC
