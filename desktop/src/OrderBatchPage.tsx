@@ -82,8 +82,11 @@ const parseRows=(raw:string):BatchInput[]=>{
     if(!cargo||cargo.length>128||/[\r\n\u0000-\u001f]/.test(cargo))throw new Error("Строка "+(i+1)+": укажите штрихкод грузоместа (не более 128 символов).");
     let normalizedDate:string,normalizedScan="";
     try{normalizedDate=date(inv);if(scanned)normalizedScan=scanDate(scanned);}catch(e){throw new Error("Строка "+(i+1)+": "+String(e));}
-    if(scanned&&(!sc||!result))throw new Error("Строка "+(i+1)+": для скана обязательно укажите SC ID и результат (OK или ERROR).");
+    // Never discard partially pasted evidence: an incomplete scan cannot be trusted.
+    if((scanned||sc||result)&&(!scanned||!sc||!result))throw new Error("Строка "+(i+1)+": для скана нужны все три поля — дата, SC ID и результат. Удалите лишние поля, если скана нет.");
     if(result&&!["OK","ERROR"].includes(result))throw new Error("Строка "+(i+1)+": результат скана должен быть OK или ERROR.");
+    if(!status&&(box||history||issued))throw new Error("Строка "+(i+1)+": указан ID коробки или история, но отсутствует статус Asgard.");
+    if(status!=="В пути"&&(box||history||issued))throw new Error("Строка "+(i+1)+": ID коробки и расширенная история допустимы только при статусе Asgard «В пути».");
     if(status.length>120)throw new Error("Строка "+(i+1)+": статус Asgard слишком длинный.");
     let verified=false,wasIssued=false;
     try{verified=checked(history,"История проверена");wasIssued=checked(issued,"Выдан в истории");}catch(e){throw new Error("Строка "+(i+1)+": "+String(e));}
