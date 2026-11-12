@@ -84,7 +84,7 @@ var MaleniaAutomation = (() => {
     const targets = normalizeTargets(input);
     const results = [];
     for (const role of ROLES) {
-      onProgress({phase: "reading", role, results: [...results]});
+      await onProgress({phase: "reading", role, results: [...results]});
       try {
         results.push(await visit(chromeApi, role, targets[role], sendNative));
       } catch {
@@ -95,7 +95,7 @@ var MaleniaAutomation = (() => {
     }
     const complete = results.every(item => item.status === "read");
     const summary = {phase: complete ? "completed" : "needs_attention", results};
-    onProgress(summary);
+    await onProgress(summary);
     return summary;
   }
   return {ROLES, MAX_TEXT, normalizeTargets, origins, waitLoaded, run};
