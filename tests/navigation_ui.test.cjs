@@ -78,3 +78,13 @@ test('bulk Excel preview preserves source read-only and escapes formulas', () =>
   assert.match(bulk, /safeCell/);
   assert.doesNotMatch(bulk, /write_google_sheet|update_google_sheet|fetch\(/);
 });
+
+
+test('bulk paste rejects incomplete source evidence rather than silently ignoring it', () => {
+  const bulk = fs.readFileSync(path.resolve(__dirname, '../desktop/src/OrderBatchPage.tsx'), 'utf8');
+  assert.match(bulk, /\(scanned\|\|sc\|\|result\).*\(!scanned\|\|!sc\|\|!result\)/);
+  assert.match(bulk, /для скана нужны все три поля/);
+  assert.match(bulk, /!status&&\(box\|\|history\|\|issued\)/);
+  assert.match(bulk, /status!=="В пути"&&\(box\|\|history\|\|issued\)/);
+  assert.match(bulk, /ID коробки и расширенная история допустимы только/);
+});
