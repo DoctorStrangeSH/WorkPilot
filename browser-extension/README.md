@@ -171,3 +171,10 @@ When an explicitly started per-cargo audit cannot use the strictly validated nat
 It must also identify exactly one result table/grid with the documented exact column names and see **a mutation inside that result table**, not an unrelated notification or spinner, after the field update. The walker waits for a short quiet period before reading results, still enforces the same origin, per-cargo row identity, pagination/completeness limits, and fail-closed reconciliation. A missing/ambiguous field or table, or no observed table update, becomes a safe diagnostic code. The injected function does not return the cargo code or form values to extension progress.
 
 **This is generic behavior, not verified live operation in ИНВента, DataLens or Asgard.** Many SPAs need a submit button, custom filter activation, or server-side paging; these are intentionally unsupported rather than guessed. In particular, the Asgard extended history of a linked box remains unverified and its status remains manual review if needed. A search can initiate ordinary server-side reads as the site's own UI does; respect organizational policies and permitted access. No status changes are implemented.
+
+
+### Reactive search: stale-table protection
+
+A DOM mutation alone no longer proves the search was applied: a site may only re-render a spinner or unrelated cells. The reactive adapter now compares the bounded visible text of the exact matching result table before and after updating its search field. It requires both a mutation within that table and changed rendered table content after the debounce period. A mutation with unchanged table content reports `dynamic_search_unchanged_table`; a missing update reports `dynamic_search_no_result_update`. Both fail closed and are shown as Russian diagnostic labels.
+
+This intentionally may reject valid searches whose result set is exactly identical before and after filtering; it is safer than treating an unchanged or stale result as proof. A complete real-site adapter should use the website's own documented filter/query completion signals and explicit empty-results state instead of guessing.
