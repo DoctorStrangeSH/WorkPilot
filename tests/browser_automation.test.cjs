@@ -428,7 +428,11 @@ test('reactive search enters exact cargo in one labelled standalone searchbox', 
   }
   const chrome={
     scripting:{async executeScript({func,args}) {
-      const context={document:{body:{},querySelectorAll:()=>[input]},
+      const table={querySelectorAll:()=>[
+        {innerText:'main_partner_code_original'},{innerText:'sc_id'},
+        {innerText:'result'},{innerText:'scanned_at'}]};
+      const context={document:{body:{},querySelectorAll:selector=>
+        selector.includes('table,')?[table]:[input]},
         location:{origin:'https://analytics.example'},HTMLInputElement:MockInput,
         MutationObserver:Observer,Event:class{constructor(type){this.type=type;}},
         setTimeout,clearTimeout};
