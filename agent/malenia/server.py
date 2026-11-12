@@ -123,7 +123,7 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
 
             if parsed.path == "/v1/runtime":
                 self._send(200, {"release": "0.6.0", "protocol": 1,
-                    "capabilities": ["local_chat", "task_idempotency", "explicit_knowledge", "knowledge_only", "public_search"]})
+                    "capabilities": ["local_chat", "task_idempotency", "explicit_knowledge", "knowledge_only", "public_search", "google_sheets_readonly"]})
             elif parsed.path == "/v1/knowledge":
                 self._send(200, {"records": knowledge.list()})
             elif parsed.path == "/v1/ai/status":
