@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { BrainCircuit, Settings2, ShieldCheck, Sparkles } from "lucide-react";
 import {KnowledgeEditor,type KnowledgeDraft} from "./KnowledgePage";
 import { invoke } from "@tauri-apps/api/core";
 
