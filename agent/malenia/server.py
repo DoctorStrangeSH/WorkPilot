@@ -150,6 +150,9 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                 except ValueError:
                     limit = 50
                 self._send(200, {"events": store.list_events(limit)})
+            elif parsed.path == "/v1/browser/audit-summary":
+                self._send(200, {"audit": store.latest_browser_audit_summary(),
+                                 "source_records_persisted": False})
             elif parsed.path == "/v1/browser/tabs":
                 query = parse_qs(parsed.query)
                 try:
