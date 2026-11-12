@@ -138,7 +138,7 @@ function BrowserPage({tabs,connected}:{tabs:BrowserTab[];connected:boolean}){
   </section>;
 }
 
-type GoogleSheetsStatus = {connected:boolean;status:string;error:string|null};
+type GoogleSheetsStatus = {connected:boolean;status:string;error:string|null;client_id?:string};
 type GoogleSheetsData = {range:string;majorDimension:string;values:(string|number|boolean|null)[][];read_only:boolean};
 
 function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected:boolean;onOpenBrowser:()=>void}){
@@ -158,6 +158,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
     try{
       const result=await invoke<GoogleSheetsStatus>("get_google_sheets_status");
       setSheetsStatus(result);
+      if(result.client_id)setClientId(current=>current||result.client_id||"");
     }catch(error){setSheetsStatus({connected:false,status:"unavailable",error:String(error)});}
   },[connected]);
 
@@ -175,7 +176,15 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
       setClientSecret("");
       setSheetNotice(message);
       await refreshSheetsStatus();
-    }catch(error){setSheetError(String(error));}
+    }catch(error){
+      const message=String(error);
+      setSheetError(message);
+      if(message.includes("google_reauthorization_required")){
+        setSheetsStatus({connected:false,status:"reauthorization_required",error:"google_reauthorization_required"});
+        setVerifiedKey(null);
+        setSheetData(null);
+      }
+    }
     finally{setBusy(false);}
   };
   const disconnectSheets=async()=>{
@@ -207,6 +216,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
   const statusLabel=sheetVerified?"Подключён · диапазон проверен":
     sheetsAuthorized?"Авторизация сохранена · проверьте таблицу":
     sheetsStatus.status==="authorizing"?"Ожидает подтверждения в браузере":
+    sheetsStatus.status==="reauthorization_required"?"Требуется повторная авторизация":
     sheetsStatus.status==="denied"?"Доступ не предоставлен":
     sheetsStatus.status==="expired"?"Время авторизации истекло":
     sheetsStatus.status==="error"?"Ошибка авторизации":
