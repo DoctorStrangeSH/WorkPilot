@@ -183,6 +183,8 @@ inspectButton.addEventListener("click", async () => {
 const RESOURCE_LABELS = {inventory:"ИНВента",datalens:"DataLens",asgard:"Asgard"};
 const FAILURE_LABELS = {
   unmapped_search_form: "форма поиска не распознана",
+  unsupported_search_form: "сайт использует неподдерживаемую HTML-форму поиска",
+  dynamic_search_ui: "сайт использует динамическое поле поиска; нужен адаптер",
   invalid_inventory_search_keys: "список грузомест не подходит для точного поиска",
   invalid_search: "неподдерживаемый идентификатор",
   unsafe_search_target: "поиск ведёт за пределы разрешённой страницы",
