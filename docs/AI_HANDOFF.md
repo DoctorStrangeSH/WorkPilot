@@ -1,3 +1,15 @@
+## 2026-11-12 — OAuth postponed, offline order workbench started
+
+- User said: «Давай попозже это сделаем:) Продолжай улучшать программу». **Do not ask them to configure Google Cloud or OAuth now.**
+- Current coding branch remains `feat/desktop-shell`, PR #2 draft; `main` unchanged.
+- Added `POST /v1/orders/preview` in `agent/malenia/server.py`: authenticated localhost-only request; strict bounded JSON, max 100 scans; delegates to existing deterministic `evaluate_order()`. Never writes to database, Google Sheets, DataLens or Asgard.
+- Added Tauri command `preview_order` and a visible sidebar page `OrderCheckPage.tsx` («Проверка заказа»), with manual inputs for cargo place, inventory date, last successful DataLens scan (SC ID/result), Asgard status, box ID and extended history.
+- UI shows only proposed status/comment/color and reason. No persisted order data; source marked manual_input. Unknown evidence goes to manual review.
+- Added regression tests to `tests/test_server.py` and `tests/navigation_ui.test.cjs`. Keep tests/run CI current before claiming verified.
+- Explicit limitation: preview only takes manually selected latest scan, not full scan history; the user must check they selected the right cargo place, SC and latest successful scan.
+- Later: OAuth on the user's initiative, then read-only Google Sheets import, browser permission review for DataLens and Asgard, followed by evidence-backed batch dry-run report. No sheet writeback until separately authorized.
+- Baseline before this work: Python, Desktop checks and Windows installer runs all passed on code commit `05c65c3` (43239645452, 43239645705, 43239645740). Latest feature code requires new CI verification.
+
 ## Personal Gmail OAuth decision — 2026-11-12
 
 - User explicitly selected a **personal Gmail**, not corporate Workspace, for Malenia Google Sheets OAuth.
