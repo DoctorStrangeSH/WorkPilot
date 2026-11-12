@@ -187,6 +187,7 @@ const FAILURE_LABELS = {
   dynamic_search_ui: "сайт использует динамическое поле поиска; нужен адаптер",
   unsupported_dynamic_search: "динамическое поле или таблица не распознаны однозначно",
   dynamic_search_no_result_update: "после поиска таблица не обновилась",
+  dynamic_search_unchanged_table: "таблица подала сигнал обновления, но данные не изменились",
   invalid_inventory_search_keys: "список грузомест не подходит для точного поиска",
   invalid_search: "неподдерживаемый идентификатор",
   unsafe_search_target: "поиск ведёт за пределы разрешённой страницы",
