@@ -407,3 +407,72 @@ test('dynamic search widget is recognized without reading its value or clicking 
   await assert.rejects(()=>api.exactGetSearch(
     chrome,7,'datalens','ABC-1','https://analytics.example'),/dynamic_search_ui/);
 });
+
+test('reactive search enters exact cargo in one labelled standalone searchbox', async () => {
+  const api=runner();
+  let value='', dispatched=0, clicks=0, observed=false, disconnected=false;
+  let notify;
+  class MockInput {}
+  Object.defineProperty(MockInput.prototype,'value',{set(v){value=v;},get(){return value;}});
+  const input=new MockInput();
+  input.type='search';input.disabled=false;input.readOnly=false;
+  input.closest=()=>null;
+  input.getAttribute=name=>name==='aria-label'?'main_partner_code_original':null;
+  input.getClientRects=()=>[{}];
+  input.dispatchEvent=()=>{dispatched++;queueMicrotask(()=>notify?.());};
+  input.click=()=>{clicks++;};
+  class Observer {
+    constructor(fn){notify=fn;}
+    observe(){observed=true;}
+    disconnect(){disconnected=true;}
+  }
+  const chrome={
+    scripting:{async executeScript({func,args}) {
+      const context={document:{body:{},querySelectorAll:()=>[input]},
+        location:{origin:'https://analytics.example'},HTMLInputElement:MockInput,
+        MutationObserver:Observer,Event:class{constructor(type){this.type=type;}},
+        setTimeout,clearTimeout};
+      return [{result:await vm.runInNewContext('('+func.toString()+')(...args)',
+        {...context,args})}];
+    }}
+  };
+  await api.reactiveSearch(chrome,7,'datalens','ABC-1','https://analytics.example');
+  assert.equal(value,'ABC-1');
+  assert.equal(dispatched,1);
+  assert.equal(clicks,0);
+  assert.equal(observed,true);
+  assert.equal(disconnected,true);
+});
+
+test('dynamic search never writes into ambiguous or form-owned controls', async () => {
+  const api=runner();
+  let writes=0;
+  class MockInput{}
+  Object.defineProperty(MockInput.prototype,'value',{set(){writes++;}});
+  const input=new MockInput();
+  input.type='search';input.disabled=false;input.readOnly=false;
+  input.closest=()=>({tagName:'FORM'});
+  input.getAttribute=()=> 'cargo_place';
+  input.getClientRects=()=>[{}];
+  const chrome={
+    scripting:{async executeScript({func,args}) {
+      const context={document:{body:{},querySelectorAll:()=>[input]},
+        location:{origin:'https://asgard.example'},HTMLInputElement:MockInput,
+        MutationObserver:class{},Event:class{},setTimeout,clearTimeout};
+      return [{result:await vm.runInNewContext('('+func.toString()+')(...args)',
+        {...context,args})}];
+    }}
+  };
+  await assert.rejects(()=>api.reactiveSearch(
+    chrome,7,'asgard','ABC-1','https://asgard.example'),/unsupported_dynamic_search/);
+  assert.equal(writes,0);
+});
+
+test('reactive search refuses result updates on a foreign origin', async () => {
+  const api=runner();
+  const chrome={scripting:{async executeScript(){
+    return [{result:{origin:'https://other.example',status:'updated'}}];
+  }}};
+  await assert.rejects(()=>api.reactiveSearch(
+    chrome,7,'asgard','ABC-1','https://asgard.example'),/unsupported_dynamic_search/);
+});
