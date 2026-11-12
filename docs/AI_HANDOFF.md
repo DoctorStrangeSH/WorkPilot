@@ -556,3 +556,16 @@ See LOCAL_AI.md. main must stay unchanged and PR #2 unmerged.
 - This is still *manual data, read-only preview only*. No DataLens/Asgard automation, no ИНВента writes, and no implied company-system permissions. Google OAuth setup is postponed by user's request.
 - GitHub Actions were pending at the time of writing: Desktop checks `43270731201`, Python tests `43270730767`, Windows installer `43270730529`. Check the exact latest SHA before reporting a passing build.
 - Next valuable step after CI: improve pasted evidence auditability and source mapping without inventing access to corporate tools; continue toward separately approved read-only integrations.
+
+
+## 2026-11-12 — Explicit live-site reading foundation
+
+The user clarified that ИНВента, DataLens and Asgard are **websites**, not downloadable files, and wants Malenia eventually to navigate/read these authenticated resources herself.
+
+Implemented on `feat/desktop-shell`:
+- Browser Bridge manifest now requests `scripting` alongside `activeTab` and `nativeMessaging`.
+- Popup has a separate explicit **«Прочитать страницу»** button. Upon a user click, `chrome.scripting.executeScript` reads up to 16,000 characters of `document.body.innerText` from the currently selected HTTP(S) tab and sends the URL without query/fragment plus that bounded text to the registered local native host. It does not inspect input values, cookies, browser profile, unrelated tabs or hidden DOM. Note: rendered text **can** contain sensitive corporate information; consent UI discloses that.
+- The native host validates the page snapshot and returns only a character count and `persisted: false`; it intentionally does **not** persist or expose raw page text via the agent/API. There is **no automatic navigation, site parsing, cross-site reconciliation, background automation or write capability** at this milestone. Do not advertise this as full autonomous site access.
+- Added UI and Python regression tests; pending CI check at latest head: Desktop `43271474063`, Python `43271473560`, Installer `43271473767`. Recheck current SHA before asserting success.
+- PR #2 remains draft; main unchanged. Browser Bridge extension must be reloaded and the latest installer/native host deployed before on-device use. Earlier installer does not understand `inspect_active_page`.
+- Future phases: named resource adapters with explicit host allowlist, scoped permission, user-verified DOM/table mapping, read-only multi-page navigation and provenance, then deterministic order reconciliation. Any status write requires a separate explicit permission/confirmation flow. Site automation must respect organizational access policy and must never bypass MFA/CAPTCHA or access restrictions.
