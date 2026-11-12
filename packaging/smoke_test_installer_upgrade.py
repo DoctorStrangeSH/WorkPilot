@@ -67,7 +67,7 @@ def main():
                               headers={'Authorization': 'Bearer ' + env['MALENIA_API_TOKEN'],
                                        'Content-Type': 'application/json'},
                               data=None if body is None else json.dumps(body).encode())
-            with opener.open(request, timeout=2) as response:
+            with opener.open(request, timeout=10) as response:
                 return json.load(response)
 
         executable = target / 'resources/malenia-agent/malenia-agent.exe'
