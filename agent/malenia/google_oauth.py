@@ -24,6 +24,7 @@ _VERIFIER_RE = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
 _STATE_RE = re.compile(r"^[A-Za-z0-9._~-]{32,256}$")
 _CLIENT_ID_RE = re.compile(r"^[0-9]+-[A-Za-z0-9-]+\.apps\.googleusercontent\.com$")
 _MAX_AUTH_CODE_LENGTH = 4096
+_TOKEN_RE = re.compile(r"^[A-Za-z0-9._~/-]{1,8192}$")
 
 
 class GoogleOAuthError(ValueError):
@@ -61,12 +62,16 @@ def create_pkce_challenge(verifier: str) -> str:
 def validate_loopback_redirect_uri(redirect_uri: str) -> str:
     if not isinstance(redirect_uri, str) or len(redirect_uri) > 200:
         raise GoogleOAuthError("Invalid OAuth redirect URI")
-    parsed = urlsplit(redirect_uri)
+    try:
+        parsed = urlsplit(redirect_uri)
+        port = parsed.port
+    except ValueError as error:
+        raise GoogleOAuthError("Invalid OAuth redirect URI") from error
     if (
         parsed.scheme != "http"
         or parsed.hostname != "127.0.0.1"
-        or parsed.port is None
-        or not 1 <= parsed.port <= 65535
+        or port is None
+        or not 1 <= port <= 65535
         or parsed.path != GOOGLE_CALLBACK_PATH
         or parsed.username is not None
         or parsed.password is not None
@@ -109,10 +114,13 @@ def parse_callback_target(target: str, expected_state: str) -> str:
         raise GoogleOAuthError("Invalid expected OAuth state")
     if not isinstance(target, str) or len(target) > 8192:
         raise GoogleOAuthError("Invalid OAuth callback")
-    parsed = urlsplit(target)
+    try:
+        parsed = urlsplit(target)
+        query = parse_qs(parsed.query, keep_blank_values=True, strict_parsing=True)
+    except ValueError as error:
+        raise GoogleOAuthError("Invalid OAuth callback query") from error
     if parsed.path != GOOGLE_CALLBACK_PATH:
         raise GoogleOAuthError("Unexpected OAuth callback path")
-    query = parse_qs(parsed.query, keep_blank_values=True, strict_parsing=True)
     states = query.get("state", [])
     if len(states) != 1 or not hmac.compare_digest(states[0], expected_state):
         raise GoogleOAuthError("OAuth state mismatch")
@@ -147,9 +155,9 @@ def validate_token_response(payload: object) -> dict[str, object]:
     token_type = payload.get("token_type")
     expires_in = payload.get("expires_in")
     scope = payload.get("scope")
-    if not isinstance(access_token, str) or not access_token or len(access_token) > 8192:
+    if not isinstance(access_token, str) or _TOKEN_RE.fullmatch(access_token) is None:
         raise GoogleOAuthError("Google access token is missing or invalid")
-    if not isinstance(refresh_token, str) or not refresh_token or len(refresh_token) > 8192:
+    if not isinstance(refresh_token, str) or _TOKEN_RE.fullmatch(refresh_token) is None:
         raise GoogleOAuthError("Google refresh token is missing or invalid")
     if token_type != "Bearer":
         raise GoogleOAuthError("Unsupported Google token type")
@@ -172,7 +180,7 @@ def validate_refresh_response(payload: object) -> dict[str, object]:
     token_type = payload.get("token_type")
     expires_in = payload.get("expires_in")
     scope = payload.get("scope")
-    if not isinstance(access_token, str) or not access_token or len(access_token) > 8192:
+    if not isinstance(access_token, str) or _TOKEN_RE.fullmatch(access_token) is None:
         raise GoogleOAuthError("Google access token is missing or invalid")
     if token_type != "Bearer":
         raise GoogleOAuthError("Unsupported Google token type")
