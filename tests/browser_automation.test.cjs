@@ -356,7 +356,7 @@ test('browser GET-search extractor only accepts an unambiguous read-only form', 
     form=normalForm(method,extra);
     await assert.rejects(
       ()=>api.exactGetSearch(chrome,7,'datalens','ABC-1','https://analytics.example'),
-      /unmapped_search_form/);
+      /unsupported_search_form/);
   }
   await assert.rejects(
     ()=>api.exactGetSearch(chrome,7,'datalens','SECRET?','https://analytics.example'),
@@ -389,4 +389,21 @@ test('unexpected browser errors are reduced to generic safe reason', async () =>
   },async()=>{throw Error('should not send');},async()=>{});
   assert.equal(result.results[0].reason,'site_or_browser_error');
   assert.ok(!JSON.stringify(result).includes('SENSITIVE'));
+});
+
+test('dynamic search widget is recognized without reading its value or clicking it', async () => {
+  const api=runner();
+  const chrome={
+    scripting:{async executeScript({func,args}) {
+      const document={querySelectorAll:selector=>
+        selector==='form'?[]:
+        selector==='[role="searchbox"],input[type="search"]'?[{type:'search'}]:[]};
+      const location={origin:'https://analytics.example',href:'https://analytics.example/orders'};
+      return [{result:vm.runInNewContext('('+func.toString()+')(...args)',
+        {document,location,URL,args})}];
+    }},
+    tabs:{async update(){throw Error('must not navigate');}}
+  };
+  await assert.rejects(()=>api.exactGetSearch(
+    chrome,7,'datalens','ABC-1','https://analytics.example'),/dynamic_search_ui/);
 });
