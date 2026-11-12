@@ -111,8 +111,24 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
             "type": "hello",
             "host": HOST_NAME,
             "version": "0.1.0",
-            "capabilities": ["share_active_tab"],
+            "capabilities": ["share_active_tab", "inspect_active_page"],
         }
+
+    if message_type == "inspect_active_page":
+        # Validate a user-initiated rendered-text snapshot without retaining it.
+        page = payload.get("page")
+        if not isinstance(page, dict) or set(page) != {"url", "text"}:
+            return {**response, "ok": False, "error": "invalid_page"}
+        try:
+            _clean_tab_url(page["url"])
+            visible_text = page["text"]
+            if (not isinstance(visible_text, str) or not visible_text.strip()
+                    or len(visible_text) > 16000 or "\\x00" in visible_text):
+                raise ValueError("invalid page text")
+        except (ValueError, TypeError, KeyError):
+            return {**response, "ok": False, "error": "invalid_page"}
+        return {**response, "ok": True, "type": "page_inspected",
+                "characters": len(visible_text), "persisted": False}
 
     if message_type != "share_active_tab":
         return {**response, "ok": False, "error": "unsupported_message"}
