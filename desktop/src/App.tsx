@@ -111,7 +111,7 @@ export default function App(){
 
         {page==="permissions"&&<PermissionsPage requests={data?.permissions??[]} connected={connected} busy={busy} onDecide={decidePermission}/>}
         {page==="browser"&&<BrowserPage tabs={data?.browser_tabs??[]} connected={connected}/>}
-        {page==="sources"&&<SourcesPage tabs={data?.browser_tabs??[]} onOpenBrowser={()=>setPage("browser")}/>}
+        {page==="sources"&&<SourcesPage tabs={data?.browser_tabs??[]} connected={connected} onOpenBrowser={()=>setPage("browser")}/>}
         {page==="knowledge"&&<KnowledgePage connected={connected}/>}
         {page==="ai"&&<AiPage connected={connected} onTaskCreated={()=>void refresh()}/>}
         {page==="settings"&&<section className="page"><div className="page-head"><div><div className="eyebrow">КОНФИГУРАЦИЯ</div><h1>Настройки</h1><p>Состояние локальной среды и параметры запуска.</p></div></div><div className="settings-grid"><Setting icon={<Database/>} title="Локальный агент" text="Python Runtime слушает только localhost." value={connected?"Запущен":"Остановлен"} action={<button className={connected?"danger":"primary"} onClick={connected?stopAgent:runAgent} disabled={busy}>{connected?<Square size={14}/>:<Play size={14}/>} {connected?"Остановить":"Запустить"}</button>}/><Setting icon={<ShieldCheck/>} title="Приватность" text="Секреты браузера не извлекаются. API доступен только локально." value="Local-first"/><Setting icon={<Cpu/>} title="Среда разработки" text="Windows · Python 3.11+ · SQLite · Tauri 2" value="Версия 0.6.0"/><Setting icon={<Globe2/>} title="Будущие подключения" text="Ручная передача вкладок Яндекс Браузера доступна через Browser Bridge. Шерлок поддерживает локальную модель и включаемый интернет-поиск." value="Доступны"/></div></section>}
@@ -138,16 +138,116 @@ function BrowserPage({tabs,connected}:{tabs:BrowserTab[];connected:boolean}){
   </section>;
 }
 
-function SourcesPage({tabs,onOpenBrowser}:{tabs:BrowserTab[];onOpenBrowser:()=>void}){
+type GoogleSheetsStatus = {connected:boolean;status:string;error:string|null};
+type GoogleSheetsData = {range:string;majorDimension:string;values:(string|number|boolean|null)[][];read_only:boolean};
+
+function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected:boolean;onOpenBrowser:()=>void}){
+  const [clientId,setClientId]=useState("");
+  const [sheetsStatus,setSheetsStatus]=useState<GoogleSheetsStatus>({connected:false,status:"not_connected",error:null});
+  const [spreadsheetId,setSpreadsheetId]=useState("");
+  const [range,setRange]=useState("A1:Z100");
+  const [sheetData,setSheetData]=useState<GoogleSheetsData|null>(null);
+  const [busy,setBusy]=useState(false);
+  const [sheetError,setSheetError]=useState("");
+  const [sheetNotice,setSheetNotice]=useState("");
+
+  const refreshSheetsStatus=useCallback(async()=>{
+    if(!connected){setSheetsStatus({connected:false,status:"agent_stopped",error:null});return;}
+    try{
+      const result=await invoke<GoogleSheetsStatus>("get_google_sheets_status");
+      setSheetsStatus(result);
+    }catch(error){setSheetsStatus({connected:false,status:"unavailable",error:String(error)});}
+  },[connected]);
+
+  useEffect(()=>{
+    void refreshSheetsStatus();
+    if(!connected)return;
+    const id=window.setInterval(()=>void refreshSheetsStatus(),2000);
+    return()=>window.clearInterval(id);
+  },[connected,refreshSheetsStatus]);
+
+  const connectSheets=async()=>{
+    setBusy(true);setSheetError("");setSheetNotice("");
+    try{
+      const message=await invoke<string>("connect_google_sheets",{clientId:clientId.trim()});
+      setSheetNotice(message);
+      await refreshSheetsStatus();
+    }catch(error){setSheetError(String(error));}
+    finally{setBusy(false);}
+  };
+  const disconnectSheets=async()=>{
+    setBusy(true);setSheetError("");setSheetNotice("");
+    try{
+      await invoke("disconnect_google_sheets");
+      setSheetData(null);
+      setSheetsStatus({connected:false,status:"not_connected",error:null});
+      setSheetNotice("Локальные данные авторизации удалены. При необходимости отзовите разрешение также в Google Account.");
+    }catch(error){setSheetError(String(error));}
+    finally{setBusy(false);}
+  };
+  const readSheet=async()=>{
+    setBusy(true);setSheetError("");setSheetNotice("");setSheetData(null);
+    try{
+      const result=await invoke<GoogleSheetsData>("read_google_sheet",{
+        spreadsheetId:spreadsheetId.trim(),range:range.trim()
+      });
+      setSheetData(result);
+      setSheetNotice("Диапазон прочитан. Никаких изменений в таблицу не внесено.");
+    }catch(error){setSheetError(String(error));}
+    finally{setBusy(false);}
+  };
+
+  const statusLabel=sheetsStatus.status==="connected"?"Подключён · только чтение":
+    sheetsStatus.status==="authorizing"?"Ожидает подтверждения в браузере":
+    sheetsStatus.status==="denied"?"Доступ не предоставлен":
+    sheetsStatus.status==="expired"?"Время авторизации истекло":
+    sheetsStatus.status==="error"?"Ошибка авторизации":
+    sheetsStatus.status==="unavailable"?"Хранилище секретов недоступно":
+    sheetsStatus.status==="agent_stopped"?"Запустите локальный агент":"Не подключён";
+
   return <section className="page sources-page">
-    <div className="page-head"><div><div className="eyebrow">РАБОЧИЕ ПОДКЛЮЧЕНИЯ</div><h1>Источники</h1><p>Здесь будет видно, к каким рабочим системам Malenia действительно имеет доступ.</p></div></div>
-    <div className="sources-notice"><ShieldCheck size={17}/><span>Доступ ChatGPT к вашим сервисам не переносится в Malenia. Каждый источник подключается отдельно, с минимальными разрешениями. Пока все рабочие интеграции доступны только после отдельной настройки.</span></div>
+    <div className="page-head"><div><div className="eyebrow">РАБОЧИЕ ПОДКЛЮЧЕНИЯ</div><h1>Источники</h1><p>Каждый источник подключается отдельно, с минимальными разрешениями и понятным статусом.</p></div></div>
+    <div className="sources-notice"><ShieldCheck size={17}/><span>Google Sheets можно подключить отдельно в режиме только чтения. ChatGPT не передаёт свои подключения Malenia. DataLens и Asgard пока не подключены.</span></div>
+    {sheetError?<p className="alert error" role="alert">{sheetError}</p>:null}
+    {sheetNotice?<p className="alert success" role="status">{sheetNotice}</p>:null}
     <div className="sources-grid">
-      <article className="panel source-card"><div className="source-card-top"><span className="source-icon sheets"><Database size={19}/></span><span className="source-state pending">Не подключён</span></div><h2>Google Sheets · ИНВента</h2><p>Отдельное read-only подключение к таблицам из приложения ещё не настроено. Подключение Google Drive в ChatGPT не даёт Malenia доступ к таблице.</p><small>Следующий шаг: OAuth только для чтения.</small></article>
-      <article className="panel source-card"><div className="source-card-top"><span className="source-icon datalens"><Activity size={19}/></span><span className="source-state pending">Не подключён</span></div><h2>Yandex DataLens</h2><p>Дашборд пока не читается приложением. Сначала будет реализовано чтение выбранной авторизованной вкладки или официального API.</p><small>Следующий шаг: read-only доступ и проверка разрешений.</small></article>
+      <article className="panel source-card google-source-card">
+        <div className="source-card-top"><span className="source-icon sheets"><Database size={19}/></span><span className={"source-state "+(sheetsStatus.connected?"ready":"pending")}>{statusLabel}</span></div>
+        <h2>Google Sheets · ИНВента</h2>
+        <p>Отдельная авторизация Malenia. Запрашивается только <code>spreadsheets.readonly</code>: приложение может читать таблицы, но не изменять их.</p>
+        {!connected?<p className="source-help">Сначала запустите локальный агент на главной странице.</p>:null}
+        {!sheetsStatus.connected?
+          <div className="google-connect-form">
+            <label>Google OAuth Desktop Client ID
+              <input value={clientId} onChange={e=>setClientId(e.target.value)} maxLength={300} autoComplete="off" spellCheck={false} placeholder="…apps.googleusercontent.com" disabled={!connected||busy}/>
+            </label>
+            <button className="primary source-action" disabled={!connected||busy||!clientId.trim()} onClick={()=>void connectSheets()}>{busy?"Подключаем…":"Подключить Google"}</button>
+            <small>Client ID создаётся в Google Cloud Console для приложения типа Desktop. Client Secret не нужен. После нажатия откроется системный браузер, где ты сам подтвердишь доступ.</small>
+          </div>:
+          <div className="google-read-form">
+            <label>ID таблицы
+              <input value={spreadsheetId} onChange={e=>setSpreadsheetId(e.target.value)} maxLength={256} placeholder="ID между /d/ и /edit в ссылке Google Sheets" disabled={busy}/>
+            </label>
+            <label>Диапазон ячеек
+              <input value={range} onChange={e=>setRange(e.target.value)} maxLength={200} placeholder="Например: Лист1!A1:Z100" disabled={busy}/>
+            </label>
+            <div className="google-actions">
+              <button className="primary" disabled={busy||!spreadsheetId.trim()||!range.trim()} onClick={()=>void readSheet()}>{busy?"Читаем…":"Прочитать диапазон"}</button>
+              <button className="secondary" disabled={busy} onClick={()=>void disconnectSheets()}>Отключить</button>
+            </div>
+            <small>Читается только указанный диапазон. Обновление ячеек, комментариев и статусов отключено.</small>
+          </div>}
+        {sheetsStatus.status==="authorizing"?<p className="source-help">Завершите подтверждение в системном браузере. Malenia не увидит пароль Google.</p>:null}
+        {sheetsStatus.status==="denied"?<p className="source-help">Разрешение не было предоставлено. Можно повторить подключение.</p>:null}
+        {sheetsStatus.status==="expired"?<p className="source-help">Окно авторизации не получило ответ вовремя. Начните подключение заново.</p>:null}
+        {sheetsStatus.status==="error"?<p className="source-help">Google не подтвердил нужный scope или OAuth завершился ошибкой. Проверьте OAuth consent screen и Client ID.</p>:null}
+        {sheetData?<div className="sheet-preview"><div className="sheet-preview-head"><b>Предпросмотр</b><small>{sheetData.range} · только чтение</small></div>{sheetData.values.length?<div className="sheet-preview-scroll"><table><tbody>{sheetData.values.slice(0,20).map((row,i)=><tr key={i}>{row.slice(0,12).map((cell,j)=><td key={j}>{String(cell??"")}</td>)}</tr>)}</tbody></table></div>:<p>В указанном диапазоне нет заполненных ячеек.</p>}<small>Показаны максимум 20 строк и 12 столбцов. Полный результат остаётся в текущем окне приложения.</small></div>:null}
+      </article>
+      <article className="panel source-card"><div className="source-card-top"><span className="source-icon datalens"><Activity size={19}/></span><span className="source-state pending">Не подключён</span></div><h2>Yandex DataLens</h2><p>Дашборд пока не читается приложением. Сначала будет реализовано чтение выбранной авторизованной вкладки или официального API.</p><small>Следующий шаг: read-only доступ и отдельная проверка разрешений.</small></article>
       <article className="panel source-card"><div className="source-card-top"><span className="source-icon asgard"><Globe2 size={19}/></span><span className="source-state pending">Не подключён</span></div><h2>Asgard</h2><p>Рабочая сессия остаётся в Яндекс Браузере. Malenia пока не читает статусы или историю коробок на этой странице.</p><small>Следующий шаг: разрешённое чтение выбранной страницы.</small></article>
-      <article className="panel source-card"><div className="source-card-top"><span className="source-icon browser"><Plug size={19}/></span><span className={"source-state "+(tabs.length?"ready":"pending")}>{tabs.length ? `Передано вкладок: ${tabs.length}` : "Ожидает передачи"}</span></div><h2>Browser Bridge</h2><p>Передаёт только заголовок и очищенный URL вкладки, которой вы поделились вручную. Содержимое страницы, DOM, cookies и история браузера не читаются.</p><small>Можно открыть список вручную переданных вкладок.</small><button className="secondary source-action" onClick={onOpenBrowser}>Открыть Browser Bridge <ArrowUpRight size={14}/></button></article>
+      <article className="panel source-card"><div className="source-card-top"><span className="source-icon browser"><Plug size={19}/></span><span className={"source-state "+(tabs.length?"ready":"pending")}>{tabs.length ? `Передано вкладок: ${tabs.length}` : "Ожидает передачи"}</span></div><h2>Browser Bridge</h2><p>Передаёт только заголовок и очищенный URL вкладки, которой поделились вручную. Содержимое страницы, DOM, cookies и история браузера не читаются.</p><small>Можно открыть список вручную переданных вкладок.</small><button className="secondary source-action" onClick={onOpenBrowser}>Открыть Browser Bridge <ArrowUpRight size={14}/></button></article>
     </div>
   </section>;
 }
+
 function Setting({icon,title,text,value,action}:{icon:ReactNode;title:string;text:string;value:string;action?:ReactNode}){return <div className="panel setting"><div className="setting-icon">{icon}</div><h3>{title}</h3><p>{text}</p><div className="setting-bottom"><b>{value}</b>{action}</div></div>;}
