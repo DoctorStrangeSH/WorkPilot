@@ -56,7 +56,7 @@ var MaleniaAutomation = (() => {
   const MAX_SEARCHES = 20;
   async function exactGetSearch(chromeApi, tabId, role, cargo, origin) {
     if (!["datalens", "asgard"].includes(role) ||
-        typeof cargo !== "string" || !/^[\\w\\-./]{1,128}$/.test(cargo)) {
+        typeof cargo !== "string" || !/^[A-Za-z0-9_.-]{1,128}$/.test(cargo)) {
       throw new Error("invalid_search");
     }
     const results = await chromeApi.scripting.executeScript({
@@ -263,7 +263,7 @@ var MaleniaAutomation = (() => {
             (!Array.isArray(searchKeys) || !searchKeys.length ||
              searchKeys.length > MAX_SEARCHES || new Set(searchKeys).size !== searchKeys.length ||
              searchKeys.some(key => typeof key !== "string" ||
-               !/^[\\w\\-./]{1,128}$/.test(key)))) {
+               !/^[A-Za-z0-9_.-]{1,128}$/.test(key)))) {
           throw new Error("invalid_inventory_search_keys");
         }
         const keys = searchKeys || [null];
