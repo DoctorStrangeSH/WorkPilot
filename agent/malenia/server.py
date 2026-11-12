@@ -290,6 +290,16 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                     self._send(422, {"error": str(error)})
                 return
 
+            if parsed.path == "/v1/skills/suggest":
+                payload = self._read_json(4096)
+                if payload is None:
+                    return
+                try:
+                    self._send(200, ai_client.suggest_skill(payload))
+                except AIError as error:
+                    self._send(error.status, {"error": error.code})
+                return
+
             if parsed.path in ("/v1/skills/draft", "/v1/skills/approve",
                                "/v1/skills/delete", "/v1/skills/feedback"):
                 payload = self._read_json(4096)
