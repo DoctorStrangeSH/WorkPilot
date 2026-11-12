@@ -19,6 +19,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from .config import data_directory
 from .store import TaskStore
+from .site_reconciliation import reconcile_tables, SiteSnapshotError
 
 
 HOST_NAME = "com.malenia.browser"
@@ -111,8 +112,18 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
             "type": "hello",
             "host": HOST_NAME,
             "version": "0.1.0",
-            "capabilities": ["share_active_tab", "inspect_active_page"],
+            "capabilities": ["share_active_tab", "inspect_active_page", "reconcile_site_tables"],
         }
+
+    if message_type == "reconcile_site_tables":
+        # The authenticated native channel carries bounded structured table data.
+        # Never write source rows or identifiers to disk, logs, or extension UI.
+        try:
+            result = reconcile_tables(payload.get("snapshots"))
+        except (SiteSnapshotError, ValueError, TypeError):
+            return {**response, "ok": False, "error": "unmapped_or_invalid_site_tables"}
+        return {**response, "ok": True, "type": "site_tables_reconciled",
+                **result, "persisted": False}
 
     if message_type == "inspect_active_page":
         # Validate a user-initiated rendered-text snapshot without retaining it.
