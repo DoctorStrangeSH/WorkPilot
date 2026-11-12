@@ -137,7 +137,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(self.api("/v1/runtime", authenticated=False)[0], 401)
         code, runtime = self.api("/v1/runtime")
         self.assertEqual(code, 200)
-        self.assertEqual(runtime["release"], "0.5.0")
+        self.assertEqual(runtime["release"], "0.5.1")
         self.assertEqual(runtime["protocol"], 1)
         self.assertIn("task_idempotency", runtime["capabilities"])
 
@@ -175,6 +175,18 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(self.api("/v1/knowledge/delete",{"id":body["request_id"]})[0],200)
         self.assertEqual(self.api("/v1/knowledge")[1]["records"],[])
         self.assertEqual(self.api("/v1/knowledge/import",{"folder":"relative"})[0],422)
+
+    def test_knowledge_search_and_empty_strict_chat_are_private_and_do_not_generate(self):
+        self.assertEqual(self.api("/v1/knowledge/search",{"query":"AB-17"},authenticated=False)[0],401)
+        for query in (None,[],"", "x"*2001):
+            self.assertEqual(self.api("/v1/knowledge/search",{"query":query})[0],422)
+        self.assertEqual(self.api("/v1/knowledge/search",{"query":"AB-17"})[1]["sources"],[])
+        self.ai._request=Mock()
+        code,result=self.api("/v1/ai/chat",{"model":"qwen3:8b","messages":[{"role":"user","content":"Адрес AB-17"}],"knowledge_only":True})
+        self.assertEqual(code,200)
+        self.assertFalse(result["generated"])
+        self.ai._request.assert_not_called()
+        self.assertEqual(self.api("/v1/knowledge")[1]["records"],[])
 
     def test_health_is_available_without_token(self):
         with urlopen(f"{self.base_url}/health", timeout=2) as response:

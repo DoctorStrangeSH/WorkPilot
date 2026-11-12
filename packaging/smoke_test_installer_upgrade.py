@@ -100,6 +100,14 @@ def main():
             memory = {'request_id': str(uuid4()), 'title': 'Confirmed fixture', 'content': 'Never invent order IDs', 'kind': 'memory'}
             api('/v1/knowledge', memory)
             assert len(api('/v1/knowledge')['records']) == 1
+            order = {'request_id': str(uuid4()), 'title': 'Order AB-17', 'content': 'AB-17: Tokyo', 'kind': 'note'}
+            other = {'request_id': str(uuid4()), 'title': 'Order AB-170', 'content': 'AB-170: Magadan', 'kind': 'note'}
+            api('/v1/knowledge', order)
+            api('/v1/knowledge', other)
+            assert [s['id'] for s in api('/v1/knowledge/search', {'query': 'AB-17'})['sources']] == [order['request_id']]
+            strict = api('/v1/ai/chat', {'model': 'qwen3:8b', 'messages': [{'role': 'user', 'content': 'AB-19'}], 'knowledge_only': True})
+            assert strict['generated'] is False and strict['sources'] == []
+
             assert api('/v1/tasks', body)['task']['id'] == first['id']
             assert isinstance(api('/v1/ai/status')['available'], bool)
             assert install() != 0, 'Locked resource upgrade incorrectly succeeded'
@@ -116,7 +124,8 @@ def main():
         try:
             assert api('/v1/tasks', body)['task']['id'] == first['id']
             assert len(api('/v1/tasks')['tasks']) == 1
-            assert api('/v1/knowledge')['records'][0]['id'] == memory['request_id']
+            assert {r['id'] for r in api('/v1/knowledge')['records']} == {memory['request_id'], order['request_id'], other['request_id']}
+            assert [s['id'] for s in api('/v1/knowledge/search', {'query': 'AB-17'})['sources']] == [order['request_id']]
         finally:
             stop(process)
     print('PASS: installed resource hashes, locked-agent refusal, reinstall, preserved tasks/knowledge and idempotency')

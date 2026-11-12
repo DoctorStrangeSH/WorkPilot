@@ -2,7 +2,7 @@ import io
 import json
 import unittest
 from unittest.mock import Mock
-from malenia.ai import AIError, NoRedirect, OllamaClient
+from malenia.ai import AIError, NoRedirect, OllamaClient, INSUFFICIENT
 
 class OllamaTests(unittest.TestCase):
     def setUp(self):
@@ -90,6 +90,57 @@ class OllamaTests(unittest.TestCase):
         self.client._request.reset_mock()
         with self.assertRaises(AIError):self.client.chat({**self.payload,"use_knowledge":"yes"})
         self.client._request.assert_not_called()
+
+    def strict_fixture(self, structured):
+        source={"id":"real-source","title":"Order","source":"order.md","kind":"note","excerpt":"AB-17: Tokyo"}
+        self.client.knowledge=Mock()
+        self.client.knowledge.retrieve.return_value=[source]
+        self.client._request=Mock(side_effect=[self.tags,{"done":True,"message":{"content":json.dumps(structured)}}])
+        return source
+
+    def test_strict_no_matching_records_never_calls_model_or_status(self):
+        self.client.knowledge=Mock()
+        self.client.knowledge.retrieve.return_value=[]
+        self.client._request=Mock()
+        result=self.client.chat({**self.payload,"knowledge_only":True})
+        self.assertEqual(result["message"]["content"],INSUFFICIENT)
+        self.assertFalse(result["generated"])
+        self.assertEqual(result["sources"],[])
+        self.client._request.assert_not_called()
+        self.client.knowledge.retrieve.assert_called_once_with("fixture question",matched_only=True)
+
+    def test_strict_answer_uses_only_current_question_and_validates_citation_ids(self):
+        source=self.strict_fixture({"answer":"Tokyo","sufficient":True,"source_ids":["real-source"]})
+        messages=[{"role":"user","content":"Old question"},{"role":"assistant","content":"Unverified old answer"},self.payload["messages"][0]]
+        result=self.client.chat({**self.payload,"messages":messages,"knowledge_only":True})
+        self.assertEqual(result["message"]["content"],"Tokyo")
+        self.assertEqual(result["cited_source_ids"],[source["id"]])
+        self.assertEqual(result["answer_mode"],"knowledge_only")
+        body=self.client._request.call_args.args[1]
+        self.assertEqual(body["messages"][1:],messages[-1:])
+        self.assertNotIn("Unverified old answer",json.dumps(body))
+        self.assertEqual(body["format"]["properties"]["source_ids"]["items"]["enum"],[source["id"]])
+
+    def test_strict_missing_or_fabricated_citations_are_not_returned(self):
+        for ids in ([],["invented"],["real-source","real-source"],[{}]):
+            with self.subTest(ids=ids):
+                self.strict_fixture({"answer":"Unverified answer","sufficient":True,"source_ids":ids})
+                with self.assertRaises(AIError) as error:self.client.chat({**self.payload,"knowledge_only":True})
+                self.assertEqual(error.exception.code,"knowledge_answer_unverified")
+
+    def test_strict_insufficient_response_discards_any_generated_answer(self):
+        self.strict_fixture({"answer":"Fabricated address","sufficient":False,"source_ids":[]})
+        result=self.client.chat({**self.payload,"knowledge_only":True})
+        self.assertEqual(result["message"]["content"],INSUFFICIENT)
+        self.assertEqual(result["cited_source_ids"],[])
+        with self.assertRaises(AIError):self.client.chat({**self.payload,"knowledge_only":True,"use_knowledge":False})
+
+    def test_strict_non_json_response_is_rejected_and_releases_lock(self):
+        self.strict_fixture({})
+        self.client._request=Mock(side_effect=[self.tags,self.reply])
+        with self.assertRaises(AIError):self.client.chat({**self.payload,"knowledge_only":True})
+        self.assertTrue(self.client._generation.acquire(False))
+        self.client._generation.release()
 
     def test_oversized_provider_response_is_not_returned(self):
         self.client._opener=Mock()

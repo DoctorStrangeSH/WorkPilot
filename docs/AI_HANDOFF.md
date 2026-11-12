@@ -337,3 +337,27 @@ See LOCAL_AI.md. main must stay unchanged and PR #2 unmerged.
   Do not describe this kit as an already installed/benchmarked stronger model.
 - Internet fact search and autonomous actions remain unimplemented. This iteration
   adds setup, explicit persistent memory and bounded local reference retrieval.
+
+
+## 0.5.1 source-constrained knowledge work (prepared)
+
+- User requested continued project improvements. Focus: exact order-code retrieval,
+  relevant long-note passages, explicit search without inference, and opt-in answers
+  only from matching saved knowledge. No new browser permissions/tools/internet.
+- Codes such as AB-17 no longer collide with AB-170. Retrieved snippets include
+  snapshot offsets. General code-free preferences remain available as context;
+  strict mode and search preview exclude unrelated preferences.
+- knowledge_only returns a fixed refusal without any model/status call if no match.
+  With matches it sends only the current question/context and requests structured
+  output. Unknown/duplicate/missing citations and malformed output are rejected.
+  Citation validation does NOT verify factual entailment; do not overclaim safety.
+- Chat source metadata is now preserved on screen over subsequent messages while
+  excluded from model history. Search results arriving after disconnect are ignored.
+- Local: 114 Python and 20 Node tests, production frontend build passed. Actual
+  compact-model fixture probe answered AB-17 with Tokyo, using only its matching
+  note; unknown AB-19 returned generated=false. Target 8B/NVIDIA still untested.
+- Installed current-PC app remains 0.4.1. Prepare a new verified kit for the other
+  32 GB NVIDIA machine; do not claim remote installation or download heavy models.
+- Next: publish feature code, run Windows CI including installed-upgrade fixture
+  search/preservation, verify artifact, build 0.5.1 kit and update handoff evidence.
+  Keep main at 712d0a8e1885cca402eaa4fdda041bb09b50e397 and PR #2 draft/unmerged.

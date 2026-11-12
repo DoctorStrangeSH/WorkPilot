@@ -1,4 +1,4 @@
-# Malenia 0.5.0 / Sherlock local assistant
+# Malenia 0.5.1 / Sherlock local assistant
 
 Sherlock is the assistant's display name; Malenia is the application. The ordinary
 UI shows Sherlock variants; underlying model IDs and upstream notices are recorded
@@ -59,7 +59,7 @@ from the development machine is not a GPU installation kit.
 
 Ollama destination fixed 127.0.0.1:11434; proxies ignored, redirects rejected.
 Allowed legacy local tags plus Qwen3 0.6b/4b/8b/14b; cloud metadata excluded.
-POST /v1/ai/chat accepts model/messages and optional boolean use_knowledge, returns
+POST /v1/ai/chat accepts model/messages and optional booleans use_knowledge/knowledge_only, returns
 actual retrieved source metadata. <=12 alternating messages, <=2000 characters
 per message, <=8000 total; backend trims oldest pairs if reference+history exceeds
 6500 characters. Deterministic temperature 0, output <=384 tokens, 90s timeout,
@@ -80,3 +80,21 @@ Intel integrated graphics on the development PC shares RAM. Earlier tiny-model
 probe: CPU 50.17 vs iGPU 45.93 tokens/s on a short test, so CPU stayed default.
 This says nothing about the second PC's NVIDIA performance. No drivers/global
 environment variables were changed. Internet factual search is not implemented.
+
+
+## 0.5.1: exact identifiers, passage search and knowledge-only mode
+
+See KNOWLEDGE_SEARCH.md. Search now prioritizes complete numeric/alphanumeric
+codes and ranks overlapping 600-character passages instead of taking the first
+query occurrence. Public source excerpts include start/end offsets into stored
+snapshots. Search preview POST /v1/knowledge/search requires authentication,
+reads only the existing database and never calls Ollama or rereads imported files.
+
+Opt-in knowledge_only mode requires use_knowledge=true. It searches only matching
+records (unrelated preferences do not count as evidence), drops previous chat
+history and asks for a structured answer with known source IDs. No matching record
+returns a deterministic insufficient-information response before contacting Ollama.
+Malformed replies, missing citations, duplicate/unknown IDs and wrong field types
+are rejected. The schema and validation establish reference integrity, not factual
+entailment: a model can still draw an incorrect conclusion from a genuine excerpt.
+No internet fact checking, embedding model or autonomous tools were added.

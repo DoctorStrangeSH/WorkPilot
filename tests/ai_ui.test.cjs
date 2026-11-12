@@ -81,10 +81,48 @@ test('knowledge folder is never imported on render or while entering a path',asy
   const calls=[];
   const h=harness(async(command,args)=>{calls.push({command,args});return command==='get_knowledge'?{records:[]}:{imported:1};},'KnowledgePage');
   h.render();await tick();
-  h.find('input')[0].props.onChange({target:{value:'C:\\ChosenNotes'}});
+  h.find('input',p=>!!p.placeholder)[0].props.onChange({target:{value:'C:\\ChosenNotes'}});
   assert.equal(calls.filter(c=>c.command==='knowledge_action').length,0);
   h.find('button',p=>p.children==='Импортировать выбранную папку')[0].props.onClick();await tick();
   const imports=calls.filter(c=>c.command==='knowledge_action');
   assert.equal(imports.length,1);assert.equal(imports[0].args.action,'import');
   assert.equal(imports[0].args.payload.folder,'C:\\ChosenNotes');
+});
+
+
+test('knowledge search is explicit, does not invoke chat and discards results after disconnect',async()=>{
+  let finish;const calls=[];const props={connected:true};
+  const h=harness(async(command,args)=>{calls.push({command,args});if(command==='get_knowledge')return {records:[]};return new Promise(resolve=>{finish=resolve;});},'KnowledgePage',props);
+  h.render();await tick();
+  h.find('input',p=>p['aria-label']==='Поиск по знаниям')[0].props.onChange({target:{value:'AB-17'}});
+  assert.equal(calls.filter(c=>c.command==='knowledge_action').length,0);
+  const button=h.find('button',p=>p.children==='Найти в знаниях')[0];button.props.onClick();button.props.onClick();
+  assert.equal(calls.filter(c=>c.command==='knowledge_action').length,1);
+  assert.deepEqual(calls.at(-1).args,{action:'search',payload:{query:'AB-17'}});
+  props.connected=false;h.render();
+  finish({sources:[{id:'fixture',title:'Stale result',source:'note.md',excerpt:'stale',start:0,end:5}]});await tick();
+  assert.equal(h.find('h3').length,0);
+  assert.equal(calls.filter(c=>c.command==='chat_ai').length,0);
+});
+
+test('strict mode is explicit and disabling knowledge clears it; source metadata is not sent as chat history',async()=>{
+  const calls=[];
+  const h=harness(async(command,args)=>{
+    if(command==='get_ai_status')return {available:true,models:['qwen3:8b']};
+    if(command==='chat_ai'){calls.push(args);return {message:{role:'assistant',content:'Tokyo'},sources:[{id:'real',title:'Japan',source:'Japan.md',excerpt:'Tokyo',start:0,end:5}],answer_mode:'knowledge_only',cited_source_ids:['real']};}
+    throw Error(command);
+  });
+  h.render();await tick();
+  h.find('input',p=>p['aria-label']==='Только по знаниям')[0].props.onChange({target:{checked:true}});
+  h.find('textarea',p=>p.id==='ai-draft')[0].props.onChange({target:{value:'Japan capital'}});
+  h.find('form')[0].props.onSubmit({preventDefault(){}});await tick();
+  assert.equal(calls[0].knowledgeOnly,true);
+  h.find('input',p=>p.type==='checkbox' && !p['aria-label'])[0].props.onChange({target:{checked:false}});
+  const strict=h.find('input',p=>p['aria-label']==='Только по знаниям')[0];
+  assert.equal(strict.props.checked,false);assert.equal(strict.props.disabled,true);
+  h.find('textarea',p=>p.id==='ai-draft')[0].props.onChange({target:{value:'Next question'}});
+  h.find('form')[0].props.onSubmit({preventDefault(){}});await tick();
+  assert.equal(calls[1].knowledgeOnly,false);assert.equal(calls[1].useKnowledge,false);
+  assert.ok(calls[1].messages.every(m=>Object.keys(m).sort().join(',')==='content,role'));
+  assert.equal(h.find('details',p=>p.className==='ai-sources').length,2);
 });

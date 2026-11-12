@@ -119,8 +119,8 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                 return
 
             if parsed.path == "/v1/runtime":
-                self._send(200, {"release": "0.5.0", "protocol": 1,
-                    "capabilities": ["local_chat", "task_idempotency", "explicit_knowledge"]})
+                self._send(200, {"release": "0.5.1", "protocol": 1,
+                    "capabilities": ["local_chat", "task_idempotency", "explicit_knowledge", "knowledge_only"]})
             elif parsed.path == "/v1/knowledge":
                 self._send(200, {"records": knowledge.list()})
             elif parsed.path == "/v1/ai/status":
@@ -158,7 +158,7 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                 return
             parsed = urlsplit(self.path)
 
-            if parsed.path in {"/v1/knowledge", "/v1/knowledge/import", "/v1/knowledge/delete"}:
+            if parsed.path in {"/v1/knowledge", "/v1/knowledge/import", "/v1/knowledge/delete", "/v1/knowledge/search"}:
                 payload = self._read_json(32 * 1024)
                 if payload is None:
                     return
@@ -166,6 +166,8 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                     if parsed.path == "/v1/knowledge":
                         result = {"record": knowledge.save(payload.get("request_id"), payload.get("title"),
                             payload.get("content"), payload.get("kind", "memory"))}
+                    elif parsed.path.endswith("/search"):
+                        result = {"sources": knowledge.retrieve(payload.get("query"), matched_only=True)}
                     elif parsed.path.endswith("/import"):
                         result = knowledge.import_folder(payload.get("folder"))
                     else:

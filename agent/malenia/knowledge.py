@@ -11,8 +11,32 @@ class KnowledgeError(ValueError):
 
 
 def words(text):
-    stop = {"столи", "какая", "какой", "какие", "это", "для", "как", "что", "the", "and"}
-    return {w[:5] if len(w) >= 5 else w for w in re.findall(r"[^\W_]{2,}", text.casefold())} - stop
+    stop = {"какая", "какой", "какие", "это", "для", "как", "что", "the", "and", "номер", "заказ"}
+    return {w for w in re.findall(r"[^\W_]{2,}", text.casefold()) if w not in stop}
+
+
+def identifiers(text):
+    # Keep the complete code, including separators: AB-17 must never match AB-170.
+    candidates = re.findall(r"(?<![\w./-])[\w]+(?:[-./][\w]+)+(?![\w./-])", text.casefold())
+    return {code for code in candidates if any(c.isalpha() for c in code) and any(c.isdigit() for c in code)}
+
+
+def passages(content):
+    # Overlap keeps answers around paragraph/window boundaries. Offsets refer to
+    # the stored snapshot, not to a live file which may have changed meanwhile.
+    for start in range(0, max(1, len(content)), 400):
+        yield start, content[start:start + 600]
+
+
+def match_score(query, title, text):
+    query_words = words(query)
+    title_words, text_words = words(title), words(text)
+    exact = len(query_words & text_words) + 3 * len(query_words & title_words)
+    # Prefix matching is only a fallback for long words, never for numeric codes.
+    prefixes = {word[:5] for word in query_words if len(word) >= 5 and word.isalpha()}
+    fallback = len(prefixes & {word[:5] for word in title_words | text_words if len(word) >= 5 and word.isalpha()})
+    phrase = query.casefold().strip()
+    return exact * 4 + fallback + (8 if len(phrase) >= 4 and phrase in text.casefold() else 0)
 
 
 class KnowledgeBase:
@@ -119,19 +143,36 @@ class KnowledgeBase:
         except (OSError, UnicodeError):
             raise KnowledgeError("Не удалось прочитать выбранные заметки. Нужны обычные файлы .md в UTF-8") from None
 
-    def retrieve(self, query):
-        tokens = words(query)
-        records = self.list()
-        def score(record):
-            return len(tokens & words(record['title'])) * 3 + len(tokens & words(record['content']))
-        memories = sorted((r for r in records if r['kind'] == 'memory'), key=score, reverse=True)[:2]
-        notes = sorted((r for r in records if r['kind'] == 'note' and score(r) > 0), key=score, reverse=True)[:2]
-        results = []
-        for record in memories + notes:
-            content = record['content']
-            offsets = [content.casefold().find(token) for token in tokens if token in content.casefold()]
-            start = max(0, min(offsets, default=0) - 120)
-            excerpt = content[start:start + 600]
-            results.append({"id": record['id'], "title": record['title'], "source": record['source'],
-                            "kind": record['kind'], "excerpt": excerpt})
-        return results
+    def retrieve(self, query, matched_only=False):
+        if not isinstance(query, str) or not query.strip() or len(query) > 2000:
+            raise KnowledgeError("Поисковый запрос: от 1 до 2000 символов")
+        query_codes = identifiers(query)
+        ranked = []
+        for record in self.list():
+            title_codes = identifiers(record['title'])
+            # A differently numbered record is not a source for the requested ID.
+            if query_codes and title_codes and not query_codes & title_codes:
+                continue
+            preference = record['kind'] == 'memory' and not matched_only and not identifiers(record['title'] + ' ' + record['content'])
+            candidates = []
+            for start, excerpt in passages(record['content']):
+                codes = identifiers(excerpt) | title_codes
+                if query_codes and not query_codes & codes and not preference:
+                    continue
+                score = match_score(query, record['title'], excerpt)
+                if query_codes:
+                    score += 40 * len(query_codes & codes)
+                candidates.append((score, -start, excerpt))
+            if not candidates:
+                continue
+            score, negative_start, excerpt = max(candidates)
+            # Preferences may be supplied as context in ordinary chat. In strict
+            # mode and preview, only text matching the question qualifies.
+            if score <= 0 and (matched_only or record['kind'] != 'memory'):
+                continue
+            start = -negative_start
+            ranked.append((score, {"id": record['id'], "title": record['title'], "source": record['source'],
+                "kind": record['kind'], "excerpt": excerpt, "start": start, "end": start + len(excerpt)}))
+        memories = sorted((r for r in ranked if r[1]['kind'] == 'memory'), key=lambda r: r[0], reverse=True)[:2]
+        notes = sorted((r for r in ranked if r[1]['kind'] == 'note'), key=lambda r: r[0], reverse=True)[:2]
+        return [record for _, record in memories + notes]
