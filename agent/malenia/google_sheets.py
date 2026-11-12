@@ -247,7 +247,10 @@ class GoogleSheetsConnector:
         except GoogleSheetsError:
             return {"connected": False, "status": "unavailable", "error": "windows_credential_store_unavailable"}
         if connected:
-            return {"connected": True, "status": "connected", "error": None}
+            # A stored OAuth grant is not yet a verified source connection.
+            # The UI marks a selected spreadsheet as connected only after a
+            # successful read of its explicitly selected range.
+            return {"connected": False, "status": "authorized", "error": None}
         with self._lock:
             attempt = self._attempt
             if attempt is not None and attempt.status in {"denied", "expired", "error"}:
