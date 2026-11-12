@@ -28,7 +28,7 @@ def preview_batch(rows: Any) -> dict[str, Any]:
     if not isinstance(rows, list) or not 1 <= len(rows) <= MAX_BATCH_ROWS:
         raise OrderBatchError("invalid_batch_size")
 
-    seen: set[tuple[str, str]] = set()
+    keys: list[tuple[str, str]] = []
     results: list[dict[str, Any]] = []
     summary = {"found": 0, "in_progress": 0, "manual_review": 0}
     for index, item in enumerate(rows):
@@ -53,24 +53,28 @@ def preview_batch(rows: Any) -> dict[str, Any]:
             raise OrderBatchError("invalid_batch_order_data") from error
 
         key = (order["cargo_place"].strip(), str(order["inventory_date"]))
-        if key in seen:
-            proposal = {
-                "decision": "manual_review", "proposed_status": None,
-                "comment": None, "color": "neutral",
-                "reason_code": "duplicate_cargo_place_and_date",
-                "evidence": {}, "write_enabled": False,
-            }
-        seen.add(key)
-        category = "found" if proposal["decision"] == "found" else (
-            "in_progress" if proposal["decision"] == "asgard" else "manual_review"
-        )
-        summary[category] += 1
+        keys.append(key)
         results.append({
             "index": index + 1, "source_row": label,
             "cargo_place": order["cargo_place"].strip(),
             "inventory_date": str(order["inventory_date"]),
             "proposal": proposal,
         })
+
+    duplicates = {key for key in keys if keys.count(key) > 1}
+    for row, key in zip(results, keys):
+        if key in duplicates:
+            row["proposal"] = {
+                "decision": "manual_review", "proposed_status": None,
+                "comment": None, "color": "neutral",
+                "reason_code": "duplicate_cargo_place_and_date",
+                "evidence": {}, "write_enabled": False,
+            }
+        proposal = row["proposal"]
+        category = "found" if proposal["decision"] == "found" else (
+            "in_progress" if proposal["decision"] == "asgard" else "manual_review"
+        )
+        summary[category] += 1
 
     return {"results": results, "summary": summary,
             "total": len(results), "read_only": True,
