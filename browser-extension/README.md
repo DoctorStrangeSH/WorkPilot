@@ -108,3 +108,18 @@ Run `node --test tests/browser_bridge.test.cjs` from the repository root to veri
 After installing the updated native host and reloading the unpacked extension, enter the actual HTTPS pages for ИНВента, DataLens, and Asgard. The browser will show a permission request listing those origins. Approve only if you are authorized to automate those pages. Press the automatic audit button once. You may close the popup; reopening it shows the last progress summary. The service worker may be interrupted by browser shutdown or platform lifecycle limits; an interrupted task must be started again manually. This read-only prototype is not yet an autonomous order reconciliation and does not replace the site-specific adapters.
 
 To validate locally, run `node --test tests/browser_bridge.test.cjs tests/browser_automation.test.cjs`.
+
+
+## Structured table reconciliation (new, experimental)
+
+The background audit now attempts to extract a **single visible HTML table** for each resource with these exact header names:
+
+- ИНВента: `cargo_place`, `inventory_date` (ISO `YYYY-MM-DD`).
+- DataLens: `main_partner_code_original`, `sc_id`, `result`, `scanned_at` (ISO date + time).
+- Asgard: `cargo_place`, `status` (optional `box_id`).
+
+Up to 100 rendered table rows and 20 columns are processed per site. Tables with unknown headings, excessive rows, or missing columns are **not** silently mapped. Raw table cells are sent to the registered local native host over Native Messaging and joined using the deterministic rule engine in memory; the host returns only aggregate counts. No order IDs, status changes or source rows are written to local storage, logs, or corporate sites. `В пути` remains manual review because a generic table cannot attest that the extended history of the **correct** box was opened.
+
+**Important limitations:** the exact headings above are an internal adapter contract, not claims about the actual user's private sites. Until a site-specific adapter is verified against its live UI, a three-site read may succeed but table reconciliation will report that mappings are unavailable. It does not search by cargo place, click filters, page through lists, or inspect virtualized rows. The summary only covers visible matched tables, not all orders on the remote systems. It cannot be considered a production audit or evidence of complete inventory reconciliation. Untrusted page text is data, never instructions to the agent.
+
+Follow-up work: permission-reviewed site adapters for in-page search/pagination and human-verified column mapping; explicit report visibility in the desktop UI; validation of permissions/role access before any change action. Do not bypass MFA, CAPTCHA, company policy or site security controls.
