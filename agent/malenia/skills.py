@@ -44,6 +44,11 @@ class SkillRegistry:
     def __init__(self, store: TaskStore):
         self.store = store
         with store._session() as db:
+            db.execute("""CREATE TABLE IF NOT EXISTS assistant_skill_feedback (
+                request_id TEXT PRIMARY KEY, skill_id TEXT NOT NULL,
+                helpful INTEGER NOT NULL CHECK(helpful IN (0,1)),
+                created_at TEXT NOT NULL
+            )""")
             db.execute("""CREATE TABLE IF NOT EXISTS assistant_skills (
                 id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL,
                 instructions TEXT NOT NULL, terms TEXT NOT NULL,
@@ -126,11 +131,46 @@ class SkillRegistry:
             return db.execute("DELETE FROM assistant_skills WHERE id=?",
                               (skill_id,)).rowcount > 0
 
+    def record_feedback(self, request_id: str, skill_id: str, helpful: bool) -> dict[str, Any]:
+        """Explicit rating of a skill, no conversation text or identifiers stored."""
+        try:
+            if str(uuid.UUID(request_id)) != request_id:
+                raise ValueError()
+        except (ValueError, TypeError, AttributeError):
+            raise SkillError("invalid_feedback_id") from None
+        if not isinstance(helpful, bool) or not isinstance(skill_id, str):
+            raise SkillError("invalid_feedback")
+        approved = {s["id"] for s in self.list() if s["status"] == "approved"}
+        if skill_id not in approved:
+            raise SkillError("skill_not_approved")
+        with self.store._session() as db:
+            db.execute("BEGIN IMMEDIATE")
+            old = db.execute("SELECT skill_id,helpful FROM assistant_skill_feedback "
+                             "WHERE request_id=?", (request_id,)).fetchone()
+            if old:
+                if old["skill_id"] != skill_id or bool(old["helpful"]) != helpful:
+                    raise SkillError("feedback_request_conflict")
+            else:
+                db.execute(
+                    "INSERT INTO assistant_skill_feedback VALUES (?,?,?,?)",
+                    (request_id, skill_id, int(helpful), _now()),
+                )
+        return {"recorded": True, "skill_id": skill_id, "helpful": helpful}
+
+    def feedback_counts(self) -> dict[str, tuple[int, int]]:
+        with self.store._session() as db:
+            rows = db.execute(
+                "SELECT skill_id,SUM(helpful) AS positive,COUNT(*) AS total "
+                "FROM assistant_skill_feedback GROUP BY skill_id"
+            ).fetchall()
+        return {row["skill_id"]: (row["positive"], row["total"]) for row in rows}
+
     def matching(self, query: str, limit: int = 2) -> list[dict[str, Any]]:
         if not isinstance(query, str) or not 1 <= len(query.strip()) <= 2000:
             return []
         query_codes = identifiers(query)
         results = []
+        feedback = self.feedback_counts()
         for skill in self.list():
             if skill["status"] != "approved":
                 continue
@@ -139,7 +179,10 @@ class SkillRegistry:
                 continue
             score = match_score(query, skill["title"], text)
             if score > 0:
-                results.append((score, skill))
+                positive, total = feedback.get(skill["id"], (0, 0))
+                # Gentle bounded tie-break, never use feedback to match unrelated skills.
+                adjusted = score + max(-4, min(4, 2 * positive - (total - positive)))
+                results.append((adjusted, skill))
         results.sort(key=lambda item: (-item[0], item[1]["id"]))
         return [{k: item[k] for k in ("id", "title", "description", "instructions")}
                 for _, item in results[:max(0, min(limit, 3))]]
