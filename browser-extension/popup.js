@@ -181,12 +181,38 @@ inspectButton.addEventListener("click", async () => {
 });
 
 const RESOURCE_LABELS = {inventory:"ИНВента",datalens:"DataLens",asgard:"Asgard"};
+const FAILURE_LABELS = {
+  unmapped_search_form: "форма поиска не распознана",
+  invalid_inventory_search_keys: "список грузомест не подходит для точного поиска",
+  invalid_search: "неподдерживаемый идентификатор",
+  unsafe_search_target: "поиск ведёт за пределы разрешённой страницы",
+  unverified_search_result_identity: "результат поиска относится к другому грузоместу",
+  unmapped_search_results: "не найдена таблица результатов",
+  changed_search_schema: "структура таблицы меняется",
+  too_many_search_rows: "слишком много результатов",
+  virtualized_or_incomplete_grid: "динамическая таблица загружена не полностью",
+  navigation_outside_allowed_origin: "сайт перенаправил на другой домен (возможно, нужен вход)",
+  search_origin_mismatch: "страница поиска не соответствует разрешённому сайту",
+  unexpected_document: "страница изменилась во время чтения",
+  empty_page: "страница не содержит читаемого текста",
+  unmapped_paginated_table: "не распознана таблица с несколькими страницами",
+  pagination_cycle: "зациклилась навигация по страницам",
+  pagination_limit: "превышен лимит страниц",
+  changed_table_schema: "колонки таблицы изменились",
+  too_many_rows: "превышен лимит строк",
+  native_host_rejected: "локальный компонент отказался принять данные",
+  page_timeout: "страница слишком долго загружается",
+  tab_closed: "вкладка закрылась",
+  site_or_browser_error: "не удалось прочитать сайт"
+};
+
 function showAudit(snapshot) {
   if (!snapshot || typeof snapshot !== "object") return;
   const parts = (snapshot.results || []).map(item =>
     RESOURCE_LABELS[item.role] + ": " + (item.status === "read" ?
       "прочитано" + (Number.isInteger(item.pages) ? " (" + item.pages + " стр.)" : "") :
-      "нужна проверка"));
+      "нужна проверка" + (FAILURE_LABELS[item.reason] ?
+        " (" + FAILURE_LABELS[item.reason] + ")" : "")));
   const phase = snapshot.phase === "reconciled" ? "Сверка таблиц завершена (только предложения)." :
     snapshot.phase === "read_only" ? "Страницы прочитаны, но таблицы не сопоставлены. Требуется настройка структуры сайтов." :
     snapshot.phase === "needs_attention" ? "Обход завершён с ошибками." :
