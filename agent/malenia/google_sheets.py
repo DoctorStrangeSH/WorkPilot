@@ -31,6 +31,7 @@ from .google_oauth import (
     create_pkce_verifier,
     parse_callback_target,
     validate_client_id,
+    validate_client_secret,
     validate_refresh_response,
     validate_token_response,
 )
@@ -44,6 +45,7 @@ _MAX_RANGE_LENGTH = 200
 _SPREADSHEET_ID_RE = re.compile(r"^[A-Za-z0-9_-]{10,256}$")
 _REFRESH_TOKEN_KEY = "google-sheets-refresh-token"
 _CLIENT_ID_KEY = "google-sheets-client-id"
+_CLIENT_SECRET_KEY = "google-sheets-client-secret"
 
 
 class GoogleSheetsError(RuntimeError):
@@ -61,6 +63,7 @@ class _NoRedirect(HTTPRedirectHandler):
 @dataclass
 class _ConnectAttempt:
     client_id: str
+    client_secret: str | None
     state: str
     verifier: str
     redirect_uri: str
@@ -111,9 +114,10 @@ class GoogleSheetsConnector:
         handler.end_headers()
         handler.wfile.write(body)
 
-    def start_connect(self, client_id: str) -> dict[str, str]:
+    def start_connect(self, client_id: str, client_secret: str | None = None) -> dict[str, str]:
         try:
             client_id = validate_client_id(client_id)
+            client_secret = validate_client_secret(client_secret)
         except GoogleOAuthError as error:
             raise GoogleSheetsError("invalid_google_oauth_client_id") from error
         self._credential_store()
@@ -167,7 +171,7 @@ class GoogleSheetsConnector:
                 server.server_close()
                 raise GoogleSheetsError("oauth_request_invalid") from error
 
-            attempt = _ConnectAttempt(client_id, state, verifier, redirect_uri, server)
+            attempt = _ConnectAttempt(client_id, client_secret, state, verifier, redirect_uri, server)
             session["attempt"] = attempt
             self._attempt = attempt
             attempt.thread = threading.Thread(
@@ -196,13 +200,16 @@ class GoogleSheetsConnector:
                 attempt.error = "authorization_timeout"
                 return
 
-            payload = self._post_form(GOOGLE_TOKEN_ENDPOINT, {
+            token_fields = {
                 "client_id": attempt.client_id,
                 "code": attempt.code,
                 "code_verifier": attempt.verifier,
                 "grant_type": "authorization_code",
                 "redirect_uri": attempt.redirect_uri,
-            }, _MAX_TOKEN_RESPONSE_BYTES)
+            }
+            if attempt.client_secret:
+                token_fields["client_secret"] = attempt.client_secret
+            payload = self._post_form(GOOGLE_TOKEN_ENDPOINT, token_fields, _MAX_TOKEN_RESPONSE_BYTES)
             validated = validate_token_response(payload)
             store = self._credential_store()
             # Store the refresh token first. If storing the public client ID fails,
@@ -210,8 +217,14 @@ class GoogleSheetsConnector:
             store.set(_REFRESH_TOKEN_KEY, str(validated["refresh_token"]))
             try:
                 store.set(_CLIENT_ID_KEY, attempt.client_id)
+                if attempt.client_secret:
+                    store.set(_CLIENT_SECRET_KEY, attempt.client_secret)
+                else:
+                    store.delete(_CLIENT_SECRET_KEY)
             except Exception:
                 store.delete(_REFRESH_TOKEN_KEY)
+                store.delete(_CLIENT_ID_KEY)
+                store.delete(_CLIENT_SECRET_KEY)
                 raise
             with self._lock:
                 self._access_token = str(validated["access_token"])
@@ -270,10 +283,11 @@ class GoogleSheetsConnector:
         store = self._credential_store()
         refresh_deleted = store.delete(_REFRESH_TOKEN_KEY)
         client_deleted = store.delete(_CLIENT_ID_KEY)
+        secret_deleted = store.delete(_CLIENT_SECRET_KEY)
         return {
             "connected": False,
             "status": "not_connected",
-            "local_credentials_deleted": bool(refresh_deleted or client_deleted),
+            "local_credentials_deleted": bool(refresh_deleted or client_deleted or secret_deleted),
             "note": "Локальные токены удалены. Если нужно отозвать доступ полностью, сделайте это в настройках Google Account.",
         }
 
@@ -320,11 +334,15 @@ class GoogleSheetsConnector:
         client_id = store.get(_CLIENT_ID_KEY)
         if not refresh_token or not client_id:
             raise GoogleSheetsError("google_sheets_not_connected")
-        payload = self._post_form(GOOGLE_TOKEN_ENDPOINT, {
+        refresh_fields = {
             "client_id": client_id,
             "refresh_token": refresh_token,
             "grant_type": "refresh_token",
-        }, _MAX_TOKEN_RESPONSE_BYTES)
+        }
+        client_secret = store.get(_CLIENT_SECRET_KEY)
+        if client_secret:
+            refresh_fields["client_secret"] = client_secret
+        payload = self._post_form(GOOGLE_TOKEN_ENDPOINT, refresh_fields, _MAX_TOKEN_RESPONSE_BYTES)
         try:
             validated = validate_refresh_response(payload)
         except GoogleOAuthError as error:
