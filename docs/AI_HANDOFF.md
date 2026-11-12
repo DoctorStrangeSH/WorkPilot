@@ -1,3 +1,14 @@
+## Secure secret vault follow-up — 2026-11-12
+
+- Current branch HEAD before this note: `1dea9eb0bcaf31bfb441fd1f6099a2b4031faf38`.
+- Added `agent/malenia/secret_store.py`: `WindowsCredentialStore` stores named UTF-8 secrets as Windows Credential Manager Generic Credentials for the current user. It has no plaintext fallback on non-Windows.
+- Added `tests/test_secret_store.py`: fake-backend tests for validation/round-trip/replacement/delete; a real Windows Credential Manager integration test is skipped on non-Windows and runs in the Windows Desktop checks.
+- Documented the boundary in `docs/SECURITY.md`, `docs/ORDER_CHECKING.md`, and `docs/ROADMAP.md`.
+- Python tests passed on Linux matrix after adding the secret store test (run `43233799550`); the latest docs-only Python run also passed (run `43233820885`). Windows Desktop checks `43233799547` still needs to complete to verify the native Credential Manager integration test.
+- This vault is only infrastructure. No Google OAuth flow, client ID, refresh token, Sheets API call, or UI connection action exists yet.
+- Google OAuth implementation must use a Desktop OAuth client, PKCE S256, a random one-use state, a loopback listener bound only to 127.0.0.1, and the exact read-only Sheets scope. Desktop client secret is optional and must not be treated as a protected secret. Official references are linked in `docs/ORDER_CHECKING.md`.
+- Do not mark Google Sheets as connected until a user explicitly authorizes the OAuth consent screen and Malenia successfully reads a user-selected spreadsheet/range with GET only.
+
 ## Latest continuation — 2026-11-12 — deterministic order rules
 
 - Current feature branch: `feat/desktop-shell`; HEAD at the time of this note: `b9a277defc91ae4bff4b08c3835db8b566a1450a`.
