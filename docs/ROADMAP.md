@@ -1,6 +1,6 @@
 # Malenia — дорожная карта
 
-Статус на 2026-11-12: реализация Malenia 0.6.0 находится в `feat/desktop-shell`; PR #2 остаётся draft и не слит. PR #1 — фундамент Runtime — также открыт. `main` намеренно не изменяется. Этапы отмечаются выполненными только после реализации и проверок. UX-код прошёл frontend build и Node regression tests; для новых order rules Python CI прошёл на Python 3.11/3.12/3.13 (131 тест в каждой матрице). Desktop Rust/runtime checks и Windows installer для последних коммитов ещё выполняются; до их завершения нельзя объявлять весь PR зелёным.
+Статус на 2026-11-12: реализация Malenia 0.6.0 находится в `feat/desktop-shell`; PR #2 остаётся draft и не слит. PR #1 — фундамент Runtime — также открыт. `main` намеренно не изменяется. Этапы отмечаются выполненными только после реализации и проверок. UX и Google Sheets UI прошли frontend build и Node regression tests на коммите `0642cdd`; Python CI прошёл на Python 3.11/3.12/3.13 (157 тестов в каждой матрице, включая order rules, OAuth, Sheets connector и API). Tauri host/Rust check прошёл на коммите `b355208`; Windows Credential Manager integration test и installer на последних коммитах ещё требуют завершения Desktop/Windows CI. Не объявлять весь PR зелёным до финальных прогонов.
 
 ## Этап 0 — Основа репозитория
 - [x] Зафиксировать продуктовые требования, архитектуру, решения и безопасность.
@@ -165,10 +165,17 @@ Browser Bridge пока передаёт только вручную выбра�
 - [x] Asgard: «Принят на ФФ», «Выдан», «В пути» + расширенная история «Выдан»; неизвестные и неполные случаи направляются на ручную проверку.
 - [x] Добавить unit-тесты для совпадений, исключения чужих СЦ/неуспешных сканов, границы даты, каждого известного статуса и неполных данных.
 - [x] Подготовить Windows Credential Manager vault для именованных integration secrets; без plaintext fallback, с изолированными unit-тестами и Windows integration test.
-- [ ] Подключить отдельный Google OAuth Desktop client с PKCE и строго read-only Sheets scope; токены — только в Windows Credential Manager.
-- [ ] Подключить чтение выбранной таблицы/диапазона ИНВенты и сверить нормализацию данных с пользователем.
+- [x] Реализовать Google OAuth Desktop flow: PKCE S256, одноразовый state, случайный loopback port на 127.0.0.1, callback validation, token exchange/refresh и строгий exact-scope check.
+- [x] Реализовать Windows Credential Manager для refresh token; access token остаётся в памяти, plaintext fallback отсутствует.
+- [x] Реализовать локальные API endpoints и Tauri commands для подключения, статуса, отключения и GET-only чтения одного spreadsheet ID + A1 range.
+- [x] Добавить UI подключения Google Sheets: пользователь вводит Client ID, подтверждает OAuth в системном браузере, указывает ID/диапазон; источник помечается подключённым только после успешного чтения диапазона.
+- [x] Ограничить ответ чтения 2 MiB, 1 000 строк и 50 000 ячеек; не добавлять write endpoints.
+- [x] Python tests: 157 тестов прошли на Python 3.11/3.12/3.13 (run 43235942347).
+- [ ] Проверить Windows Credential Manager integration test в Windows Desktop CI и собрать/проверить installer на актуальном HEAD.
+- [ ] Пользователь создаёт Google OAuth Desktop Client ID, включает Sheets API, настраивает consent screen/Test users и самостоятельно подтверждает доступ. Client Secret не требуется.
+- [ ] Подключить выбранную таблицу ИНВенты, подтвердить реальный Spreadsheet ID, вкладку и диапазон; после успешного read проверить нормализацию колонок.
 - [ ] Только после permission review подключить чтение выбранных вкладок DataLens и Asgard.
 - [ ] Собрать dry-run отчёт по заказам с доказательствами и очередью ручной проверки.
 - [ ] Не добавлять запись/изменение статусов в ИНВенту до отдельного согласования.
 
-Модуль правил пока не является подключённым навыком: реальные источники и интерфейс запуска проверки ещё не реализованы. См. `docs/ORDER_CHECKING.md`.
+Детерминированные правила, Google Sheets OAuth/GET-only connector и интерфейс чтения диапазона реализованы в feature-ветке. Реальная авторизация пользователя и проверка его таблицы ИНВенты ещё не выполнены; DataLens/Asgard и dry-run end-to-end отчёт остаются следующими этапами. См. `docs/ORDER_CHECKING.md`.
