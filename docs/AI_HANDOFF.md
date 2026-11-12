@@ -1,18 +1,19 @@
-## Latest continuation — 2026-11-12 — read-only Google Sheets connector
+## Latest continuation — 2026-11-12 — Google Sheets read-only connector
 
-- Current feature branch HEAD before this handoff note: `172cb6232bcc6a7228a56a18f32d12ac4451172e`.
-- PR #2 remains draft/open/unmerged. PR #1 remains open. Do not merge either PR or modify `main`.
-- The user confirmed Malenia 0.6.0 is installed and the app works on their PC. The current feature-branch UX/connector changes have not yet been installed on the user's PC.
-- The exact order-checking rules are in `docs/ORDER_CHECKING.md`. The pure rules engine is `agent/malenia/order_check.py`; it only evaluates supplied snapshots and always returns `write_enabled: false`.
-- Google OAuth protocol helpers: `agent/malenia/google_oauth.py` (Desktop Client ID validation, PKCE S256, random state, loopback redirect, callback parsing, exact-scope/token validation).
-- Google Sheets connector: `agent/malenia/google_sheets.py` (loopback listener bound to 127.0.0.1, token exchange/refresh, Windows Credential Manager, GET-only values API with response bounds). API routes are in `agent/malenia/server.py`; Tauri commands are in `desktop/src-tauri/src/main.rs`; UI is in `desktop/src/App.tsx`.
-- Google Sheets scope is exactly `https://www.googleapis.com/auth/spreadsheets.readonly`. It is read-only but can view all spreadsheets accessible to the Google account. Malenia itself only requests the spreadsheet ID and A1 range explicitly entered by the user. No Google Drive scope, Sheets write scope, or write endpoint exists.
-- The UI distinguishes OAuth authorization from a verified source: status `authorized` does not show «Подключён». It marks the selected range verified only after a successful GET. Local disconnect deletes local credentials; it does not revoke the Google grant.
-- Python CI passed 157 tests on 3.11/3.12/3.13 (run `43235942347`). This includes order rules, OAuth helpers, connector, server routes, and vault tests. Tauri host/Rust check passed on run `43235110793`; frontend build and Node regression tests passed on run `43235941069` through the navigation step. The latest Desktop run was still running its Tauri host check; Windows Credential Manager integration and installer checks must still complete.
-- The first connector CI test failures were fixed: callback test uses Google's Desktop loopback root redirect; refresh test now expects the initial refresh plus one retry after a 401; UI source-notice assertion matches the updated Russian copy.
-- User setup still required: create a Google OAuth Desktop client in Google Cloud, enable Google Sheets API, configure consent screen and test users, then enter the Client ID in Malenia and approve in the system browser. Client Secret is optional and not requested; never ask the user to paste refresh tokens.
-- DataLens and Asgard remain disconnected. No DOM/screenshot access. Their read-only permission review is still required.
-- Next: verify latest Desktop/Windows installer CI, then ask user to set up OAuth Client ID and test a real selected spreadsheet/range. Only after that connect the order rules engine to a dry-run order report. No writes to ИНВента.
+- Current branch HEAD before this handoff update: `bd157e13a80ef9ba6e2db95384b69ee95b9ecc60`.
+- PR #2 remains draft/open/unmerged; PR #1 remains open. `main` is unchanged. Never merge without explicit user approval.
+- The user confirmed Malenia 0.6.0 is installed and the app works on their PC. The current feature-branch UX/Google Sheets changes have not been installed on the user's PC.
+- Order rules: `docs/ORDER_CHECKING.md`, pure evaluator `agent/malenia/order_check.py`. It uses only supplied source snapshots and always returns `write_enabled: false`. DataLens rules and exact Asgard mappings are recorded there.
+- OAuth protocol: `agent/malenia/google_oauth.py` — Desktop Client ID validation, PKCE S256, random one-use state, loopback redirect validation, callback parsing, exact scope and token-response validation. It supports an optional Client Secret but does not treat it as confidential.
+- Google Sheets connector: `agent/malenia/google_sheets.py` — local callback listener bound only to 127.0.0.1, Google callback query/fragment bridge (static same-origin script, no external resources), code exchange/refresh, and GET-only Sheets values API with response limits.
+- Secrets: `agent/malenia/secret_store.py` — Windows Credential Manager. Refresh token, client ID and optional client secret are stored there; access token is memory-only. No SQLite/config/log/frontend token storage or plaintext fallback.
+- API: `agent/malenia/server.py` exposes authenticated status/connect/read/disconnect routes. Tauri commands in `desktop/src-tauri/src/main.rs` open the system browser and proxy only read operations. UI in `desktop/src/App.tsx` asks for Client ID, optional Client Secret, spreadsheet ID and A1 range.
+- Only scope requested: `https://www.googleapis.com/auth/spreadsheets.readonly`. It is read-only but grants visibility to all spreadsheets accessible to the Google account. Malenia itself only issues GET for the explicitly entered ID/range. No Google Drive scope, Sheets write scope, or write endpoint.
+- UI reports «Авторизация сохранена» after OAuth, and «Подключён» only after the selected range is successfully read. Changing the spreadsheet/range clears the previous preview. Disconnect removes local credentials; the Google grant must be revoked separately in Google Account settings.
+- Google OAuth setup: create an OAuth Desktop client, enable Sheets API, configure consent screen/Test users, enter Client ID in Malenia and approve in the system browser. Client Secret is optional; if a particular project requires it, enter it only in the local UI. Never paste Client Secret or refresh token into chat.
+- DataLens and Asgard remain disconnected pending separate read-only permission review. Browser Bridge still sends only manually shared title and sanitized URL; no DOM/screenshots/cookies/history.
+- CI for current head `bd157e13a80ef9ba6e2db95384b69ee95b9ecc60`: Python run `43237513372` queued; Desktop checks `43237513501` queued; Windows installer `43237513420` in progress. Earlier baseline Python matrix passed 157 tests before optional-secret/fragment-bridge additions; do not claim the current head green until the latest three runs finish.
+- Next: verify CI including the Windows Credential Manager integration test; then ask user to configure OAuth Client ID and test a real selected ИНВента spreadsheet/range. Confirm column mapping with the user before connecting `evaluate_order()` to a dry-run report. No writes to ИНВента, DataLens, or Asgard.
 
 ## Secure secret vault follow-up — 2026-11-12
 
