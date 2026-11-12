@@ -95,7 +95,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(report["audit"]["total"], 2)
         self.assertEqual(report["audit"]["summary"]["found"], 1)
         self.assertNotIn("cargo_place", json.dumps(report))
-        self.assertNotIn("rows", json.dumps(report))
+        self.assertEqual(set(report["audit"]), {"checked_at", "total", "summary", "read_only", "source"})
 
     def test_internal_browser_request_http_approval_and_local_preparation(self):
         browser = BrowserPermissionSession(self.inbox)
