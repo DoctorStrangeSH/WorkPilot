@@ -80,7 +80,7 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
     }
 
     if std::net::TcpStream::connect((API_HOST, API_PORT)).is_ok() {
-        return Err("Порт 8765 уже занят. Останови другой экземпляр WorkPilot Agent.".to_string());
+        return Err("Порт 8765 уже занят. Останови другой экземпляр Malenia Agent.".to_string());
     }
 
     let mut random = [0_u8; 32];
@@ -112,7 +112,7 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
         #[cfg(not(debug_assertions))]
         {
             return Err(
-                "Не найден встроенный WorkPilot Agent. Переустанови приложение.".to_string()
+                "Не найден встроенный Malenia Agent. Переустанови приложение.".to_string()
             );
         }
     };
@@ -231,7 +231,13 @@ fn cancel_task(state: State<'_, AgentState>, task_id: String) -> Result<Value, S
 fn main() {
     tauri::Builder::default()
         .manage(AgentState::default())
-        .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard, create_task, cancel_task])
-        .run(tauri::generate_context!())
-        .expect("error while running WorkPilot");
+        .invoke_handler(tauri::generate_handler![star…7119 tokens truncated…"Агент подключён":"Сначала запустите агента"}</span></div>
+    <div className="browser-safety"><div><ShieldCheck size={19}/></div><section><b>Приватность по умолчанию</b><p>Расширение не читает cookies, пароли, историю, DOM или содержимое страниц. URL сохраняется без query-параметров и фрагмента. Передача происходит только после нажатия «Поделиться вкладкой» в расширении.</p></section></div>
+    <div className="panel browser-panel"><div className="panel-head"><div><h3>Вкладки, которыми вы поделились</h3><p>Последние 20 локальных записей</p></div><span className="live">{tabs.length} SHARED</span></div>
+      {tabs.length?<div className="browser-tab-list">{tabs.map(tab=><article className="browser-tab" key={tab.id}><span className="browser-tab-icon"><Globe2 size={16}/></span><div className="browser-tab-copy"><b>{tab.title}</b><a href={tab.url} target="_blank" rel="noreferrer">{tab.url}</a><small>Передано вручную · {time(tab.shared_at)}</small></div></article>)}</div>:<Empty title="Пока нет переданных вкладок" text="Установите Malenia Browser Bridge, затем откройте нужную страницу и нажмите кнопку расширения «Поделиться вкладкой»."/>}
+    </div>
+    <div className="note"><CircleHelp size={15}/>Native Messaging работает только после регистрации расширения и хоста. Поддержка проверяется на установленной версии Яндекс Браузера; автоматический доступ к вкладкам не включён.</div>
+  </section>;
 }
+function Coming({icon,title,text}:{icon:ReactNode;title:string;text:string}){return <div className="coming"><div>{icon}</div><small>СЛЕДУЮЩИЙ ЭТАП РАЗРАБОТКИ</small><h1>{title}</h1><p>{text}</p><span>Модуль пока не подключён</span></div>;}
+function Setting({icon,title,text,value,action}:{icon:ReactNode;title:string;text:string;value:string;action?:ReactNode}){return <div className="panel setting"><div className="setting-icon">{icon}</div><h3>{title}</h3><p>{text}</p><div className="setting-bottom"><b>{value}</b>{action}</div></div>;}

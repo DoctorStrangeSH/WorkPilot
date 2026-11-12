@@ -1,4 +1,4 @@
-# WorkPilot — дорожная карта
+# Malenia — дорожная карта
 
 Статус: Python Agent Runtime 0.1 и Desktop Shell 0.2 подготовлены в feature-ветках. Этапы отмечаются выполненными только после реализации и проверок.
 
@@ -29,8 +29,8 @@
 - [x] Включить NSIS per-user bundle и workflow сборки Windows installer.
 - [x] Подтвердить прохождение Windows unit tests после исправления SQLite connection lifecycle.
 - [x] Проверить PyInstaller onedir package и запуск упакованного агента с `--help` в Windows CI.
-- [ ] Получить успешный NSIS artifact из Windows installer workflow (текущая onedir-сборка выполняется).
-- [ ] Проверить установку и запуск на компьютере пользователя.
+- [x] Получить успешный NSIS artifact: Windows workflow `43040062771` завершился успешно.
+- [x] Пользователь подтвердил установку, запуск и Browser Bridge (2026-11-12).
 
 ## Этап 3 — Яндекс Браузер: Browser Bridge
 - [x] Создать MV3 extension с минимальными разрешениями `activeTab` и `nativeMessaging`.
@@ -44,11 +44,11 @@
 - [x] Подготовить PowerShell-регистрацию Native Messaging host с автоопределением Tauri resource path, explicit path override и HKCU-only registry writes.
 - [x] Сделать исходник registration script ASCII-only для совместимости с Windows PowerShell 5.1.
 - [x] Проверить PowerShell syntax validation скриптов в Windows CI.
-- [ ] При необходимости повторно собрать NSIS после изменений регистрации; текущий доступный установщик из workflow `43032886364` уже содержит Native Messaging host.
-- [ ] Проверить регистрацию host и ручную передачу вкладки на Яндекс Браузере 26.10.3.771 (64-bit); пользователь уже установил распакованное расширение и передал его ID.
+- [x] Повторно собрать NSIS и расширение после исправлений регистрации: workflow `43040062771`.
+- [x] Проверить регистрацию и ручную передачу вкладки на компьютере пользователя: подтверждено 2026-11-12.
 - [ ] Реализовать reconnect, тайм-ауты и диагностику соединения.
 - [ ] Отдельно спроектировать чтение DOM/скриншоты и список вкладок только после явного согласия и отдельного permission review.
-- [ ] Реализовать отдельный профиль WorkPilot.
+- [ ] Реализовать отдельный профиль Malenia.
 
 ## Этап 4 — Desktop Automation
 - [ ] Перечисление окон и приложений.

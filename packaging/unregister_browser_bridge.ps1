@@ -14,4 +14,4 @@ foreach ($registryPath in $registryPaths) {
 $root = Join-Path $env:LOCALAPPDATA "WorkPilot"
 Remove-Item -LiteralPath (Join-Path $root "browser_bridge.json") -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath (Join-Path $root "browser-bridge") -Recurse -Force -ErrorAction SilentlyContinue
-Write-Host "WorkPilot Browser Bridge registration removed. Existing WorkPilot task data was kept."
+Write-Host "Malenia Browser Bridge registration removed. Existing WorkPilot task data was kept."

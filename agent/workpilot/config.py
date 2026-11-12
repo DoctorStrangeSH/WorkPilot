@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 
+# Stable storage name: Malenia keeps existing WorkPilot tasks and shared tabs.
 APP_NAME = "WorkPilot"
 
 

@@ -56,7 +56,28 @@ try {
             throw "Generated JSON has a UTF-8 BOM."
         }
     }
-    Write-Host "PASS: Windows PowerShell 5.1 registration, repeat registration, JSON, HKCU values and invalid-host rejection."
+    # Discover renamed and legacy installations from isolated uninstall metadata.
+    # Ignore real running processes so this test cannot select the user's app.
+    function Get-Process { param($Name, $ErrorAction) }
+    $installRoot = Join-Path $testRoot "Installed App With Spaces"
+    $hostDir = Join-Path $installRoot "resources\workpilot-native-host"
+    New-Item -ItemType Directory -Path (Join-Path $hostDir "_internal") -Force | Out-Null
+    $discoveredHost = Join-Path $hostDir "workpilot-native-host.exe"
+    [IO.File]::WriteAllBytes($discoveredHost, [byte[]]@())
+    $uninstallKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\TestApp"
+    New-Item -Path $uninstallKey -Force | Out-Null
+    New-ItemProperty -LiteralPath $uninstallKey -Name InstallLocation -Value $installRoot | Out-Null
+    $sentinel = Join-Path $testRoot "WorkPilot\workpilot.sqlite3"
+    [IO.File]::WriteAllText($sentinel, "existing-data-must-survive")
+    foreach ($displayName in @("Malenia", "WorkPilot 0.2")) {
+        New-ItemProperty -LiteralPath $uninstallKey -Name DisplayName -Value $displayName -Force | Out-Null
+        & $registration -ExtensionId $extensionId
+        $discovered = Get-Content -Raw -Encoding UTF8 -LiteralPath $manifestPath | ConvertFrom-Json
+        if ($discovered.path -ne [IO.Path]::GetFullPath($discoveredHost)) { throw "Host discovery failed for $displayName" }
+        if ([IO.File]::ReadAllText($sentinel) -ne "existing-data-must-survive") { throw "Existing data changed" }
+    }
+    Write-Host "PASS: Malenia/WorkPilot discovery, data preservation, registration, repeat registration and invalid-host rejection."
+
 }
 finally {
     $env:LOCALAPPDATA = $originalLocalAppData

@@ -30,10 +30,10 @@ async function connect() {
     if (!response.ok || response.host !== HOST_NAME) {
       throw new Error(response.error || "Не удалось проверить Native Messaging host.");
     }
-    setStatus("WorkPilot подключён. Выберите вкладку для передачи.", "ok");
+    setStatus("Malenia подключён. Выберите вкладку для передачи.", "ok");
     shareButton.disabled = false;
   } catch (error) {
-    setStatus("Нет соединения с WorkPilot. Проверьте установку Native Messaging host.", "error");
+    setStatus("Нет соединения с Malenia. Проверьте установку Native Messaging host.", "error");
     shareButton.disabled = true;
   }
 }
@@ -64,9 +64,9 @@ shareButton.addEventListener("click", async () => {
     });
 
     if (!response.ok) {
-      throw new Error(response.error || "WorkPilot не принял вкладку.");
+      throw new Error(response.error || "Malenia не принял вкладку.");
     }
-    setStatus("Вкладка передана в WorkPilot.", "ok");
+    setStatus("Вкладка передана в Malenia.", "ok");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Не удалось передать вкладку.", "error");
   } finally {

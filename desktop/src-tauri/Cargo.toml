@@ -1,7 +1,7 @@
 [package]
 name = "workpilot-desktop"
-version = "0.2.0"
-description = "WorkPilot local-first desktop assistant"
+version = "0.2.1"
+description = "Malenia local-first desktop assistant"
 authors = ["WorkPilot contributors"]
 edition = "2021"
 

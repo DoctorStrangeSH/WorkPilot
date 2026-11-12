@@ -14,6 +14,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $hostName = "com.workpilot.browser"
+# Preserve the existing data/config path across the Malenia rename.
 $localRoot = Join-Path $env:LOCALAPPDATA "WorkPilot"
 $bridgeDir = Join-Path $localRoot "browser-bridge"
 $manifestPath = Join-Path $bridgeDir "$hostName.json"
@@ -42,8 +43,8 @@ function Find-InstalledNativeHost {
     $candidates = New-Object 'System.Collections.Generic.List[string]'
     $installRoots = New-Object 'System.Collections.Generic.List[string]'
 
-    # If WorkPilot is running, its executable directory is the resource root.
-    $processes = Get-Process -Name "WorkPilot" -ErrorAction SilentlyContinue
+    # If Malenia or a legacy WorkPilot build is running, its executable directory is the resource root.
+    $processes = Get-Process -Name "Malenia", "WorkPilot", "workpilot-desktop" -ErrorAction SilentlyContinue
     foreach ($process in $processes) {
         try {
             if ($process.Path) {
@@ -71,7 +72,7 @@ function Find-InstalledNativeHost {
                 $displayIconProperty = $entry.PSObject.Properties["DisplayIcon"]
 
                 $displayName = if ($displayNameProperty) { [string]$displayNameProperty.Value } else { "" }
-                if ($displayName -notmatch '^WorkPilot(?:\s|$)') { continue }
+                if ($displayName -notmatch '^(?:Malenia|WorkPilot)(?:\s|$)') { continue }
 
                 if ($installLocationProperty -and $installLocationProperty.Value) {
                     Add-UniquePath -List $installRoots -Path ([string]$installLocationProperty.Value)
@@ -99,6 +100,8 @@ function Find-InstalledNativeHost {
 
     # Fallback locations are accepted only if the exact resource file exists.
     foreach ($fallbackRoot in @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Malenia"),
+        (Join-Path $env:LOCALAPPDATA "Malenia"),
         (Join-Path $env:LOCALAPPDATA "Programs\WorkPilot"),
         (Join-Path $env:LOCALAPPDATA "WorkPilot")
     )) {
@@ -117,9 +120,9 @@ function Find-InstalledNativeHost {
     if ($candidates.Count -eq 0) {
         throw @"
 Could not automatically locate the Native Messaging host.
-Confirm WorkPilot 0.2 is installed. For a non-standard install directory, rerun
+Confirm Malenia (or legacy WorkPilot 0.2) is installed. For a non-standard install directory, rerun
 with -NativeHostPath "C:\full\path\to\workpilot-native-host.exe".
-Expected layout: <WorkPilot folder>\resources\workpilot-native-host\workpilot-native-host.exe
+Expected layout: <Malenia folder>\resources\workpilot-native-host\workpilot-native-host.exe
 "@
     }
 
@@ -156,7 +159,7 @@ New-Item -ItemType Directory -Force -Path $bridgeDir | Out-Null
 
 $manifest = @{
     name = $hostName
-    description = "WorkPilot user-approved browser tab bridge"
+    description = "Malenia user-approved browser tab bridge"
     path = $resolvedHostPath
     type = "stdio"
     allowed_origins = @("chrome-extension://$ExtensionId/")
@@ -181,7 +184,7 @@ foreach ($registryPath in $registryPaths) {
 }
 
 Write-Host ""
-Write-Host "WorkPilot Browser Bridge registered." -ForegroundColor Green
+Write-Host "Malenia Browser Bridge registered." -ForegroundColor Green
 Write-Host "Extension ID : $ExtensionId"
 Write-Host "Native host  : $resolvedHostPath"
 Write-Host "Manifest     : $manifestPath"
@@ -193,4 +196,4 @@ foreach ($registryPath in $registryPaths) {
 }
 Write-Host ""
 Write-Host "Close all Yandex Browser windows and restart the browser."
-Write-Host "Then open the WorkPilot Browser Bridge popup and click Share tab."
+Write-Host "Then open the Malenia Browser Bridge popup and click Share tab."

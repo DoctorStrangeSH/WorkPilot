@@ -1,4 +1,4 @@
-# WorkPilot Desktop 0.2.0
+# Malenia Desktop 0.2.1
 
 React + Vite frontend and Tauri 2 host for the local Python Agent Runtime.
 
@@ -61,5 +61,5 @@ The desktop CI validates the frontend, Tauri Rust host and Python tests on Windo
 - Tauri commands proxy authenticated requests; the bearer token is held in Rust process memory.
 - The current browser profile is not read by this application.
 - Browser cookies, passwords and tokens are not extracted.
-- Stopping the agent terminates only the child process started by this WorkPilot window.
+- Stopping the agent terminates only the child process started by this Malenia window.
 - The UI does not claim that unimplemented browser/AI/image-search modules are available.

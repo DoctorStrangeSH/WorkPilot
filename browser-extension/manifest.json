@@ -1,14 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "WorkPilot Browser Bridge",
-  "version": "1.0.0",
-  "description": "Share the active browser tab with WorkPilot only when you click the extension.",
+  "name": "Malenia Browser Bridge",
+  "version": "1.0.1",
+  "description": "Share the active browser tab with Malenia only when you click the extension.",
   "permissions": [
     "activeTab",
     "nativeMessaging"
   ],
   "action": {
-    "default_title": "WorkPilot Browser Bridge",
+    "default_title": "Malenia Browser Bridge",
     "default_popup": "popup.html"
   }
 }

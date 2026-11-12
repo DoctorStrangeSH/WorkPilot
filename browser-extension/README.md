@@ -1,4 +1,4 @@
-# WorkPilot Browser Bridge extension preview
+# Malenia Browser Bridge extension preview
 
 This is a developer-preview Manifest V3 extension for Yandex Browser builds that support Chromium extensions and Native Messaging.
 
@@ -55,7 +55,7 @@ There are no `tabs`, `history`, `cookies`, `scripting`, or broad host permission
 
    If the host is installed in a non-standard location, add `-NativeHostPath "C:\full\path\to\workpilot-native-host.exe"`.
 7. Close all Yandex Browser windows (including background processes) and restart the browser.
-8. Navigate to a normal HTTP(S) page, open the WorkPilot extension popup and click **Поделиться вкладкой**. Then start/refresh WorkPilot and check the Browser page.
+8. Navigate to a normal HTTP(S) page, open the WorkPilot extension popup and click **Поделиться вкладкой**. Then start/refresh Malenia and check the Browser page.
 
 The registration script is intentionally ASCII-only so it also parses correctly in Windows PowerShell 5.1 (`powershell.exe`), which otherwise may misread UTF-8 files without a BOM. The script writes only to the current user's `%LOCALAPPDATA%\WorkPilot` folder and `HKCU` registry keys; it does not require administrator rights. It verifies the host EXE and adjacent PyInstaller `_internal` folder before registering.
 
@@ -80,3 +80,7 @@ The extension sends only the active tab's title and URL path after an explicit c
 This preview does not read cookies, passwords, browser history, page DOM, form fields, local storage, or browser profile files. It does not execute scripts, click page controls, or navigate tabs.
 
 Target browser reported by the initial tester: Yandex Browser 26.10.3.771 (64-bit). Yandex's public documentation confirms Chrome/Opera extension catalogue compatibility and documents the `NativeMessagingUserLevelHosts` policy (default: Not Configured, which permits user-level hosts). It does not specify a stable-consumer-build registry lookup contract. The setup script registers both a Yandex-specific per-user key and the Chromium per-user fallback; actual discovery and tab sharing still need to be confirmed on the target machine. See the official Yandex policy and extension docs linked below.
+
+## Rename compatibility
+
+Malenia is the new display name of WorkPilot. The native host remains `com.workpilot.browser` and data remains in `%LOCALAPPDATA%/WorkPilot`. Reload the existing unpacked extension in its original directory to preserve its ID; do not load a second copy from a new directory. If the installer uses a new directory, register the new bundled host path with the current script.
