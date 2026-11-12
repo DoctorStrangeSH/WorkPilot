@@ -132,7 +132,7 @@ def parse_callback_target(target: str, expected_state: str) -> str:
     codes = query.get("code", [])
     if len(codes) != 1 or not codes[0] or len(codes[0]) > _MAX_AUTH_CODE_LENGTH:
         raise GoogleOAuthError("Missing or invalid OAuth authorization code")
-    if any(ord(char) < 0x21 or ord(char) > 0x7E for char in codes[0]):
+    if _TOKEN_RE.fullmatch(codes[0]) is None:
         raise GoogleOAuthError("Invalid OAuth authorization code")
     return codes[0]
 
