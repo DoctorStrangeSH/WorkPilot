@@ -31,3 +31,15 @@ test('sources page shows truthful connection state and no fake connect actions',
   assert.match(app, /Передаёт только заголовок и очищенный URL/);
   assert.match(app, /Открыть Browser Bridge/);
 });
+
+
+test('Google Sheets onboarding is explicitly read-only and calls the native connector', () => {
+  assert.match(app, /Google OAuth Desktop Client ID/);
+  assert.match(app, /spreadsheets\.readonly/);
+  assert.match(app, /connect_google_sheets/);
+  assert.match(app, /get_google_sheets_status/);
+  assert.match(app, /read_google_sheet/);
+  assert.match(app, /disconnect_google_sheets/);
+  assert.match(app, /Никаких изменений в таблицу не внесено/);
+  assert.doesNotMatch(app, /write_google_sheet|update_google_sheet/);
+});
