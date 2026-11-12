@@ -15,20 +15,20 @@ There are no `tabs`, `history`, `cookies`, `scripting`, or broad host permission
 2. Enable Developer mode.
 3. Choose **Load unpacked** and select this `browser-extension` folder.
 4. Copy the extension ID shown by the browser.
-5. Open PowerShell (ordinary user permissions are enough). The registration script auto-detects the installed host using the running WorkPilot process, the per-user uninstall registry, and the bundled Tauri resource layout. It also accepts an explicit executable path if auto-detection is ambiguous.
+5. Open PowerShell (ordinary user permissions are enough). The registration script auto-detects the installed host using the running Malenia or legacy WorkPilot process, the per-user uninstall registry, and the bundled Tauri resource layout. It also accepts an explicit executable path if auto-detection is ambiguous.
 6. From a local clone of this repository, run:
 
    ```powershell
    .\packaging\register_browser_bridge.ps1 -ExtensionId YOUR_32_CHARACTER_EXTENSION_ID
    ```
 
-   Or download the verified script pinned to the ASCII fix commit (paste the entire block):
+   Or download the verified script pinned to the Malenia compatibility commit (paste the entire block):
 
    ```powershell
    & {
        $ErrorActionPreference = "Stop"
-       $sha = "c7c5f48a4a206048a9aef65efeacce24face79c9"
-       $expected = "de7350d5df7d50b7192a030fa79da443b1bf82b269529a4a6525d602eb87f470"
+       $sha = "a9aefa0dfd2a67ea07eb58f3a64bfdde8508bc79"
+       $expected = "afc7793fad80a45c115333b4378cbedaa547af5eeff74ad38082ed9c0aa1cbd4"
        $fresh = Join-Path $env:TEMP ("workpilot-register-" + [guid]::NewGuid() + ".ps1")
        $url = "https://raw.githubusercontent.com/DoctorStrangeSH/WorkPilot/$sha/packaging/register_browser_bridge.ps1"
        Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $fresh -ErrorAction Stop
@@ -51,11 +51,11 @@ There are no `tabs`, `history`, `cookies`, `scripting`, or broad host permission
    }
    ```
 
-   The block creates a unique file, stops on download/ASCII/hash/syntax failure, and only then executes that file. Never rerun the previous `$script` temp file. The commit URL avoids the mutable branch cache; the SHA256 above covers the exact 7433 downloaded bytes.
+   The block creates a unique file, stops on download/ASCII/hash/syntax failure, and only then executes that file. Never rerun the previous `$script` temp file. The commit URL avoids the mutable branch cache; the SHA256 above covers the exact 7690 downloaded bytes.
 
    If the host is installed in a non-standard location, add `-NativeHostPath "C:\full\path\to\workpilot-native-host.exe"`.
 7. Close all Yandex Browser windows (including background processes) and restart the browser.
-8. Navigate to a normal HTTP(S) page, open the WorkPilot extension popup and click **Поделиться вкладкой**. Then start/refresh Malenia and check the Browser page.
+8. Navigate to a normal HTTP(S) page, open the Malenia extension popup and click **Поделиться вкладкой**. Then start/refresh Malenia and check the Browser page.
 
 The registration script is intentionally ASCII-only so it also parses correctly in Windows PowerShell 5.1 (`powershell.exe`), which otherwise may misread UTF-8 files without a BOM. The script writes only to the current user's `%LOCALAPPDATA%\WorkPilot` folder and `HKCU` registry keys; it does not require administrator rights. It verifies the host EXE and adjacent PyInstaller `_internal` folder before registering.
 
