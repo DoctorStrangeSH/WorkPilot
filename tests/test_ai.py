@@ -65,6 +65,32 @@ class OllamaTests(unittest.TestCase):
             self.assertTrue(self.client._generation.acquire(False))
             self.client._generation.release()
 
+    def test_confirmed_knowledge_can_be_disabled_and_sources_are_explicit(self):
+        self.client.knowledge = Mock()
+        self.client.knowledge.retrieve.return_value = [{"id":"fixture","title":"Japan","source":"Japan.md","kind":"note","excerpt":"Tokyo"}]
+        self.client._request = Mock(side_effect=[self.tags,self.reply])
+        result = self.client.chat(self.payload)
+        self.assertEqual(result["sources"][0]["id"],"fixture")
+        sent = self.client._request.call_args.args[1]
+        self.assertIn("Tokyo",sent["messages"][0]["content"])
+        self.assertEqual(sent["options"]["num_ctx"],4096)
+        self.client.knowledge.retrieve.reset_mock()
+        self.client._request = Mock(side_effect=[self.tags,self.reply])
+        result = self.client.chat({**self.payload,"use_knowledge":False})
+        self.assertEqual(result["sources"],[])
+        self.client.knowledge.retrieve.assert_not_called()
+        self.assertEqual(self.client._request.call_args.args[1]["messages"][1:],self.payload["messages"])
+
+    def test_sherlock_models_disable_thinking_and_reject_non_boolean_context_switch(self):
+        self.client._request=Mock(side_effect=[{"models":[{"name":"qwen3:8b"}]},self.reply])
+        self.client.chat({**self.payload,"model":"qwen3:8b"})
+        body=self.client._request.call_args.args[1]
+        self.assertIs(body["think"],False)
+        self.assertEqual(body["options"]["temperature"],0)
+        self.client._request.reset_mock()
+        with self.assertRaises(AIError):self.client.chat({**self.payload,"use_knowledge":"yes"})
+        self.client._request.assert_not_called()
+
     def test_oversized_provider_response_is_not_returned(self):
         self.client._opener=Mock()
         self.client._opener.open.return_value=io.BytesIO(b"x"*131073)

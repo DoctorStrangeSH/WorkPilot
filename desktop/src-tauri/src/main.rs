@@ -173,7 +173,7 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
                 runtime.get("release").and_then(Value::as_str) == Some(env!("CARGO_PKG_VERSION"))
                     && runtime.get("protocol").and_then(Value::as_u64) == Some(1)
                     && runtime.get("capabilities").and_then(Value::as_array)
-                        .map(|items| items.iter().any(|item| item.as_str() == Some("task_idempotency")))
+                        .map(|items| ["task_idempotency", "explicit_knowledge"].iter().all(|cap| items.iter().any(|item| item.as_str() == Some(*cap))))
                         .unwrap_or(false)
             }).unwrap_or(false);
             if !compatible {
@@ -305,8 +305,10 @@ fn start_local_ai(state: State<'_, AgentState>) -> Result<String, String> {
         return Err("Порт модели занят другим процессом".to_string());
     }
     let root = PathBuf::from(std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA недоступна".to_string())?).join("Malenia");
-    let executable = root.join("ollama/ollama.exe");
-    if !executable.is_file() { return Err("Сначала установите локальный Ollama".to_string()); }
+    let portable = root.join("ollama/ollama.exe");
+    let standard = PathBuf::from(std::env::var("LOCALAPPDATA").unwrap_or_default()).join("Programs/Ollama/ollama.exe");
+    let executable = if portable.is_file() { portable } else { standard };
+    if !executable.is_file() { return Err("Установите локальный движок с ollama.com/download/windows и повторите запуск".to_string()); }
     if let Some(mut old) = slot.take() { let _ = old.kill(); let _ = old.wait(); }
     let mut command = Command::new(executable);
     command.arg("serve")
@@ -335,14 +337,14 @@ fn get_ai_status(state: State<'_, AgentState>) -> Result<Value, String> {
 }
 
 #[tauri::command]
-async fn chat_ai(state: State<'_, AgentState>, model: String, messages: Value) -> Result<Value, String> {
+async fn chat_ai(state: State<'_, AgentState>, model: String, messages: Value, use_knowledge: Option<bool>) -> Result<Value, String> {
     let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
         .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
         let response = reqwest::blocking::Client::new()
             .post(format!("http://{API_HOST}:{API_PORT}/v1/ai/chat"))
             .header("Authorization", format!("Bearer {token}"))
-            .json(&serde_json::json!({"model": model, "messages": messages}))
+            .json(&serde_json::json!({"model": model, "messages": messages, "use_knowledge": use_knowledge.unwrap_or(true)}))
             .timeout(Duration::from_secs(100))
             .send().map_err(|_| "Модель не ответила. Запрос не повторён автоматически".to_string())?;
         let status = response.status();
@@ -352,6 +354,71 @@ async fn chat_ai(state: State<'_, AgentState>, model: String, messages: Value) -
         }
         Ok(body)
     }).await.map_err(|_| "Ошибка обработки запроса модели".to_string())?
+}
+
+#[tauri::command]
+async fn install_sherlock(model: String) -> Result<String, String> {
+    if !matches!(model.as_str(), "qwen3:4b" | "qwen3:8b" | "qwen3:14b") {
+        return Err("Неизвестный вариант Шерлока".to_string());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        // Download only on an explicit click; never silently load the model.
+        let required = match model.as_str() { "qwen3:14b" => 14, "qwen3:8b" => 8, _ => 5 };
+        #[cfg(windows)]
+        {
+            #[repr(C)]
+            struct MemoryStatus { length: u32, load: u32, total: u64, available: u64,
+                page: u64, available_page: u64, virtual_total: u64, virtual_available: u64, extended: u64 }
+            #[link(name="kernel32")]
+            extern "system" { fn GlobalMemoryStatusEx(status: *mut MemoryStatus) -> i32; }
+            let mut memory = MemoryStatus { length: std::mem::size_of::<MemoryStatus>() as u32,
+                load:0,total:0,available:0,page:0,available_page:0,virtual_total:0,virtual_available:0,extended:0 };
+            if unsafe { GlobalMemoryStatusEx(&mut memory) } == 0 || memory.available < required * 1024 * 1024 * 1024 {
+                return Err(format!("Для выбранной версии освободите минимум {required} ГБ оперативной памяти. Загрузка не начата"));
+            }
+        }
+        let response = reqwest::blocking::Client::builder().no_proxy().redirect(reqwest::redirect::Policy::none()).build().map_err(|e| e.to_string())?
+            .post("http://127.0.0.1:11434/api/pull")
+            .json(&serde_json::json!({"model": model, "stream": false}))
+            .timeout(Duration::from_secs(1800)).send()
+            .map_err(|_| "Загрузка не подтверждена. Проверьте подключение и список установленных вариантов".to_string())?;
+        let ok = response.status().is_success();
+        let body = response.json::<Value>().map_err(|_| "Не удалось проверить загрузку Шерлока".to_string())?;
+        if !ok || body.get("status").and_then(Value::as_str) != Some("success") {
+            return Err("Не удалось скачать Шерлока. Проверьте интернет, свободное место и локальный движок".to_string());
+        }
+        Ok("Шерлок установлен".to_string())
+    }).await.map_err(|_| "Ошибка установки Шерлока".to_string())?
+}
+
+#[tauri::command]
+fn get_knowledge(state: State<'_, AgentState>) -> Result<Value, String> {
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
+    api_get(&token, "/v1/knowledge")
+}
+
+#[tauri::command]
+async fn knowledge_action(state: State<'_, AgentState>, action: String, payload: Value) -> Result<Value, String> {
+    let path = match action.as_str() {
+        "save" => "/v1/knowledge", "import" => "/v1/knowledge/import", "delete" => "/v1/knowledge/delete",
+        _ => return Err("Неизвестное действие с базой знаний".to_string()),
+    };
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let response = reqwest::blocking::Client::builder().no_proxy().redirect(reqwest::redirect::Policy::none()).build().map_err(|e| e.to_string())?
+            .post(format!("http://{API_HOST}:{API_PORT}{path}"))
+            .header("Authorization", format!("Bearer {token}"))
+            .json(&payload).timeout(Duration::from_secs(30)).send()
+            .map_err(|_| "Результат не подтверждён. Обновите список перед повтором".to_string())?;
+        let status = response.status();
+        let body = response.json::<Value>().map_err(|_| "Некорректный ответ агента".to_string())?;
+        if !status.is_success() {
+            return Err(body.get("error").and_then(Value::as_str).unwrap_or("Ошибка базы знаний").to_string());
+        }
+        Ok(body)
+    }).await.map_err(|_| "Ошибка обработки базы знаний".to_string())?
 }
 
 fn main() {
@@ -365,7 +432,7 @@ fn main() {
             }
         }))
         .manage(AgentState::default())
-        .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai])
+        .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_knowledge, knowledge_action, install_sherlock])
         .run(tauri::generate_context!())
         .expect("error while running Malenia");
 }

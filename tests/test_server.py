@@ -137,7 +137,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(self.api("/v1/runtime", authenticated=False)[0], 401)
         code, runtime = self.api("/v1/runtime")
         self.assertEqual(code, 200)
-        self.assertEqual(runtime["release"], "0.4.1")
+        self.assertEqual(runtime["release"], "0.5.0")
         self.assertEqual(runtime["protocol"], 1)
         self.assertIn("task_idempotency", runtime["capabilities"])
 
@@ -157,6 +157,24 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(len(self.store.list_events()), 1)
         self.assertEqual(self.api("/v1/tasks", {"title": "Legacy"})[0], 201)
         self.assertEqual(self.api("/v1/tasks", {"title": "Null", "request_id": None})[0], 201)
+
+    def test_knowledge_api_auth_save_retrieve_delete_and_no_implicit_chat_learning(self):
+        body={"request_id":"b1234567-1234-1234-1234-123456789abc","title":"Проверка заказа",
+              "content":"Не выдумывать адрес доставки","kind":"memory"}
+        self.assertEqual(self.api("/v1/knowledge",authenticated=False)[0],401)
+        self.assertEqual(self.api("/v1/knowledge",body,authenticated=False)[0],401)
+        self.assertEqual(self.api("/v1/knowledge",body)[0],200)
+        self.assertEqual(self.api("/v1/knowledge",body)[0],200)
+        self.assertEqual(len(self.api("/v1/knowledge")[1]["records"]),1)
+        self.ai._request=Mock(side_effect=[{"models":[{"name":"qwen2.5:0.5b"}]},
+            {"done":True,"message":{"role":"assistant","content":"fixture"}}])
+        result=self.api("/v1/ai/chat",{"model":"qwen2.5:0.5b","messages":[{"role":"user","content":"Проверь заказ"}]})
+        self.assertEqual(result[0],200)
+        self.assertEqual(len(result[1]["sources"]),1)
+        self.assertEqual(len(self.api("/v1/knowledge")[1]["records"]),1)
+        self.assertEqual(self.api("/v1/knowledge/delete",{"id":body["request_id"]})[0],200)
+        self.assertEqual(self.api("/v1/knowledge")[1]["records"],[])
+        self.assertEqual(self.api("/v1/knowledge/import",{"folder":"relative"})[0],422)
 
     def test_health_is_available_without_token(self):
         with urlopen(f"{self.base_url}/health", timeout=2) as response:

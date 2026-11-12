@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 from .ai import OllamaClient, AIError
+from .knowledge import KnowledgeBase, KnowledgeError
 from .permission_inbox import PermissionInbox
 from .permissions import PermissionGate
 from .resources import ResourceManager
@@ -33,7 +34,9 @@ class MaleniaHTTPServer(ThreadingHTTPServer):
 def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                  permissions: PermissionInbox | None = None, ai: OllamaClient | None = None):
     inbox = permissions if permissions is not None else PermissionInbox(PermissionGate(store))
+    knowledge = KnowledgeBase(store)
     ai_client = ai if ai is not None else OllamaClient()
+    ai_client.knowledge = knowledge
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "MaleniaAgent/0.2"
@@ -116,8 +119,10 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                 return
 
             if parsed.path == "/v1/runtime":
-                self._send(200, {"release": "0.4.1", "protocol": 1,
-                    "capabilities": ["local_chat", "task_idempotency"]})
+                self._send(200, {"release": "0.5.0", "protocol": 1,
+                    "capabilities": ["local_chat", "task_idempotency", "explicit_knowledge"]})
+            elif parsed.path == "/v1/knowledge":
+                self._send(200, {"records": knowledge.list()})
             elif parsed.path == "/v1/ai/status":
                 self._send(200, ai_client.status())
             elif parsed.path == "/v1/permissions":
@@ -152,6 +157,26 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
             if not self._require_access():
                 return
             parsed = urlsplit(self.path)
+
+            if parsed.path in {"/v1/knowledge", "/v1/knowledge/import", "/v1/knowledge/delete"}:
+                payload = self._read_json(32 * 1024)
+                if payload is None:
+                    return
+                try:
+                    if parsed.path == "/v1/knowledge":
+                        result = {"record": knowledge.save(payload.get("request_id"), payload.get("title"),
+                            payload.get("content"), payload.get("kind", "memory"))}
+                    elif parsed.path.endswith("/import"):
+                        result = knowledge.import_folder(payload.get("folder"))
+                    else:
+                        record_id = payload.get("id")
+                        if not isinstance(record_id, str) or re.fullmatch(r"[0-9a-f-]{36}", record_id) is None:
+                            raise KnowledgeError("Некорректный идентификатор записи")
+                        result = {"deleted": knowledge.delete(record_id)}
+                    self._send(200, result)
+                except KnowledgeError as error:
+                    self._send(422, {"error": str(error)})
+                return
 
             if parsed.path == "/v1/ai/chat":
                 payload = self._read_json(32 * 1024)

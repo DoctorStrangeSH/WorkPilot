@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {KnowledgePage} from "./KnowledgePage";
 import { AiPage } from "./AiPage";
 import { invoke } from "@tauri-apps/api/core";
 import { PermissionsPage, type PermissionRequest, type PermissionDecision } from "./PermissionsPage";
@@ -14,9 +15,9 @@ type EventItem = { id:number; event_type:string; message:string; created_at:stri
 type BrowserTab = { id:string; url:string; title:string; shared_at:string; };
 type Resources = { total_memory_bytes:number; available_memory_bytes:number; used_memory_percent:number; logical_processors:number; cpu_usage_percent:number; mode:"normal"|"economy"|"emergency"; recommended_parallel_jobs:number; };
 type Dashboard = { running:boolean; resources:Resources; tasks:Task[]; events:EventItem[]; browser_tabs:BrowserTab[]; permissions:PermissionRequest[]; };
-type Page = "overview"|"tasks"|"browser"|"search"|"ai"|"settings"|"permissions";
+type Page = "overview"|"tasks"|"browser"|"search"|"ai"|"settings"|"permissions"|"knowledge";
 
-const labels:Record<Page,string>={overview:"Главная",tasks:"Задания",browser:"Браузер",search:"Поиск",ai:"ИИ-модели",settings:"Настройки",permissions:"Разрешения"};
+const labels:Record<Page,string>={overview:"Главная",tasks:"Задания",browser:"Браузер",search:"Поиск",ai:"ИИ-модели",settings:"Настройки",permissions:"Разрешения",knowledge:"Память и знания"};
 const bytes=(n:number)=>n ? (n/1024/1024/1024).toFixed(1)+" ГБ" : "—";
 const time=(v:string)=>{try{return new Intl.DateTimeFormat("ru-RU",{hour:"2-digit",minute:"2-digit"}).format(new Date(v));}catch{return v;}};
 
@@ -65,7 +66,8 @@ export default function App(){
         <Nav icon={<ListTodo/>} label="Задания" active={page==="tasks"} count={data?.tasks.length} onClick={()=>setPage("tasks")}/>
         <Nav icon={<Globe2/>} label="Браузер" active={page==="browser"} onClick={()=>setPage("browser")}/>
         <Nav icon={<FileSearch/>} label="Поиск" active={page==="search"} onClick={()=>setPage("search")}/>
-        <Nav icon={<BrainCircuit/>} label="ИИ-модели" active={page==="ai"} onClick={()=>setPage("ai")}/>
+        <Nav icon={<Database/>} label="Память и знания" active={page==="knowledge"} onClick={()=>setPage("knowledge")}/>
+          <Nav icon={<BrainCircuit/>} label="ИИ-модели" active={page==="ai"} onClick={()=>setPage("ai")}/>
       </nav>
       <div className="nav-label separated">СИСТЕМА</div>
       <nav><Nav icon={<ShieldCheck/>} label="Разрешения" active={page==="permissions"} count={data?.permissions.filter(p=>p.status==="pending").length} onClick={()=>setPage("permissions")}/><Nav icon={<Settings2/>} label="Настройки" active={page==="settings"} onClick={()=>setPage("settings")}/></nav>
@@ -103,10 +105,11 @@ export default function App(){
         {page==="permissions"&&<PermissionsPage requests={data?.permissions??[]} connected={connected} busy={busy} onDecide={decidePermission}/>}
         {page==="browser"&&<BrowserPage tabs={data?.browser_tabs??[]} connected={connected}/>}
         {page==="search"&&<Coming icon={<FileSearch/>} title="Универсальный поиск" text="Здесь появится поиск по рабочим ресурсам, трекерам и фотографиям. Источники подключаются отдельными адаптерами."/>}
+        {page==="knowledge"&&<KnowledgePage connected={connected}/>}
         {page==="ai"&&<AiPage connected={connected} onTaskCreated={()=>void refresh()}/>}
-        {page==="settings"&&<section className="page"><div className="page-head"><div><div className="eyebrow">КОНФИГУРАЦИЯ</div><h1>Настройки</h1><p>Состояние локальной среды и параметры запуска.</p></div></div><div className="settings-grid"><Setting icon={<Database/>} title="Локальный агент" text="Python Runtime слушает только localhost." value={connected?"Запущен":"Остановлен"} action={<button className={connected?"danger":"primary"} onClick={connected?stopAgent:runAgent} disabled={busy}>{connected?<Square size={14}/>:<Play size={14}/>} {connected?"Остановить":"Запустить"}</button>}/><Setting icon={<ShieldCheck/>} title="Приватность" text="Секреты браузера не извлекаются. API доступен только локально." value="Local-first"/><Setting icon={<Cpu/>} title="Среда разработки" text="Windows · Python 3.11+ · SQLite · Tauri 2" value="Версия 0.4.1"/><Setting icon={<Globe2/>} title="Будущие подключения" text="Ручная передача вкладок Яндекс Браузера доступна через Browser Bridge. Ollama и поисковые адаптеры ещё не подключены." value="Ожидают реализации"/></div></section>}
+        {page==="settings"&&<section className="page"><div className="page-head"><div><div className="eyebrow">КОНФИГУРАЦИЯ</div><h1>Настройки</h1><p>Состояние локальной среды и параметры запуска.</p></div></div><div className="settings-grid"><Setting icon={<Database/>} title="Локальный агент" text="Python Runtime слушает только localhost." value={connected?"Запущен":"Остановлен"} action={<button className={connected?"danger":"primary"} onClick={connected?stopAgent:runAgent} disabled={busy}>{connected?<Square size={14}/>:<Play size={14}/>} {connected?"Остановить":"Запустить"}</button>}/><Setting icon={<ShieldCheck/>} title="Приватность" text="Секреты браузера не извлекаются. API доступен только локально." value="Local-first"/><Setting icon={<Cpu/>} title="Среда разработки" text="Windows · Python 3.11+ · SQLite · Tauri 2" value="Версия 0.5.0"/><Setting icon={<Globe2/>} title="Будущие подключения" text="Ручная передача вкладок Яндекс Браузера доступна через Browser Bridge. Ollama и поисковые адаптеры ещё не подключены." value="Ожидают реализации"/></div></section>}
       </div>
-      <footer className="statusbar"><span><i className={connected?"":"idle"}/>{connected?"Локальный агент активен":"Локальный агент остановлен"}</span><span><LockKeyhole size={12}/>Локальная среда　·　Malenia 0.4.1</span></footer>
+      <footer className="statusbar"><span><i className={connected?"":"idle"}/>{connected?"Локальный агент активен":"Локальный агент остановлен"}</span><span><LockKeyhole size={12}/>Локальная среда　·　Malenia 0.5.0</span></footer>
     </main>
 
     {composer&&<div className="backdrop" onClick={()=>setComposer(false)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><div><div className="eyebrow">НОВОЕ ЗАДАНИЕ</div><h2>Что нужно сделать?</h2></div><button className="icon-btn" onClick={()=>setComposer(false)}><X size={17}/></button></div><label>Название задачи<input autoFocus maxLength={200} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Например: проверить новые заказы"/></label><label>Описание <small>необязательно</small><textarea rows={4} maxLength={2000} value={description} onChange={e=>setDescription(e.target.value)} placeholder="Дополнительные детали..."/></label><div className="modal-foot"><span><LockKeyhole size={12}/>Сохранится локально</span><button className="primary" disabled={!connected||!title.trim()||busy} onClick={addTask}>{busy?<LoaderCircle className="spin" size={15}/>:<Plus size={15}/>}Добавить в очередь</button></div><p className="hint">Пока задача только сохраняется в очереди — автоматическое выполнение ещё не подключено.</p></div></div>}

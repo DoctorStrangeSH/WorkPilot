@@ -1,69 +1,82 @@
-# Malenia 0.4.0 local chat
+# Malenia 0.5.0 / Sherlock local assistant
 
-The AI page connects to Ollama at fixed 127.0.0.1:11434; Python ignores proxy
-settings and rejects redirects. Default first-test model: qwen2.5:0.5b. Only local
-Qwen 2.5 0.5B/1.5B/3B tags are allowed; remote/cloud tags are excluded. No model
-messages, prompts or responses are persisted or logged by Malenia. Ollama is a
-separate trusted local runtime and may maintain its own operational logs.
+Sherlock is the assistant's display name; Malenia is the application. The ordinary
+UI shows Sherlock variants; underlying model IDs and upstream notices are recorded
+in THIRD_PARTY_MODELS.md. No original foundation-model training is claimed.
 
-The runtime is installed under LOCALAPPDATA/Malenia/ollama, models under
-LOCALAPPDATA/Malenia/models. The app's Start Ollama button launches this runtime
-with loopback binding, OLLAMA_NO_CLOUD=1, one parallel request/model, context 2048
-and a 30-second keep-alive. Existing Ollama processes are not adopted or killed.
-The app stops only an Ollama process it spawned itself.
+## Target machine and model setup
 
-The chat sends only user-entered messages plus the fixed Malenia system prompt.
-No tabs, task queue, files, profiles or browser secrets are attached. No tool
-execution is available. The model can propose plans but cannot perform them.
-The short conversation lives in React memory and clears on leaving the page,
-app reload or agent disconnection. A request is never retried automatically.
+The user selected a different PC with 32 GB RAM and an NVIDIA RTX GPU. Exact GPU
+model/VRAM is not yet supplied. Development machine has 15.55 GiB RAM, Intel
+integrated graphics and roughly 1.4 GiB available. Do not install/load an 8B model
+on the development PC. Its existing 0.4.1 installation is preserved at this stage.
 
-Requests: authenticated GET /v1/ai/status and POST /v1/ai/chat. The latter has a
-32-KiB body limit, at most 12 alternating user/assistant messages, 2000 characters
-per message and 8000 characters total, ending in a user turn. Inference is limited
-to one request at a time, context 2048 and output 384 tokens, with a 90-second
-provider timeout. Responses must be completed plain text without tool calls.
-The frontend forwards at most three preceding exchanges, trimming oldest pairs
-when needed. Failed sends restore the draft rather than resending it silently.
+On the target PC install the full official Ollama Windows runtime, then Malenia.
+Start the agent, open AI models, start Sherlock, expand Install Sherlock and click
+Download chosen Sherlock. Main is qwen3:8b (about 5 GB download), light qwen3:4b
+(about 3 GB), extended qwen3:14b (about 9 GB). Downloads are explicit, local-runtime
+only, allowlisted, proxy-free and reject redirects. They require respectively
+8/5/14 GiB available system RAM before starting. Downloading does not load a model.
+Only one loaded model/request is configured. Ollama handles NVIDIA offload based
+on actual VRAM; GPU utilization on the target PC has not been verified.
 
-The compact first-test model has limited reasoning and Russian fluency. Evaluate
-it with simple text summaries, extraction and planning; do not infer that its
-accuracy represents larger models. No actual desktop/browser actions are enabled.
+Start searches portable LOCALAPPDATA/Malenia/ollama first, then the standard
+LOCALAPPDATA/Programs/Ollama runtime. An already healthy local server is reused
+without adopting or killing it. App-owned runtime is loopback only with cloud
+models disabled, one parallel request/model, context 2048 default, keep-alive 30s.
+Explicit inference sets context 4096 for Sherlock or retrieved knowledge. A full
+NVIDIA-capable runtime is needed on the second PC; the old portable CPU extraction
+from the development machine is not a GPU installation kit.
 
+## Explicit memory and Markdown knowledge
 
-## Verified Intel Graphics experiment on the user's PC
+- Authenticated /v1/knowledge endpoints list, save, delete and import knowledge.
+  SQLite stores confirmed memory and imported note snapshots next to existing
+  task data. Chats/model replies are never automatically saved as knowledge.
+- Remember under a USER message opens editable review. Only Confirm and remember
+  writes data. Review freezes after an uncertain attempt and retries the same UUID
+  and text; changed content for the same UUID is rejected. Records are visible
+  and deletable in Memory and knowledge. No hidden conversational history store.
+- Up to 12 memory entries and 200 total records. Memory content <=2000 characters;
+  note <=6000; title <=120. The UI permits adding manual reference notes as well.
+- Explicit folder import reads UTF-8 .md snapshots only, <=100 notes, <=24 KiB each,
+  <=1000 directory entries, depth <=6. Hidden/dot files/directories, symlinks and
+  Windows reparse points are skipped; linked ancestors are rejected. Root/home
+  folders are rejected. Attachments, embedded links and other files are not read.
+  No network links are followed. Import validates all notes before one transaction.
+- Reimport replaces that folder's snapshot and removes disappeared notes from the
+  database; source files remain untouched. No watcher or automatic synchronization.
+- Retrieval is a small lexical search using word prefixes, not semantic embeddings.
+  It includes at most two memory records and two matching notes, excerpts <=600
+  characters each. Relevant memories rank first, ties favor recent records. Not
+  every saved rule is necessarily included; sources/excerpts are visible per reply.
+  The chat checkbox disables all knowledge retrieval for that request.
+- Notes are quoted reference DATA, never permission to run tools or alter storage.
+  Retrieval is not a guarantee of grounded answers; inspect original notes and
+  model answers. No browser/desktop tools or autonomous task execution are enabled.
 
-Intel integrated graphics uses shared system RAM, not an additional VRAM pool.
-Ollama v0.40.16 detects the Vulkan device but skips an integrated GPU unless
-OLLAMA_IGPU_ENABLE=1 is also set. A temporary isolated server with both
-OLLAMA_VULKAN=1 and OLLAMA_IGPU_ENABLE=1 did offload about 456 MB. On one short
-48-token Qwen 0.5B test, CPU generated 50.17 tokens/s versus 45.93 on the iGPU;
-this is a limited machine/model-specific comparison, not a general GPU benchmark.
-The regular chat stays on CPU. No graphics driver/global environment was changed.
-GPU probe processes were stopped; the original local CPU server remains running.
+## API and inference
 
-## First test in the installed application
+Ollama destination fixed 127.0.0.1:11434; proxies ignored, redirects rejected.
+Allowed legacy local tags plus Qwen3 0.6b/4b/8b/14b; cloud metadata excluded.
+POST /v1/ai/chat accepts model/messages and optional boolean use_knowledge, returns
+actual retrieved source metadata. <=12 alternating messages, <=2000 characters
+per message, <=8000 total; backend trims oldest pairs if reference+history exceeds
+6500 characters. Deterministic temperature 0, output <=384 tokens, 90s timeout,
+Qwen3 thinking disabled, no tool calls. Frontend sends at most three earlier pairs
+and strips source metadata from conversation messages before submitting again.
+No silent retries or full chat persistence. Task creation remains reviewed queueing.
 
-Open Malenia 0.4.0, start its agent on the main page, then open the AI models page.
-The installed qwen2.5:0.5b should be selected. Use Check connection if needed and
-send a short question. Ollama must be running; the Start Ollama button can launch
-the portable runtime installed in LOCALAPPDATA/Malenia/ollama on this machine.
-The compact model answered arithmetic correctly but invented order details in a
-planning probe. Treat it as an experimental baseline, never as verified business
-facts. Tasks and browser actions are still not executed by the model.
+## Verification and limitations
 
+Small-machine smoke comparison (three short Russian prompts) confirmed neither
+0.5B nor 0.6B is a satisfactory factual baseline: the 0.6B answer to Japan capital
+was wrong. Arithmetic/extraction were better but did not obey exact-output format.
+The UTF-8-correct evaluation artifact is local; an initial shell-encoding-corrupted
+probe was discarded and is not evidence. No 8B/14B quality/latency/memory benchmark
+has run on the second PC. Keep these claims separate from passing software tests.
 
-### Reviewed task creation (0.4.1)
-
-An assistant reply can be copied into an editable task review. Saving requires
-an explicit click and only queues the reviewed text; the model cannot execute
-it. Check invented details before confirming. The description limit is 2000
-characters; longer replies must be shortened. An uncertain save can be retried
-with the same submission key and unchanged content without creating a duplicate.
-After the first attempt, check the Tasks page before cancelling the review or
-creating a new submission. Chat history and unsaved review state remain temporary.
-
-The desktop checks the agent release and protocol when starting it. If versions
-do not match, close Malenia and rerun the verified installer. Setup refuses to
-replace an agent/browser-host executable still in use. Close Malenia and the
-browser bridge before retrying. User tasks and model files are preserved.
+Intel integrated graphics on the development PC shares RAM. Earlier tiny-model
+probe: CPU 50.17 vs iGPU 45.93 tokens/s on a short test, so CPU stayed default.
+This says nothing about the second PC's NVIDIA performance. No drivers/global
+environment variables were changed. Internet factual search is not implemented.

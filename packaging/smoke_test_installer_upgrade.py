@@ -97,6 +97,9 @@ def main():
         body = {'title': 'Preserve reviewed task', 'description': 'Fixture only', 'request_id': str(uuid4())}
         try:
             first = api('/v1/tasks', body)['task']
+            memory = {'request_id': str(uuid4()), 'title': 'Confirmed fixture', 'content': 'Never invent order IDs', 'kind': 'memory'}
+            api('/v1/knowledge', memory)
+            assert len(api('/v1/knowledge')['records']) == 1
             assert api('/v1/tasks', body)['task']['id'] == first['id']
             assert isinstance(api('/v1/ai/status')['available'], bool)
             assert install() != 0, 'Locked resource upgrade incorrectly succeeded'
@@ -113,9 +116,10 @@ def main():
         try:
             assert api('/v1/tasks', body)['task']['id'] == first['id']
             assert len(api('/v1/tasks')['tasks']) == 1
+            assert api('/v1/knowledge')['records'][0]['id'] == memory['request_id']
         finally:
             stop(process)
-    print('PASS: installed resource hashes, locked-agent refusal, reinstall, preserved data and idempotency')
+    print('PASS: installed resource hashes, locked-agent refusal, reinstall, preserved tasks/knowledge and idempotency')
 
 
 if __name__ == '__main__':

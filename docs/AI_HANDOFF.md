@@ -285,3 +285,26 @@ See LOCAL_AI.md. main must stay unchanged and PR #2 unmerged.
 - Task creation queues only reviewed text. No automatic execution, browser DOM
   access or automatic context was added. User click-through remains a user test.
 - main must remain 712d0a8e1885cca402eaa4fdda041bb09b50e397; PR #2 draft/unmerged.
+
+
+## 0.5.0 Sherlock and explicit knowledge (in development)
+
+- User approved continuing model/memory/knowledge work, then requested Sherlock
+  branding and a stronger model for a DIFFERENT 32 GB NVIDIA PC. Exact GPU/VRAM
+  is unknown. App name remains Malenia. Technical model provenance stays in docs;
+  no claim of original training. main and PR #2 must remain unchanged/unmerged.
+- Added explicit remembered-user-text review, visible/deletable SQLite knowledge,
+  bounded selected-folder Markdown snapshots and lexical retrieval with excerpts.
+  No existing Obsidian path was supplied; prepare a separate sample folder in the
+  output kit. Do not search user directories for a vault or read browser profiles.
+- UI supports main/light/extended Sherlock downloads after an explicit click,
+  with free-RAM guard. Target main is Qwen3 8B. No large model downloaded/loaded on
+  the development PC; its 0.4.1 installed app has not been upgraded in this stage.
+- Downloaded only Qwen3 0.6B for an actual small-model comparison. It also answered
+  Japan's capital incorrectly. It is an experimental fallback, not a quality fix.
+  No actual 8B model inference or NVIDIA offload verified on the second PC.
+- Local validation so far: 104 Python tests, 18 Node tests, frontend build. Windows
+  Rust/NSIS and frozen knowledge/upgrade checks must pass before distributing.
+- See LOCAL_AI.md for limits/architecture and THIRD_PARTY_MODELS.md for actual IDs
+  and upstream license links. Next: Windows CI, verified target-PC kit, then actual
+  user-machine quality/performance evaluation before claiming an improvement.
