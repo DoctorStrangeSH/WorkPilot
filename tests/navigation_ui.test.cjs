@@ -150,3 +150,14 @@ test('Sherlock can suggest an editable skill but cannot activate it without revi
   assert.match(native,/fn suggest_skill\(/);
   assert.match(native,/\/v1\/skills\/suggest/);
 });
+
+test('Sherlock offers automatic thinking depth for complex work',()=>{
+  const ai=fs.readFileSync(path.resolve(__dirname,'../desktop/src/AiPage.tsx'),'utf8');
+  assert.match(ai,/setReasoningMode/);
+  assert.match(ai,/reasoningMode\}\)/);
+  assert.match(ai,/Автоматически — глубже для сложных задач/);
+  assert.match(ai,/Глубоко — больше анализа, медленнее/);
+  const native=fs.readFileSync(path.resolve(__dirname,'../desktop/src-tauri/src/main.rs'),'utf8');
+  assert.match(native,/reasoning_mode: Option<String>/);
+  assert.match(native,/"reasoning_mode": reasoning_mode\.unwrap_or_else/);
+});
