@@ -291,7 +291,7 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                 return
 
             if parsed.path in ("/v1/skills/draft", "/v1/skills/approve",
-                               "/v1/skills/delete"):
+                               "/v1/skills/delete", "/v1/skills/feedback"):
                 payload = self._read_json(4096)
                 if payload is None:
                     return
@@ -304,6 +304,12 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                             payload["request_id"], payload["title"],
                             payload["description"], payload["instructions"],
                             payload["terms"])}
+                    elif parsed.path.endswith("/feedback"):
+                        if set(payload) != {"request_id", "skill_id", "helpful"}:
+                            raise SkillError("invalid_skill_payload")
+                        result = skills.record_feedback(
+                            payload["request_id"], payload["skill_id"],
+                            payload["helpful"])
                     elif set(payload) != {"id"}:
                         raise SkillError("invalid_skill_payload")
                     elif parsed.path.endswith("/approve"):
