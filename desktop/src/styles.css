@@ -161,3 +161,5 @@ body{min-width:820px}
 .sheet-preview tr:first-child td{background:#1b2231;color:#e4e9f2;font-weight:600}
 .sheet-preview>p{color:#929fb2;font-size:9px}
 .sheet-preview>small{display:block;margin-top:8px}
+
+.source-optional{color:#78869b;font-size:8px;font-weight:400}
