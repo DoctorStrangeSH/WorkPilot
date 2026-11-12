@@ -232,7 +232,7 @@ function showAudit(snapshot) {
 if (chrome.storage?.local) {
   chrome.storage.local.get(["maleniaTargets","maleniaExactGetSearch"]).then(saved => {
     const targets = saved?.maleniaTargets || {};
-    document.getElementById("exactSearch").checked = saved?.maleniaExactGetSearch === true;
+    document.getElementById("exactSearch").checked = saved?.maleniaExactGetSearch !== false;
     for (const role of Object.keys(RESOURCE_LABELS)) {
       if (typeof targets[role] === "string") document.getElementById(role).value = targets[role];
     }
