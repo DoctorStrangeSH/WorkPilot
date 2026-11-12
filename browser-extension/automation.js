@@ -173,22 +173,25 @@ var MaleniaAutomation = (() => {
           return {origin: location.origin, status: "unsupported"};
         }
         const result = await new Promise(resolve => {
-          let settled = false, timeout;
-          const observer = new MutationObserver(() => {
+          let settled = false, changed = false, settleTimer;
+          const finish = status => {
             if (settled) return;
             settled = true;
-            clearTimeout(timeout);
+            clearTimeout(deadline);
+            clearTimeout(settleTimer);
             observer.disconnect();
-            resolve({origin: location.origin, status: "updated"});
+            resolve({origin: location.origin, status});
+          };
+          const observer = new MutationObserver(() => {
+            if (settled) return;
+            changed = true;
+            clearTimeout(settleTimer);
+            // Wait for the grid to settle instead of reading its loading frame.
+            settleTimer = setTimeout(() => finish("updated"), 400);
           });
           observer.observe(containers[0], {subtree: true, childList: true,
             characterData: true});
-          timeout = setTimeout(() => {
-            if (settled) return;
-            settled = true;
-            observer.disconnect();
-            resolve({origin: location.origin, status: "unchanged"});
-          }, 6000);
+          const deadline = setTimeout(() => finish(changed ? "updated" : "unchanged"), 6000);
           setter.call(input, code);
           input.dispatchEvent(new Event("input", {bubbles: true}));
         });
