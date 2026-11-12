@@ -101,11 +101,45 @@ var MaleniaAutomation = (() => {
               table = {columns: header, rows: entries};
               break;
             }
+            // Accessible ARIA grids are common in SPA dashboards. Read only
+            // fully rendered rows with exact headers; never invent missing rows.
+            let incomplete = false;
+            if (!table) {
+              for (const grid of document.querySelectorAll('[role="grid"],[role="table"]')) {
+                const rows = [...grid.querySelectorAll('[role="row"]')];
+                const head = rows[0] ?
+                  [...rows[0].querySelectorAll('[role="columnheader"]')]
+                    .map(cell => cell.innerText.trim()) : [];
+                if (!required.every(name => head.includes(name)) || head.length > 20) continue;
+                const declared = grid.getAttribute("aria-rowcount");
+                const count = declared === null ? null : Number(declared);
+                if (declared !== null && (!Number.isInteger(count) || count < 0)) {
+                  incomplete = true; break;
+                }
+                const bodyRows = rows.slice(1);
+                if (bodyRows.length > 100 || (count !== null && count > rows.length)) {
+                  incomplete = true; break;
+                }
+                const entries = [];
+                let malformed = false;
+                for (const row of bodyRows) {
+                  const cells = [...row.querySelectorAll('[role="gridcell"],[role="cell"]')];
+                  if (cells.length !== head.length) { malformed = true; break; }
+                  entries.push(cells.map(cell => cell.innerText.trim().slice(0, 256)));
+                }
+                if (malformed || head.some(c => c.length > 256)) {
+                  incomplete = true; break;
+                }
+                table = {columns: head, rows: entries};
+                break;
+              }
+            }
             const nextAnchor = document.querySelector("a[rel~='next'][href]");
             return {
               origin: location.origin,
               text: typeof text === "string" ? text.slice(0, 16000) : "",
               table,
+              incomplete,
               next: nextAnchor ? nextAnchor.href : null
             };
           },
@@ -116,6 +150,7 @@ var MaleniaAutomation = (() => {
             typeof snapshot.text !== "string" || !snapshot.text.trim()) {
           throw new Error("unexpected_document");
         }
+        if (snapshot.incomplete) throw new Error("virtualized_or_incomplete_grid");
         const text = snapshot.text;
         const response = await sendNative({
           type: "inspect_active_page",
