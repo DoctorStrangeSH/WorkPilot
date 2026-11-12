@@ -65,3 +65,16 @@ test('offline order-checking skill is reachable and has no write actions', () =>
   assert.match(order, /Строка в ИНВенте не изменена/);
   assert.doesNotMatch(order, /update_sheet|write_sheet|fetch\(/);
 });
+
+
+test('bulk Excel preview preserves source read-only and escapes formulas', () => {
+  assert.match(app, /label="Список заказов" active=\{page==="order_batch"\}/);
+  assert.match(app, /<OrderBatchPage connected=\{connected\}\/>/);
+  const bulk = fs.readFileSync(path.resolve(__dirname, '../desktop/src/OrderBatchPage.tsx'), 'utf8');
+  assert.match(bulk, /invoke<BatchResponse>\("preview_order_batch"/);
+  assert.match(bulk, /navigator\.clipboard\.writeText\(report\(batch\)\)/);
+  assert.match(bulk, /Ни одна строка в исходном Excel не изменена/);
+  assert.match(bulk, /Максимум 100|максимум 100|100 строк/);
+  assert.match(bulk, /safeCell/);
+  assert.doesNotMatch(bulk, /write_google_sheet|update_google_sheet|fetch\(/);
+});
