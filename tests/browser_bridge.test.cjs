@@ -30,7 +30,7 @@ function popup(url = 'https://example.com/orders?secret=remove#private') {
     async timeout() {for (const [id, callback] of [...timers]) {timers.delete(id); callback();} await flush();}
   };
 }
-const hello = {ok: true, host: 'com.workpilot.browser'};
+const hello = {ok: true, host: 'com.malenia.browser'};
 
 test('hello and manual reconnect never read or share a tab', async () => {
   const p = popup();

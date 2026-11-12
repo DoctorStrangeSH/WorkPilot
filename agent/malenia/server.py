@@ -5,6 +5,7 @@ from __future__ import annotations
 import hmac
 import json
 import re
+import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -15,14 +16,20 @@ from .store import TaskStore
 MAX_BODY_BYTES = 8 * 1024
 
 
-class WorkPilotHTTPServer(ThreadingHTTPServer):
+class MaleniaHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
-    allow_reuse_address = True
+    # Windows SO_REUSEADDR can allow two listeners to bind the same endpoint.
+    allow_reuse_address = not hasattr(socket, "SO_EXCLUSIVEADDRUSE")
+
+    def server_bind(self) -> None:
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
 
 def make_handler(store: TaskStore, token: str, resources: ResourceManager):
     class Handler(BaseHTTPRequestHandler):
-        server_version = "WorkPilotAgent/0.1"
+        server_version = "MaleniaAgent/0.2"
         sys_version = ""
 
         def log_message(self, format: str, *args: object) -> None:
@@ -83,7 +90,7 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager):
         def do_GET(self) -> None:
             parsed = urlsplit(self.path)
             if parsed.path == "/health":
-                self._send(200, {"status": "ok", "service": "workpilot-agent", "version": "0.1.0"})
+                self._send(200, {"status": "ok", "service": "malenia-agent", "version": "0.2.0"})
                 return
             if not self._require_access():
                 return
@@ -149,13 +156,20 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager):
     return Handler
 
 
-def serve(host: str, port: int, store: TaskStore, token: str) -> None:
+def create_server(host: str, port: int, store: TaskStore, token: str) -> MaleniaHTTPServer:
     if host not in {"127.0.0.1", "localhost"}:
-        raise ValueError("WorkPilot API may only bind to loopback")
-    server = WorkPilotHTTPServer((host, port), make_handler(store, token, ResourceManager()))
+        raise ValueError("Malenia API may only bind to loopback")
+    return MaleniaHTTPServer((host, port), make_handler(store, token, ResourceManager()))
+
+
+def run_server(server: MaleniaHTTPServer) -> None:
     try:
         server.serve_forever(poll_interval=0.25)
     except KeyboardInterrupt:
         pass
     finally:
         server.server_close()
+
+
+def serve(host: str, port: int, store: TaskStore, token: str) -> None:
+    run_server(create_server(host, port, store, token))

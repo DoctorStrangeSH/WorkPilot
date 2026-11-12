@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from workpilot.store import TaskStore
+from malenia.store import TaskStore
 
 
 class TaskStoreTests(unittest.TestCase):

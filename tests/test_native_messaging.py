@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from workpilot.native_messaging import (
+from malenia.native_messaging import (
     HOST_NAME,
     configured_extension_id,
     handle_message,
@@ -13,13 +13,13 @@ from workpilot.native_messaging import (
     validate_origin,
     write_message,
 )
-from workpilot.store import TaskStore
+from malenia.store import TaskStore
 
 
 class NativeMessagingProtocolTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.store = TaskStore(Path(self.temp_dir.name) / "workpilot.sqlite3")
+        self.store = TaskStore(Path(self.temp_dir.name) / "malenia.sqlite3")
 
     def tearDown(self):
         self.temp_dir.cleanup()

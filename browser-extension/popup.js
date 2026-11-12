@@ -1,4 +1,4 @@
-const HOST_NAME = "com.workpilot.browser";
+const HOST_NAME = "com.malenia.browser";
 const RESPONSE_TIMEOUT_MS = 5000;
 const statusNode = document.getElementById("status");
 const shareButton = document.getElementById("share");

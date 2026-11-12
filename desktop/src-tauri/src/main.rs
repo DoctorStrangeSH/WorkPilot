@@ -58,14 +58,14 @@ fn api_get(token: &str, path: &str) -> Result<Value, String> {
 }
 
 fn agent_directory() -> Result<PathBuf, String> {
-    if let Ok(path) = std::env::var("WORKPILOT_AGENT_DIR") {
+    if let Ok(path) = std::env::var("MALENIA_AGENT_DIR") {
         return Ok(PathBuf::from(path));
     }
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../agent");
     if path.exists() {
         Ok(path)
     } else {
-        Err("Не найдена папка Python-агента. Укажи WORKPILOT_AGENT_DIR.".to_string())
+        Err("Не найдена папка Python-агента. Укажи MALENIA_AGENT_DIR.".to_string())
     }
 }
 
@@ -80,7 +80,7 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
     }
 
     if std::net::TcpStream::connect((API_HOST, API_PORT)).is_ok() {
-        return Err("Порт 8765 уже занят. Останови другой экземпляр Malenia Agent.".to_string());
+        return Err("Порт 8765 занят другим процессом. Если Malenia уже открыта, перейди в её окно. Иначе останови свой отдельно запущенный агент; чужие процессы не завершаются автоматически.".to_string());
     }
 
     let mut random = [0_u8; 32];
@@ -89,7 +89,7 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
 
     let packaged_agent = app
         .path()
-        .resolve("resources/workpilot-agent/workpilot-agent.exe", BaseDirectory::Resource)
+        .resolve("resources/malenia-agent/malenia-agent.exe", BaseDirectory::Resource)
         .ok()
         .filter(|path| path.is_file());
 
@@ -99,12 +99,12 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
         #[cfg(debug_assertions)]
         {
             let agent_dir = agent_directory()?;
-            let python = std::env::var("WORKPILOT_PYTHON")
+            let python = std::env::var("MALENIA_PYTHON")
                 .unwrap_or_else(|_| "python".to_string());
             let mut command = Command::new(python);
             command
                 .arg("-m")
-                .arg("workpilot")
+                .arg("malenia")
                 .env("PYTHONPATH", &agent_dir)
                 .current_dir(&agent_dir);
             command
@@ -123,7 +123,7 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
         .arg("--port")
         .arg(API_PORT.to_string())
         .env("PYTHONUNBUFFERED", "1")
-        .env("WORKPILOT_API_TOKEN", &token)
+        .env("MALENIA_API_TOKEN", &token)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -143,6 +143,15 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
 
     for _ in 0..30 {
         thread::sleep(Duration::from_millis(200));
+        {
+            let mut guard = state.child.lock().map_err(|_| "Ошибка состояния агента".to_string())?;
+            if let Some(child) = guard.as_mut() {
+                if child.try_wait().map_err(|error| error.to_string())?.is_some() {
+                    *guard = None;
+                    return Err("Malenia Agent завершился при запуске. Проверь порт 8765 и установку приложения.".to_string());
+                }
+            }
+        }
         let ready = reqwest::blocking::Client::new()
             .get(format!("http://{API_HOST}:{API_PORT}/v1/resources"))
             .header("Authorization", format!("Bearer {token}"))
@@ -230,6 +239,14 @@ fn cancel_task(state: State<'_, AgentState>, task_id: String) -> Result<Value, S
 
 fn main() {
     tauri::Builder::default()
+        // Activate the original window before a second shell can own another agent.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .manage(AgentState::default())
         .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard, create_task, cancel_task])
         .run(tauri::generate_context!())

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Malenia Browser Bridge",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Share the active browser tab with Malenia only when you click the extension.",
   "permissions": [
     "activeTab",

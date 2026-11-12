@@ -1,5 +1,5 @@
 $ErrorActionPreference = "Stop"
-$hostName = "com.workpilot.browser"
+$hostName = "com.malenia.browser"
 $registryPaths = @(
     "HKCU:\Software\Yandex\YandexBrowser\NativeMessagingHosts\$hostName",
     "HKCU:\Software\Chromium\NativeMessagingHosts\$hostName"
@@ -11,7 +11,7 @@ foreach ($registryPath in $registryPaths) {
     }
 }
 
-$root = Join-Path $env:LOCALAPPDATA "WorkPilot"
+$root = Join-Path $env:LOCALAPPDATA "Malenia"
 Remove-Item -LiteralPath (Join-Path $root "browser_bridge.json") -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath (Join-Path $root "browser-bridge") -Recurse -Force -ErrorAction SilentlyContinue
-Write-Host "Malenia Browser Bridge registration removed. Existing WorkPilot task data was kept."
+Write-Host "Malenia Browser Bridge registration removed. Existing Malenia task data was kept."

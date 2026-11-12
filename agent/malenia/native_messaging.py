@@ -1,4 +1,4 @@
-"""Restricted Chrome-compatible Native Messaging host for WorkPilot.
+"""Restricted Chrome-compatible Native Messaging host for Malenia.
 
 The host accepts only messages from the extension ID explicitly registered by the
 user. It stores only a tab title and a URL with query/fragment removed, and only
@@ -21,7 +21,7 @@ from .config import data_directory
 from .store import TaskStore
 
 
-HOST_NAME = "com.workpilot.browser"
+HOST_NAME = "com.malenia.browser"
 MAX_MESSAGE_BYTES = 1024 * 1024
 _EXTENSION_ID_RE = re.compile(r"^[a-p]{32}$")
 
@@ -153,7 +153,7 @@ def run_native_messaging(argv: list[str] | None = None) -> int:
         return 2
 
     if not validate_origin(args[0], extension_id):
-        print("Native Messaging caller is not the registered WorkPilot extension.", file=sys.stderr)
+        print("Native Messaging caller is not the registered Malenia extension.", file=sys.stderr)
         return 3
 
     if os.name == "nt":
@@ -162,7 +162,7 @@ def run_native_messaging(argv: list[str] | None = None) -> int:
         msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
         msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
 
-    store = TaskStore(data_directory() / "workpilot.sqlite3")
+    store = TaskStore(data_directory() / "malenia.sqlite3")
     source = sys.stdin.buffer
     destination = sys.stdout.buffer
 

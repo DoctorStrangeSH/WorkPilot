@@ -1,4 +1,4 @@
-"""Small, dependency-free resource monitoring for the WorkPilot MVP."""
+"""Small, dependency-free resource monitoring for the Malenia MVP."""
 
 from __future__ import annotations
 

@@ -39,7 +39,7 @@ def main() -> int:
     origin = f"chrome-extension://{extension_id}/"
     with tempfile.TemporaryDirectory() as temporary:
         local_app_data = Path(temporary)
-        app_dir = local_app_data / "WorkPilot"
+        app_dir = local_app_data / "Malenia"
         app_dir.mkdir()
         (app_dir / "browser_bridge.json").write_text(
             json.dumps({"extension_id": extension_id}), encoding="utf-8"
@@ -100,7 +100,7 @@ def main() -> int:
         if shared["tab"]["url"] != "https://example.com/orders/1":
             raise RuntimeError("Native host did not remove query/fragment data")
 
-        database = app_dir / "workpilot.sqlite3"
+        database = app_dir / "malenia.sqlite3"
         if not database.is_file():
             raise RuntimeError("Native host did not persist the explicitly shared tab")
         print("Native Messaging host origin rejection, framing, tab validation and SQLite write passed.")

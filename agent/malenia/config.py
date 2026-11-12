@@ -1,4 +1,4 @@
-"""Configuration helpers for the local WorkPilot runtime."""
+"""Configuration helpers for the local Malenia runtime."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import os
 from pathlib import Path
 
 
-# Stable storage name: Malenia keeps existing WorkPilot tasks and shared tabs.
-APP_NAME = "WorkPilot"
+# Fresh Malenia namespace; no implicit import of previous product data.
+APP_NAME = "Malenia"
 
 
 def data_directory() -> Path:
@@ -22,4 +22,4 @@ def data_directory() -> Path:
 
 
 def database_path() -> Path:
-    return data_directory() / "workpilot.sqlite3"
+    return data_directory() / "malenia.sqlite3"

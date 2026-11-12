@@ -1,4 +1,4 @@
-# WorkPilot Agent API — MVP
+# Malenia Agent API — MVP
 
 This API is an internal local bridge for the future desktop shell. It is not intended to be exposed to a LAN or the public internet.
 
@@ -10,7 +10,7 @@ From the repository root:
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
-workpilot-agent
+malenia-agent
 ```
 
 The server binds to 127.0.0.1 only. At startup it prints a random, per-run bearer token. Keep that token private. It is not persisted and changes after restart.

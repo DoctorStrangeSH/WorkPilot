@@ -75,16 +75,16 @@ jobs:
       - name: Package local Python agent
         run: >-
           python -m PyInstaller --clean --onedir
-          --name workpilot-agent
+          --name malenia-agent
           --distpath desktop/src-tauri/resources
-          --workpath "$env:RUNNER_TEMP/workpilot-pyinstaller"
+          --workpath "$env:RUNNER_TEMP/malenia-pyinstaller"
           --paths agent
-          packaging/workpilot_agent_entry.py
+          packaging/malenia_agent_entry.py
 
       - name: Verify bundled agent
         shell: pwsh
         run: |
-          $agent = "desktop/src-tauri/resources/workpilot-agent/workpilot-agent.exe"
+          $agent = "desktop/src-tauri/resources/malenia-agent/malenia-agent.exe"
           if (!(Test-Path $agent)) { throw "Bundled Python agent was not produced." }
           $size = (Get-Item $agent).Length
           if ($size -lt 1000000) { throw "Bundled agent looks unexpectedly small ($size bytes)." }
@@ -92,19 +92,22 @@ jobs:
           & $agent --help | Out-Host
           if ($LASTEXITCODE -ne 0) { throw "Bundled agent smoke test failed." }
 
+      - name: Verify bundled agent duplicate-start protection
+        run: python packaging/smoke_test_agent_instance.py desktop/src-tauri/resources/malenia-agent/malenia-agent.exe
+
       - name: Package Native Messaging host
         run: >-
           python -m PyInstaller --clean --onedir
-          --name workpilot-native-host
+          --name malenia-native-host
           --distpath desktop/src-tauri/resources
-          --workpath "$env:RUNNER_TEMP/workpilot-native-host-pyinstaller"
+          --workpath "$env:RUNNER_TEMP/malenia-native-host-pyinstaller"
           --paths agent
-          packaging/workpilot_native_host_entry.py
+          packaging/malenia_native_host_entry.py
 
       - name: Verify Native Messaging host
         shell: pwsh
         run: |
-          $hostExe = "desktop/src-tauri/resources/workpilot-native-host/workpilot-native-host.exe"
+          $hostExe = "desktop/src-tauri/resources/malenia-native-host/malenia-native-host.exe"
           if (!(Test-Path $hostExe)) { throw "Native Messaging host was not produced." }
           $size = (Get-Item $hostExe).Length
           if ($size -lt 1000000) { throw "Native host looks unexpectedly small ($size bytes)." }
@@ -113,12 +116,12 @@ jobs:
       - name: Exercise registration with bundled host (Windows PowerShell 5.1)
         shell: powershell
         run: |
-          & ./packaging/test_browser_bridge_registration.ps1 -NativeHostPath (Resolve-Path "desktop/src-tauri/resources/workpilot-native-host/workpilot-native-host.exe").Path
+          & ./packaging/test_browser_bridge_registration.ps1 -NativeHostPath (Resolve-Path "desktop/src-tauri/resources/malenia-native-host/malenia-native-host.exe").Path
 
       - name: Prepare browser extension archive
         shell: pwsh
         run: |
-          $archive = Join-Path $env:RUNNER_TEMP "workpilot-browser-extension.zip"
+          $archive = Join-Path $env:RUNNER_TEMP "malenia-browser-extension.zip"
           Compress-Archive -Path "browser-extension/*" -DestinationPath $archive -Force
           if (!(Test-Path $archive)) { throw "Browser extension archive was not created." }
 
@@ -130,10 +133,17 @@ jobs:
         working-directory: desktop
         run: npm run tauri -- build --bundles nsis
 
+      - name: Verify single desktop instance
+        shell: powershell
+        run: |
+          $desktopExe = (Resolve-Path "desktop/src-tauri/target/release/Malenia.exe").Path
+          python packaging/smoke_test_desktop_instance.py $desktopExe
+          if ($LASTEXITCODE -ne 0) { throw "Malenia single-instance smoke test failed" }
+
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: workpilot-windows-installer
+          name: malenia-windows-installer
           path: desktop/src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
           retention-days: 14
@@ -141,7 +151,7 @@ jobs:
       - name: Upload browser extension preview
         uses: actions/upload-artifact@v4
         with:
-          name: workpilot-browser-extension
-          path: ${{ runner.temp }}/workpilot-browser-extension.zip
+          name: malenia-browser-extension
+          path: ${{ runner.temp }}/malenia-browser-extension.zip
           if-no-files-found: error
           retention-days: 14

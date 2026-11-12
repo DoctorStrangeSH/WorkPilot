@@ -6,9 +6,9 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from workpilot.resources import ResourceManager
-from workpilot.server import WorkPilotHTTPServer, make_handler
-from workpilot.store import TaskStore
+from malenia.resources import ResourceManager
+from malenia.server import MaleniaHTTPServer, make_handler
+from malenia.store import TaskStore
 
 
 class LocalApiTests(unittest.TestCase):
@@ -16,7 +16,7 @@ class LocalApiTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.store = TaskStore(Path(self.temp_dir.name) / "api.sqlite3")
         self.token = "test-only-token"
-        self.server = WorkPilotHTTPServer(
+        self.server = MaleniaHTTPServer(
             ("127.0.0.1", 0),
             make_handler(self.store, self.token, ResourceManager()),
         )
@@ -34,6 +34,8 @@ class LocalApiTests(unittest.TestCase):
         with urlopen(f"{self.base_url}/health", timeout=2) as response:
             payload = json.loads(response.read())
         self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["service"], "malenia-agent")
+        self.assertEqual(payload["version"], "0.2.0")
 
     def test_private_endpoint_rejects_missing_token(self):
         with self.assertRaises(HTTPError) as error:

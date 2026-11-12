@@ -13,13 +13,13 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$hostName = "com.workpilot.browser"
-# Preserve the existing data/config path across the Malenia rename.
-$localRoot = Join-Path $env:LOCALAPPDATA "WorkPilot"
+$hostName = "com.malenia.browser"
+# New product namespace; previous registrations are not reused.
+$localRoot = Join-Path $env:LOCALAPPDATA "Malenia"
 $bridgeDir = Join-Path $localRoot "browser-bridge"
 $manifestPath = Join-Path $bridgeDir "$hostName.json"
 $configPath = Join-Path $localRoot "browser_bridge.json"
-$hostRelativePath = "resources\workpilot-native-host\workpilot-native-host.exe"
+$hostRelativePath = "resources\malenia-native-host\malenia-native-host.exe"
 
 function Add-UniquePath {
     param(
@@ -43,8 +43,8 @@ function Find-InstalledNativeHost {
     $candidates = New-Object 'System.Collections.Generic.List[string]'
     $installRoots = New-Object 'System.Collections.Generic.List[string]'
 
-    # If Malenia or a legacy WorkPilot build is running, its executable directory is the resource root.
-    $processes = Get-Process -Name "Malenia", "WorkPilot", "workpilot-desktop" -ErrorAction SilentlyContinue
+    # If Malenia is running, its executable directory is the resource root.
+    $processes = Get-Process -Name "Malenia", "malenia-desktop" -ErrorAction SilentlyContinue
     foreach ($process in $processes) {
         try {
             if ($process.Path) {
@@ -72,7 +72,7 @@ function Find-InstalledNativeHost {
                 $displayIconProperty = $entry.PSObject.Properties["DisplayIcon"]
 
                 $displayName = if ($displayNameProperty) { [string]$displayNameProperty.Value } else { "" }
-                if ($displayName -notmatch '^(?:Malenia|WorkPilot)(?:\s|$)') { continue }
+                if ($displayName -notmatch '^Malenia(?:\s|$)') { continue }
 
                 if ($installLocationProperty -and $installLocationProperty.Value) {
                     Add-UniquePath -List $installRoots -Path ([string]$installLocationProperty.Value)
@@ -101,9 +101,7 @@ function Find-InstalledNativeHost {
     # Fallback locations are accepted only if the exact resource file exists.
     foreach ($fallbackRoot in @(
         (Join-Path $env:LOCALAPPDATA "Programs\Malenia"),
-        (Join-Path $env:LOCALAPPDATA "Malenia"),
-        (Join-Path $env:LOCALAPPDATA "Programs\WorkPilot"),
-        (Join-Path $env:LOCALAPPDATA "WorkPilot")
+        (Join-Path $env:LOCALAPPDATA "Malenia")
     )) {
         if (Test-Path -LiteralPath $fallbackRoot -PathType Container) {
             Add-UniquePath -List $installRoots -Path $fallbackRoot
@@ -120,9 +118,9 @@ function Find-InstalledNativeHost {
     if ($candidates.Count -eq 0) {
         throw @"
 Could not automatically locate the Native Messaging host.
-Confirm Malenia (or legacy WorkPilot 0.2) is installed. For a non-standard install directory, rerun
-with -NativeHostPath "C:\full\path\to\workpilot-native-host.exe".
-Expected layout: <Malenia folder>\resources\workpilot-native-host\workpilot-native-host.exe
+Confirm Malenia 0.3 or newer is installed. For a non-standard install directory, rerun
+with -NativeHostPath "C:\full\path\to\malenia-native-host.exe".
+Expected layout: <Malenia folder>\resources\malenia-native-host\malenia-native-host.exe
 "@
     }
 
@@ -144,8 +142,8 @@ else {
     $resolvedHostPath = (Resolve-Path -LiteralPath $NativeHostPath).Path
 }
 
-if ([System.IO.Path]::GetFileName($resolvedHostPath) -ne "workpilot-native-host.exe") {
-    throw "Expected workpilot-native-host.exe, got: $resolvedHostPath"
+if ([System.IO.Path]::GetFileName($resolvedHostPath) -ne "malenia-native-host.exe") {
+    throw "Expected malenia-native-host.exe, got: $resolvedHostPath"
 }
 
 # PyInstaller onedir requires the adjacent runtime directory.

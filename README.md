@@ -16,7 +16,7 @@
 
 ## Текущий статус
 
-### Python Agent Runtime 0.1
+### Python Agent Runtime 0.2
 - Локальный Python Agent Runtime.
 - SQLite-хранилище задач и журнала событий.
 - Resource Manager: память, CPU utilization и режимы Normal / Economy / Emergency.
@@ -24,7 +24,7 @@
 - Создание, просмотр и отмена ожидающих задач.
 - Unit-тесты и GitHub Actions.
 
-### Desktop Shell 0.2 — в разработке
+### Desktop Shell 0.3 — в разработке
 - Tauri 2 + React + Vite.
 - Русскоязычный тёмный интерфейс.
 - Запуск и остановка Python Agent из приложения.
@@ -46,7 +46,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
 python -m unittest discover -s tests -v
-workpilot-agent
+malenia-agent
 ```
 
 После запуска standalone Agent показывает временный bearer-токен в консоли. Не публикуй его и не отправляй в чаты.
@@ -78,6 +78,10 @@ Malenia не извлекает cookies, пароли или токены из �
 
 Изменения ведутся в feature-ветках и поставляются через Pull Request. Не добавляйте в Git реальные cookies, пароли, токены, личные данные, дампы профилей или рабочие выгрузки.
 
-## Новое имя и совместимость
+## Полное имя Malenia
 
-Malenia — новое имя WorkPilot. Данные остаются в `%LOCALAPPDATA%\WorkPilot`; идентификаторы `com.workpilot.desktop` и `com.workpilot.browser`, Python-пакет и пути встроенных компонентов сохранены для совместимости. Репозиторий не переименован.
+Версия 0.3 использует отдельное пространство имён: Python-пакет `malenia`, команда `malenia-agent`, приложение `com.malenia.desktop`, Browser Bridge `com.malenia.browser`, папка `%LOCALAPPDATA%\Malenia` и база `malenia.sqlite3`. По запросу пользователя старые вкладки и задания не переносятся. Старые установленные файлы и данные автоматически не удаляются.
+
+Повторный запуск окна активирует уже открытое окно Malenia. Агент не занимает чужой порт, не завершает посторонние процессы и при занятом порте выдаёт понятную ошибку до объявления готовности.
+
+Расширение нужно обновить в прежней папке и заново зарегистрировать новый Native Messaging host. Подробности — в `browser-extension/README.md`. Адрес GitHub пока остаётся прежним; имя внешнего репозитория нельзя изменить заменой строк в коде.

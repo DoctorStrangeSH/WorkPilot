@@ -7,9 +7,9 @@ __pycache__/
 venv/
 .env
 
-# WorkPilot local data and secrets
-.workpilot/
-workpilot-data/
+# Malenia local data and secrets
+.malenia/
+malenia-data/
 *.sqlite
 *.sqlite3
 *.db
@@ -27,3 +27,5 @@ src-tauri/target/
 .idea/
 .DS_Store
 Thumbs.db
+
+*.tsbuildinfo
