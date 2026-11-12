@@ -9,7 +9,9 @@ Last updated: 2026-11-12
 - Keep `%LOCALAPPDATA%/WorkPilot`, the SQLite filename, Python package, executable resources, app identifier and Native Messaging host ID unchanged. This is a compatible display rename, not a data migration.
 - Registration supports Malenia and legacy WorkPilot processes, uninstall entries and installation directories. ASCII-only PowerShell 5.1 remains required. Tests cover both uninstall display names and preservation of existing data.
 - Do not install the new build or stop the working app automatically. After updating to a different installation folder, rerun the new verified registration block so the manifest points at the new host path; reload the existing unpacked extension in place rather than loading a second copy from a different directory.
-- Next functional milestone: connection diagnostics/reconnect, then an explicit permission design for DOM/screenshots. These features are not implemented by the rename.
+- Connection diagnostics now implemented in the extension popup: a five-second Native Messaging response timeout, actionable missing-host/access-denied/disconnect/protocol errors, and a manual reconnect button. Reconnect sends only `hello`, never reads a tab and never resends a timed-out share. Late callbacks are ignored; a share with uncertain delivery asks the user to check Malenia before trying again. The UI rejects URLs with embedded credentials before sending anything.
+- Nine deterministic Node tests use a simulated Chrome API (no real browser access) for reconnect, missing/forbidden host, timeout/late callbacks, URL sanitization, duplicate clicks, uncertain delivery and malformed handshake. Desktop CI runs them.
+- Next functional milestone: explicit permission design for DOM/screenshots, plus a separate review of duplicate-agent startup. No DOM, screenshot, automatic tab listing or automatic task execution was added.
 
 ## Product decisions
 
@@ -85,7 +87,7 @@ Last updated: 2026-11-12
 
 1. Windows installer workflow `43040062771` passed on code revision `fa7da1d`; use its installer and extension artifacts if a fresh build is needed.
 2. Installed host registration passed locally. For another installation, use the full verified commit-pinned download block from browser-extension/README.md with the local extension ID.
-3. User confirmed tab sharing works (2026-11-12). Next implement connection diagnostics/reconnect without broadening extension permissions.
+3. User confirmed tab sharing works (2026-11-12). Connection diagnostics/reconnect is implemented with the same permissions; verify the updated popup after reloading the existing unpacked extension.
 4. If native host is not found, inspect the exact Yandex registry lookup path/policies and use the error output; do not add broad permissions or touch browser profile data.
 5. Verify persistent SQLite storage and that stopping the app leaves no agent process behind.
 6. Only after the preview is verified, plan DOM snapshots and tab listing behind explicit permissions.

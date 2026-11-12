@@ -84,3 +84,11 @@ Target browser reported by the initial tester: Yandex Browser 26.10.3.771 (64-bi
 ## Rename compatibility
 
 Malenia is the new display name of WorkPilot. The native host remains `com.workpilot.browser` and data remains in `%LOCALAPPDATA%/WorkPilot`. Reload the existing unpacked extension in its original directory to preserve its ID; do not load a second copy from a new directory. If the installer uses a new directory, register the new bundled host path with the current script.
+
+## Connection diagnostics
+
+The popup checks the registered native host with a `hello` message. **Retry connection** sends another `hello` only; it never reads or shares a tab. Missing registration, denied access, disconnected host and invalid responses have separate guidance. Native Messaging replies time out after five seconds; late replies cannot replace a newer connection state.
+
+If sharing times out or disconnects, the tab may already have been saved. Check Malenia before sharing again. The extension never automatically retries a share. Query/fragment data is stripped, URLs containing embedded credentials are rejected, and raw browser/native errors are not displayed.
+
+Run `node --test tests/browser_bridge.test.cjs` from the repository root to verify popup behavior against a simulated Chrome API.
