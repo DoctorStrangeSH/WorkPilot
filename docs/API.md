@@ -71,7 +71,7 @@ GET `/v1/runtime` release is `0.6.0` and includes `public_search` capability.
 
 All routes below require the local bearer token and a loopback Host header.
 
-- `GET /v1/integrations/google-sheets/status` — connection state only; never returns tokens.
+- `GET /v1/integrations/google-sheets/status` — authorization state only; after OAuth consent it returns `authorized`, not `connected`. The desktop UI shows «Подключён» only after the selected spreadsheet/range has been read successfully. Never returns tokens.
 - `POST /v1/integrations/google-sheets/connect` — JSON `{"client_id":"...apps.googleusercontent.com"}`. Starts a Desktop OAuth flow and returns a short-lived authorization URL to the trusted Tauri host. Tauri opens it in the system browser. The local callback binds only to `127.0.0.1`, validates one-use state and PKCE S256, and accepts only the exact Sheets read-only scope.
 - `POST /v1/integrations/google-sheets/read` — JSON `{"spreadsheet_id":"...","range":"Sheet1!A1:Z100"}`. Performs one GET request to the Google Sheets values API. Limits the response to 2 MiB, 1,000 rows and 50,000 cells.
 - `POST /v1/integrations/google-sheets/disconnect` — JSON `{}`. Deletes local refresh-token and client-ID credentials. It does not revoke the Google grant; the user can revoke it in Google Account settings.
