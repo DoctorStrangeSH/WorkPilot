@@ -53,7 +53,7 @@ test('automated traversal opens and closes separate background tabs without writ
     sent.push(msg);
     return {ok:true,type:'page_inspected',persisted:false,characters:msg.page.text.length};
   },async snapshot=>reports.push(snapshot));
-  assert.equal(result.phase,'completed');
+  assert.equal(result.phase,'read_only');
   assert.equal(chrome.stats.created,3);
   assert.equal(chrome.stats.removed,3);
   assert.equal(sent.length,3);
@@ -83,4 +83,38 @@ test('the site data is not persisted and a native rejection fails closed',async(
   assert.equal(result.phase,'needs_attention');
   assert.equal(result.results.length,3);
   assert.equal(chrome.stats.removed,3);
+});
+
+test('exact table evidence triggers one ephemeral reconciliation, without exposing identifiers in progress', async () => {
+  const api=runner(), chrome=fakeBrowser();
+  chrome.scripting.executeScript=async ({args})=>({
+    inventory:{columns:['cargo_place','inventory_date'],rows:[['TEST-001','2026-09-12']]},
+    datalens:{columns:['main_partner_code_original','sc_id','result','scanned_at'],
+      rows:[['TEST-001','101366','OK','2026-09-15T08:00:00']]},
+    asgard:{columns:['cargo_place','status'],rows:[]}
+  }[args[0]] ? [{result:{origin:'https://' + ({
+    inventory:'inventory.example',datalens:'analytics.example',asgard:'asgard.example'
+  }[args[0]]),text:'Тестовая строка',table:{
+    inventory:{columns:['cargo_place','inventory_date'],rows:[['TEST-001','2026-09-12']]},
+    datalens:{columns:['main_partner_code_original','sc_id','result','scanned_at'],
+      rows:[['TEST-001','101366','OK','2026-09-15T08:00:00']]},
+    asgard:{columns:['cargo_place','status'],rows:[]}
+  }[args[0]]}}] : []);
+  const sent=[],progress=[];
+  const result=await api.run(chrome,{
+    inventory:'https://inventory.example/orders',
+    datalens:'https://analytics.example/reports',
+    asgard:'https://asgard.example/history'
+  },async message=>{
+    sent.push(message);
+    if(message.type==='reconcile_site_tables')return {
+      ok:true,type:'site_tables_reconciled',persisted:false,read_only:true,
+      write_enabled:false,total:1,summary:{found:1,in_progress:0,manual_review:0}
+    };
+    return {ok:true,type:'page_inspected',persisted:false,characters:message.page.text.length};
+  },async snapshot=>progress.push(snapshot));
+  assert.equal(result.phase,'reconciled');
+  assert.equal(sent.filter(x=>x.type==='reconcile_site_tables').length,1);
+  assert.ok(progress.every(snapshot=>!JSON.stringify(snapshot).includes('TEST-001')));
+  assert.equal(result.reconciliation.summary.found,1);
 });
