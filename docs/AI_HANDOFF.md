@@ -1,3 +1,12 @@
+## Personal Gmail OAuth decision — 2026-11-12
+
+- User explicitly selected a **personal Gmail**, not corporate Workspace, for Malenia Google Sheets OAuth.
+- Recommended Cloud setup: separate project `Malenia Personal`, External audience, In production publishing status, personal-use exception from required verification (possible unverified warning and up to 100 users), one Desktop OAuth client, Sheets API enabled, ONLY `spreadsheets.readonly` scope. Do not leave in Testing: Sheets refresh token then expires after 7 days. Production removes this specific 7-day limit but not other token invalidation.
+- Complete account-owner checklist, Google documentation, and caveats: `docs/ORDER_CHECKING.md` section «Настройка личного Gmail для постоянной работы».
+- Latest code baseline `05c65c3`: Python run 43239645452, Desktop run 43239645705, Windows installer run 43239645740 all completed successfully. Subsequent changes to docs are [skip ci]. PR #2 remains draft and unmerged; main unchanged.
+- Owner action required: create Google Cloud project/client and publish OAuth audience, then enter Client ID in installed Malenia, approve in system browser, read selected ИНВента spreadsheet/range. Never request a refresh token in chat; real account authorization has not yet happened.
+- Next coding step only after real selected spreadsheet/range is validated: map ИНВента columns and create evidence-backed dry-run order results. Keep DataLens/Asgard disconnected pending their permission review.
+
 ## Latest continuation — 2026-11-12 — Google Sheets read-only connector
 
 - Current branch HEAD before this handoff update: `05c65c3fac162d34ecb0090ffe4fa14cb7f00d39`.
