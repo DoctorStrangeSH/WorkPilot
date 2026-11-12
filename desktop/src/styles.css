@@ -196,3 +196,7 @@ body{min-width:820px}
 .order-readonly{display:flex;align-items:flex-start;gap:8px;font-size:10px;line-height:1.6;padding:12px;border:1px solid #365647;border-radius:9px;background:#182a25;color:#9edcbc}
 .order-readonly svg{flex:0 0 16px}
 @media(max-width:1060px){.order-work-grid{grid-template-columns:1fr}}
+
+.order-card-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.order-card-heading h2{margin:0!important}
+.order-card-heading .secondary{font-size:9px;padding:7px 10px;white-space:nowrap}
