@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlsplit
 from .ai import OllamaClient, AIError
 from .knowledge import KnowledgeBase, KnowledgeError
 from .google_sheets import GoogleSheetsConnector, GoogleSheetsError
+from .order_check import evaluate_order
 from .permission_inbox import PermissionInbox
 from .permissions import PermissionGate
 from .resources import ResourceManager
@@ -162,6 +163,32 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
             if not self._require_access():
                 return
             parsed = urlsplit(self.path)
+
+            if parsed.path == "/v1/orders/preview":
+                payload = self._read_json(16 * 1024)
+                if payload is None:
+                    return
+                if set(payload) - {"order", "datalens_scans", "asgard_record"}:
+                    self._send(422, {"error": "invalid_order_preview_payload"})
+                    return
+                if not isinstance(payload.get("order"), dict):
+                    self._send(422, {"error": "order_required"})
+                    return
+                scans = payload.get("datalens_scans", [])
+                if not isinstance(scans, list) or len(scans) > 100:
+                    self._send(422, {"error": "invalid_datalens_scans"})
+                    return
+                asgard = payload.get("asgard_record")
+                if asgard is not None and not isinstance(asgard, dict):
+                    self._send(422, {"error": "invalid_asgard_record"})
+                    return
+                try:
+                    proposal = evaluate_order(payload["order"], scans, asgard)
+                except ValueError:
+                    self._send(422, {"error": "invalid_order_preview_data"})
+                    return
+                self._send(200, {"proposal": proposal, "read_only": True, "source": "manual_input"})
+                return
 
             if parsed.path in {
                 "/v1/integrations/google-sheets/connect",
