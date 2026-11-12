@@ -28,7 +28,8 @@ test('sources page shows truthful connection state and no fake connect actions',
   assert.match(app, /Google Sheets · ИНВента/);
   assert.match(app, /ChatGPT не передаёт свои подключения Malenia/);
   assert.match(app, /Malenia пока не читает статусы или историю коробок/);
-  assert.match(app, /Передаёт только заголовок и очищенный URL/);
+  assert.match(app, /Ручная передача отправляет только заголовок и очищенный URL/);
+  assert.match(app, /автоматический обход читает видимый текст/);
   assert.match(app, /Открыть Browser Bridge/);
 });
 
