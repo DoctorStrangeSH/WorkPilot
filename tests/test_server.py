@@ -81,6 +81,22 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(state["id"], item)
         return f"/v1/permissions/{item}/decision", state["binding"]
 
+    def test_browser_audit_summary_requires_auth_and_contains_only_counts(self):
+        code, initial = self.api("/v1/browser/audit-summary")
+        self.assertEqual(code, 200)
+        self.assertIsNone(initial["audit"])
+        self.assertFalse(initial["source_records_persisted"])
+        self.assertEqual(self.api("/v1/browser/audit-summary",
+                                  authenticated=False)[0], 401)
+        self.store.record_browser_audit_summary(
+            2, {"found": 1, "in_progress": 1, "manual_review": 0})
+        code, report = self.api("/v1/browser/audit-summary")
+        self.assertEqual(code, 200)
+        self.assertEqual(report["audit"]["total"], 2)
+        self.assertEqual(report["audit"]["summary"]["found"], 1)
+        self.assertNotIn("cargo_place", json.dumps(report))
+        self.assertNotIn("rows", json.dumps(report))
+
     def test_internal_browser_request_http_approval_and_local_preparation(self):
         browser = BrowserPermissionSession(self.inbox)
         connection = browser.connect()
