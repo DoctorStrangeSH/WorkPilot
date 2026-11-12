@@ -108,3 +108,6 @@
 - Sheets access is GET-only for a user-entered spreadsheet ID and A1 range. The connector has no write method or Google Drive API client. Response size and cell count are bounded.
 - Disconnect deletes local credentials but does not claim to revoke Google's grant; the UI tells the user how to revoke it in Google Account settings.
 - The OAuth callback flow, token exchange and real-account authorization must pass CI and target-PC smoke tests before the connection is treated as production-ready.
+
+
+- Для External OAuth consent screen в статусе Testing refresh tokens для Sheets scope истекают через 7 дней. UI предупреждает об этом; при `invalid_grant` приложение должно просить пользователя пройти OAuth повторно. Не обещать долговременную авторизацию при оставленном Testing status.
