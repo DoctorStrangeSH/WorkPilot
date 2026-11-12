@@ -64,7 +64,7 @@ var MaleniaAutomation = (() => {
     "changed_table_schema", "too_many_rows", "native_host_rejected",
     "page_timeout", "tab_closed", "unsupported_search_form",
     "dynamic_search_ui", "unsupported_dynamic_search",
-    "dynamic_search_no_result_update"
+    "dynamic_search_no_result_update", "dynamic_search_unchanged_table"
   ]);
   function reasonCode(error) {
     return error instanceof Error && SAFE_FAILURE_CODES.has(error.message) ?
@@ -166,6 +166,12 @@ var MaleniaAutomation = (() => {
         if (containers.length !== 1) {
           return {origin: location.origin, status: "unsupported"};
         }
+        // Prove the result table actually changed; a loading-spinner or
+        // unrelated mutation is not evidence of an updated result set.
+        const before = containers[0].innerText;
+        if (typeof before !== "string" || before.length > 16000) {
+          return {origin: location.origin, status: "unsupported"};
+        }
         // Use the native setter so common controlled React/Vue inputs see the update.
         const setter = Object.getOwnPropertyDescriptor(
           HTMLInputElement.prototype, "value")?.set;
@@ -180,7 +186,10 @@ var MaleniaAutomation = (() => {
             clearTimeout(deadline);
             clearTimeout(settleTimer);
             observer.disconnect();
-            resolve({origin: location.origin, status});
+            const after = containers[0].innerText;
+            resolve({origin: location.origin, status:
+              status === "updated" && typeof after === "string" && after !== before ?
+                "updated" : status === "updated" ? "unchanged_table" : status});
           };
           const observer = new MutationObserver(() => {
             if (settled) return;
@@ -203,7 +212,9 @@ var MaleniaAutomation = (() => {
     if (!outcome || outcome.origin !== origin ||
         outcome.status !== "updated") {
       throw new Error(outcome?.status === "unchanged" ?
-        "dynamic_search_no_result_update" : "unsupported_dynamic_search");
+        "dynamic_search_no_result_update" :
+        outcome?.status === "unchanged_table" ?
+          "dynamic_search_unchanged_table" : "unsupported_dynamic_search");
     }
   }
 
