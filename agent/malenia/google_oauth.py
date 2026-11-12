@@ -37,6 +37,19 @@ def validate_client_id(client_id: str) -> str:
     return client_id
 
 
+def validate_client_secret(client_secret: str | None) -> str | None:
+    """Accept an optional Desktop client secret without treating it as confidential."""
+    if client_secret is None or client_secret == "":
+        return None
+    if (
+        not isinstance(client_secret, str)
+        or len(client_secret) > 512
+        or any(ord(char) < 0x21 or ord(char) > 0x7E for char in client_secret)
+    ):
+        raise GoogleOAuthError("Invalid optional Google OAuth client secret")
+    return client_secret
+
+
 def create_pkce_verifier() -> str:
     """Create an RFC 7636 verifier using only unreserved URL-safe characters."""
     verifier = secrets.token_urlsafe(64)
