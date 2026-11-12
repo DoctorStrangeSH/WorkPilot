@@ -343,7 +343,7 @@ test('browser GET-search extractor only accepts an unambiguous read-only form', 
   let form=normalForm();
   const chrome={
     scripting:{async executeScript({func,args}) {
-      const document={querySelectorAll:()=>[form]};
+      const document={querySelectorAll:selector=>selector==="form"?[form]:[]};
       const location={origin:'https://analytics.example',href:current};
       const context={document,location,URL};
       return [{result:vm.runInNewContext('('+func.toString()+')(...args)',{...context,args})}];
