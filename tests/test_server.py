@@ -133,6 +133,31 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(self.api("/v1/ai/chat",{"model":"remote","messages":[]})[0],422)
         self.ai._request.assert_not_called()
 
+    def test_runtime_descriptor_requires_authentication(self):
+        self.assertEqual(self.api("/v1/runtime", authenticated=False)[0], 401)
+        code, runtime = self.api("/v1/runtime")
+        self.assertEqual(code, 200)
+        self.assertEqual(runtime["release"], "0.4.1")
+        self.assertEqual(runtime["protocol"], 1)
+        self.assertIn("task_idempotency", runtime["capabilities"])
+
+    def test_task_retry_conflict_validation_and_legacy_compatibility(self):
+        body = {"title": "Reviewed", "description": "Text",
+                "request_id": "a1234567-1234-1234-1234-123456789abc"}
+        self.assertEqual(self.api("/v1/tasks", body, authenticated=False)[0], 401)
+        first = self.api("/v1/tasks", body)
+        retry = self.api("/v1/tasks", body)
+        self.assertEqual(first[0], 201)
+        self.assertEqual(first[1]["task"]["id"], retry[1]["task"]["id"])
+        self.assertEqual(self.api("/v1/tasks", {**body, "title": "Changed"})[0], 409)
+        for invalid in ("", "not-a-uuid", 42, True, [], {}, body["request_id"].upper()):
+            with self.subTest(invalid=invalid):
+                self.assertEqual(self.api("/v1/tasks", {**body, "request_id": invalid})[0], 422)
+        self.assertEqual(len(self.store.list_tasks()), 1)
+        self.assertEqual(len(self.store.list_events()), 1)
+        self.assertEqual(self.api("/v1/tasks", {"title": "Legacy"})[0], 201)
+        self.assertEqual(self.api("/v1/tasks", {"title": "Null", "request_id": None})[0], 201)
+
     def test_health_is_available_without_token(self):
         with urlopen(f"{self.base_url}/health", timeout=2) as response:
             payload = json.loads(response.read())

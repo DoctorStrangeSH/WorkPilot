@@ -14,6 +14,10 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+class SubmissionConflict(ValueError):
+    pass
+
+
 class TaskStore:
     def __init__(self, path: str | Path):
         self.path = Path(path)
@@ -54,6 +58,11 @@ class TaskStore:
                     status TEXT NOT NULL CHECK(status IN ('pending', 'cancelled')),
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS task_submissions (
+                    request_id TEXT PRIMARY KEY,
+                    task_id TEXT NOT NULL UNIQUE REFERENCES tasks(id)
                 );
 
                 CREATE TABLE IF NOT EXISTS events (
@@ -97,16 +106,28 @@ class TaskStore:
                 """
             )
 
-    def create_task(self, title: str, description: str = "") -> dict[str, Any]:
+    def create_task(self, title: str, description: str = "", request_id: str | None = None) -> dict[str, Any]:
         task_id = str(uuid.uuid4())
         now = _now()
         with self._session() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if request_id is not None:
+                uuid.UUID(request_id)
+                existing = db.execute("SELECT tasks.* FROM task_submissions "
+                    "JOIN tasks ON tasks.id = task_submissions.task_id WHERE request_id = ?",
+                    (request_id,)).fetchone()
+                if existing is not None:
+                    if existing["title"] != title or existing["description"] != description:
+                        raise SubmissionConflict("Request already submitted with different content")
+                    return dict(existing)
             db.execute(
                 """INSERT INTO tasks
                    (id, title, description, status, created_at, updated_at)
                    VALUES (?, ?, ?, 'pending', ?, ?)""",
                 (task_id, title, description, now, now),
             )
+            if request_id is not None:
+                db.execute("INSERT INTO task_submissions VALUES (?, ?)", (request_id, task_id))
             db.execute(
                 """INSERT INTO events
                    (task_id, event_type, message, created_at)

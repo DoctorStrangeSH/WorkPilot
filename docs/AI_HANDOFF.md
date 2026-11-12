@@ -187,3 +187,67 @@ SHA256; CPU runtime extracted under LOCALAPPDATA/Malenia/ollama. Runtime launch
 and compact-model download are being verified; installation of the new desktop
 build is still pending. Do not treat source changes as delivered functionality.
 See LOCAL_AI.md. main must stay unchanged and PR #2 unmerged.
+
+
+## Delivered Malenia 0.4.0 first local chat (2026-11-12)
+
+- Published source revision 3005284eb069216ea3ffe6e4ce59704c6a7b105c in
+  feat/desktop-shell; all 36 changed public files were fetched and compared to
+  local source. main stays at 712d0a8e1885cca402eaa4fdda041bb09b50e397 and
+  PR #2 remains draft/open/unmerged. Local history merged the published revision.
+- All CI succeeded: Windows installer 43190208605, Desktop checks 43190208487,
+  Python 43190208614, Windows PowerShell registration 43190208789. 89 Python tests,
+  15 Node tests, frontend build, Rust compilation, frozen agent/native host,
+  registration and real desktop duplicate-launch smoke checks passed.
+- Installer artifact 13929834613 (ZIP SHA256
+  069283c07bc12b3e640d10888a7eb55d8f1333c97c787461709da28bd21e6240) was installed.
+  Important upgrade finding: NSIS returned 0 and desktop was new, but installed
+  resource agent was still old and returned HTTP 404 for /v1/ai/status. Cause was
+  not conclusively established. Closed the exact Malenia app, verified its
+  resource processes stopped, backed up old resources and copied BOTH frozen
+  resource directories from the hash-verified installer. Every copied file hash
+  matched. User database/config/extension registration were not removed.
+- Post-repair actual installed frozen agent -> Ollama -> Qwen 0.5B chat succeeded
+  against an isolated fixture DB and replied 2 + 2 = 4. Updated desktop was opened.
+  User click-through of the new chat is not yet independently confirmed.
+- CPU runtime is official Ollama v0.40.16, model qwen2.5:0.5b Q4_K_M (~398 MB).
+  Owned CPU server was started by setup; no unrelated process was killed. Ollama
+  sees one compact model, cloud tags/tools/context attachments are disabled.
+- Intel Graphics experiment: OLLAMA_VULKAN=1 alone skipped iGPU; adding
+  OLLAMA_IGPU_ENABLE=1 offloaded ~456 MB of shared RAM. Short 48-token test gave
+  CPU 50.17 tok/s and iGPU 45.93 tok/s; CPU remains the default. No driver change.
+- Model quality limitation observed: a planning prompt caused invented order
+  quantity/address. Compact-model answers must not be treated as verified data.
+- Next reliability work: an installed-upgrade test and resource manifest/version
+  check must detect stale bundled agents even when the NSIS exit code is zero.
+  Fresh-build smoke checks alone missed this upgrade problem. Preserve the
+  existing user data and restrict any process stops to owned Malenia processes.
+
+
+## 0.4.1 task review and upgrade safeguards (source prepared)
+
+- AI replies offer an explicit Create task button, editable title/description
+  review and a separate queue confirmation. No tool execution is enabled.
+- A UUID submission key is stored transactionally with the task and event.
+  Concurrent/retried submissions return the same task, including after restart
+  or cancellation. Changed content for the same key is rejected with HTTP 409.
+  After a save attempt the UI freezes reviewed text for identical safe retries.
+  Oversized replies are shown in full and must be shortened before submission.
+- Authenticated /v1/runtime advertises release 0.4.1, protocol 1 and capabilities.
+  Desktop requires the exact release/protocol and task_idempotency capability;
+  a mismatch stops only its own spawned agent and reports reinstall guidance.
+  This is a compatibility handshake, not cryptographic resource verification.
+- NSIS preinstall/preuninstall hooks test write access to the two frozen resource
+  executables, without writing data, and exit 32 if locked. No process killing.
+  This addresses resource locks; the original 0.4.0 cause remains unproven.
+- New CI-only installed-upgrade test checks every installed resource hash against
+  build output, real installed runtime/task API, locked-agent refusal, stale-exe
+  repair and preservation of fixture data/task/submission key after reinstall.
+  It runs only on an isolated Windows GitHub Actions runner, never on user data.
+- Windows unread-body connection resets during denied POSTs were reproduced.
+  Access denial now discards at most 32 KiB without parsing, with a 250 ms bound,
+  before sending 401/403. This never invokes chat or task creation.
+- Local: 94 Python tests, 16 Node tests and production frontend build passed.
+  Rust/NSIS build and installed-upgrade execution still require Windows CI.
+  Installed user version remains 0.4.0 until successful verified delivery.
+- main baseline and draft/unmerged PR #2 were checked unchanged before publication.

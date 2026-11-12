@@ -29,3 +29,41 @@ when needed. Failed sends restore the draft rather than resending it silently.
 The compact first-test model has limited reasoning and Russian fluency. Evaluate
 it with simple text summaries, extraction and planning; do not infer that its
 accuracy represents larger models. No actual desktop/browser actions are enabled.
+
+
+## Verified Intel Graphics experiment on the user's PC
+
+Intel integrated graphics uses shared system RAM, not an additional VRAM pool.
+Ollama v0.40.16 detects the Vulkan device but skips an integrated GPU unless
+OLLAMA_IGPU_ENABLE=1 is also set. A temporary isolated server with both
+OLLAMA_VULKAN=1 and OLLAMA_IGPU_ENABLE=1 did offload about 456 MB. On one short
+48-token Qwen 0.5B test, CPU generated 50.17 tokens/s versus 45.93 on the iGPU;
+this is a limited machine/model-specific comparison, not a general GPU benchmark.
+The regular chat stays on CPU. No graphics driver/global environment was changed.
+GPU probe processes were stopped; the original local CPU server remains running.
+
+## First test in the installed application
+
+Open Malenia 0.4.0, start its agent on the main page, then open the AI models page.
+The installed qwen2.5:0.5b should be selected. Use Check connection if needed and
+send a short question. Ollama must be running; the Start Ollama button can launch
+the portable runtime installed in LOCALAPPDATA/Malenia/ollama on this machine.
+The compact model answered arithmetic correctly but invented order details in a
+planning probe. Treat it as an experimental baseline, never as verified business
+facts. Tasks and browser actions are still not executed by the model.
+
+
+### Reviewed task creation (0.4.1 source)
+
+An assistant reply can be copied into an editable task review. Saving requires
+an explicit click and only queues the reviewed text; the model cannot execute
+it. Check invented details before confirming. The description limit is 2000
+characters; longer replies must be shortened. An uncertain save can be retried
+with the same submission key and unchanged content without creating a duplicate.
+After the first attempt, check the Tasks page before cancelling the review or
+creating a new submission. Chat history and unsaved review state remain temporary.
+
+The desktop checks the agent release and protocol when starting it. If versions
+do not match, close Malenia and rerun the verified installer. Setup refuses to
+replace an agent/browser-host executable still in use. Close Malenia and the
+browser bridge before retrying. User tasks and model files are preserved.

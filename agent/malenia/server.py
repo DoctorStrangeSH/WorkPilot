@@ -13,7 +13,7 @@ from .ai import OllamaClient, AIError
 from .permission_inbox import PermissionInbox
 from .permissions import PermissionGate
 from .resources import ResourceManager
-from .store import TaskStore
+from .store import TaskStore, SubmissionConflict
 
 
 MAX_BODY_BYTES = 8 * 1024
@@ -65,12 +65,25 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                 return False
             return hmac.compare_digest(supplied[len(prefix):], token)
 
+        def _reject_access(self, status: int, error: str) -> None:
+            # Windows can reset a closing socket with unread request data,
+            # hiding the denial response. Discard only a bounded body, never
+            # parse it, and cap waiting for an incomplete/untrusted request.
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if 0 < length <= 32 * 1024:
+                    self.connection.settimeout(0.25)
+                    self.rfile.read(length)
+            except (ValueError, OSError):
+                pass
+            self._send(status, {"error": error})
+
         def _require_access(self) -> bool:
             if not self._valid_host():
-                self._send(403, {"error": "invalid_host"})
+                self._reject_access(403, "invalid_host")
                 return False
             if not self._authorized():
-                self._send(401, {"error": "unauthorized"})
+                self._reject_access(401, "unauthorized")
                 return False
             return True
 
@@ -102,7 +115,10 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
             if not self._require_access():
                 return
 
-            if parsed.path == "/v1/ai/status":
+            if parsed.path == "/v1/runtime":
+                self._send(200, {"release": "0.4.1", "protocol": 1,
+                    "capabilities": ["local_chat", "task_idempotency"]})
+            elif parsed.path == "/v1/ai/status":
                 self._send(200, ai_client.status())
             elif parsed.path == "/v1/permissions":
                 self._send(200, {"permissions": inbox.list_requests(), "execution_enabled": False})
@@ -179,7 +195,16 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                 if not isinstance(description, str) or len(description) > 2000:
                     self._send(422, {"error": "invalid_description", "max_length": 2000})
                     return
-                task = store.create_task(title.strip(), description)
+                request_id = payload.get("request_id")
+                if request_id is not None and (not isinstance(request_id, str) or
+                        re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", request_id) is None):
+                    self._send(422, {"error": "invalid_request_id"})
+                    return
+                try:
+                    task = store.create_task(title.strip(), description, request_id)
+                except SubmissionConflict:
+                    self._send(409, {"error": "request_content_changed"})
+                    return
                 self._send(201, {"task": task, "note": "Queued only; task execution is not implemented yet."})
                 return
 

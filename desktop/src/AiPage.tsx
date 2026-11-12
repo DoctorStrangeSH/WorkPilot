@@ -3,9 +3,10 @@ import { invoke } from "@tauri-apps/api/core";
 
 type Message = {role: "user" | "assistant"; content: string};
 type Status = {available: boolean; models: string[]};
+type TaskDraft = {requestId:string; title:string; description:string; submitted?:boolean};
 type Reply = {message: Message; model: string};
 
-export function AiPage({connected}: {connected: boolean}) {
+export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCreated:()=>void}) {
   const [status, setStatus] = useState<Status | null>(null);
   const [model, setModel] = useState("qwen2.5:0.5b");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -13,6 +14,19 @@ export function AiPage({connected}: {connected: boolean}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef(false);
+  const [taskDraft,setTaskDraft]=useState<TaskDraft|null>(null);
+  const [taskBusy,setTaskBusy]=useState(false);
+  const [taskNotice,setTaskNotice]=useState("");
+  const taskPending=useRef(false);
+  const saveTask=async()=>{
+    if(!taskDraft || taskPending.current || !connected || !taskDraft.title.trim() || taskDraft.description.length>2000)return;
+    taskPending.current=true;setTaskBusy(true);setTaskNotice("");setTaskDraft({...taskDraft,submitted:true});
+    try {
+      await invoke("create_task",{title:taskDraft.title.trim(),description:taskDraft.description,requestId:taskDraft.requestId});
+      setTaskDraft(null);setTaskNotice("Задача добавлена в очередь. Автоматическое выполнение пока не подключено.");onTaskCreated();
+    } catch {setTaskNotice("Сохранение не подтверждено. Можно повторить тот же запрос без дубликата или проверить раздел «Задания».");}
+    finally {taskPending.current=false;setTaskBusy(false);}
+  };
   const refresh = async () => {
     try {
       const result = await invoke<Status>("get_ai_status");
@@ -25,7 +39,7 @@ export function AiPage({connected}: {connected: boolean}) {
     if (connected) void invoke<Status>("get_ai_status").then(result => {
       if (active) {setStatus(result);if(result.models.length)setModel(result.models[0]);}
     }).catch(() => {if(active)setError("Не удалось проверить Ollama.");});
-    else {setStatus(null);setMessages([]);}
+    else {setStatus(null);setMessages([]);setTaskDraft(null);}
     return () => {active = false;};
   }, [connected]);
   const startModel = async () => {
@@ -56,9 +70,11 @@ export function AiPage({connected}: {connected: boolean}) {
     {!connected ? <p role="status">Запустите агента на главной странице.</p> : !status?.available ? <p role="status">Ollama недоступен. Запустите локальный сервер Ollama и проверьте подключение.</p> : !status.models.length ? <p role="status">Подходящая модель ещё не установлена. Для первого теста нужна Qwen 2.5 0.5B.</p> : <p className="note">Модель подключена. Компактная модель может ошибаться — проверяйте важные ответы.</p>}
     {error ? <p className="alert error" role="alert">{error}</p> : null}
     <div className="panel ai-messages" role="log" aria-live="polite" aria-label="Переписка с Маленией">
-      {!messages.length ? <p className="empty">Попробуйте: «Разбей задачу проверки заказа на пять шагов».</p> : messages.map((message,index)=><article className={"ai-message "+message.role} key={index}><b>{message.role==="user"?"Вы":"Маления"}</b><p>{message.content}</p></article>)}
+      {!messages.length ? <p className="empty">Попробуйте: «Разбей задачу проверки заказа на пять шагов».</p> : messages.map((message,index)=><article className={"ai-message "+message.role} key={index}><b>{message.role==="user"?"Вы":"Маления"}</b><p>{message.content}</p>{message.role==="assistant" ? <button className="secondary" disabled={busy || taskBusy || !!taskDraft || !connected} onClick={()=>{setTaskNotice("");setTaskDraft({requestId:crypto.randomUUID(),title:(messages[index-1]?.content??"Задача из чата").slice(0,200),description:message.content});}}>Создать задачу из ответа</button> : null}</article>)}
       {busy ? <p role="status">Маления думает… Первый ответ может занять больше времени.</p> : null}
     </div>
+    {taskNotice ? <p role="status" className="note">{taskNotice}</p> : null}
+    {taskDraft ? <section className="panel ai-task-review" aria-labelledby="task-review-title"><h2 id="task-review-title">Проверьте задачу перед добавлением</h2><p>Модель может выдумывать сведения. Исправьте текст, если нужно. Подтверждение только сохраняет задачу в очереди.</p><label>Название<input autoFocus maxLength={200} disabled={taskBusy || taskDraft.submitted} value={taskDraft.title} onChange={e=>setTaskDraft({...taskDraft,title:e.target.value})}/></label><label>Описание<textarea rows={5} maxLength={2000} disabled={taskBusy || taskDraft.submitted} value={taskDraft.description} onChange={e=>setTaskDraft({...taskDraft,description:e.target.value})}/><small>{taskDraft.description.length}/2000{taskDraft.description.length>2000?" — сократите описание перед сохранением":""}</small></label><div><button className="secondary" disabled={taskBusy} onClick={()=>setTaskDraft(null)}>Отмена</button><button className="primary" disabled={taskBusy || !connected || !taskDraft.title.trim() || taskDraft.description.length>2000} onClick={()=>void saveTask()}>{taskBusy?"Сохраняем…":"Добавить в очередь"}</button></div></section> : null}
     <form className="ai-composer" onSubmit={event=>{event.preventDefault();void send();}}><label htmlFor="ai-draft">Ваше сообщение</label><textarea id="ai-draft" rows={3} maxLength={2000} value={draft} disabled={busy} onChange={e=>setDraft(e.target.value)} placeholder="Напишите вопрос или вставьте небольшой текст"/><button className="primary" type="submit" disabled={busy || !connected || !draft.trim() || !status?.models.includes(model)}>{busy?"Ожидаем ответ":"Отправить"}</button></form>
   </section>;
 }

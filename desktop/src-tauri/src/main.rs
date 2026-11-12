@@ -169,6 +169,19 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
             .map(|response| response.status().is_success())
             .unwrap_or(false);
         if ready {
+            let compatible = api_get(&token, "/v1/runtime").map(|runtime| {
+                runtime.get("release").and_then(Value::as_str) == Some(env!("CARGO_PKG_VERSION"))
+                    && runtime.get("protocol").and_then(Value::as_u64) == Some(1)
+                    && runtime.get("capabilities").and_then(Value::as_array)
+                        .map(|items| items.iter().any(|item| item.as_str() == Some("task_idempotency")))
+                        .unwrap_or(false)
+            }).unwrap_or(false);
+            if !compatible {
+                if let Ok(mut guard) = state.child.lock() {
+                    if let Some(mut child) = guard.take() { let _ = child.kill(); let _ = child.wait(); }
+                }
+                return Err("Обнаружены файлы агента другой версии. Закройте Малению и повторите установку обновления".to_string());
+            }
             *state.token.lock().map_err(|_| "Ошибка состояния токена".to_string())? = Some(token);
             return Ok("Локальный агент запущен".to_string());
         }
@@ -210,7 +223,7 @@ fn get_dashboard(state: State<'_, AgentState>) -> Result<Dashboard, String> {
 }
 
 #[tauri::command]
-fn create_task(state: State<'_, AgentState>, title: String, description: String) -> Result<Value, String> {
+fn create_task(state: State<'_, AgentState>, title: String, description: String, request_id: Option<String>) -> Result<Value, String> {
     let token = state.token.lock().map_err(|_| "Ошибка состояния токена".to_string())?
         .clone().ok_or_else(|| "Сначала запусти агента".to_string())?;
     if title.trim().is_empty() || title.chars().count() > 200 {
@@ -223,7 +236,7 @@ fn create_task(state: State<'_, AgentState>, title: String, description: String)
     reqwest::blocking::Client::new()
         .post(format!("http://{API_HOST}:{API_PORT}/v1/tasks"))
         .header("Authorization", format!("Bearer {token}"))
-        .json(&serde_json::json!({"title": title.trim(), "description": description}))
+        .json(&serde_json::json!({"title": title.trim(), "description": description, "request_id": request_id}))
         .timeout(Duration::from_secs(3))
         .send().map_err(|error| error.to_string())?
         .error_for_status().map_err(|error| error.to_string())?
