@@ -1,3 +1,11 @@
+## CI update — 2026-11-12 — Excel batch checks
+
+- Code head `e3af7541a7cafb282354e916f73b0b6485fec79f`: Python matrix run 43254104757 succeeded on 3.11/3.12/3.13. Previous code run 43253695476 executed **172 tests per version** successfully.
+- Desktop run 43253695499 passed frontend build, browser bridge, permissions, AI, navigation UI tests; Tauri host still running at last check. Latest Desktop run 43254104791 has begun frontend dependency installation.
+- Windows installer run 43254104814 is building; previous 43253695610 was cancelled by the later UI improvement commit. Do not claim installer green or ready for user download until latest CI completes.
+- UI source validation now explicitly rejects a scan timestamp if SC ID or scan result is absent; it no longer defaults to OK/SC 101366. Unknown Asgard status is passed through to evaluator and leads to manual review. Displayed batch reason labels are localized in Russian.
+- No OAuth setup request; user explicitly deferred it.
+
 ## 2026-11-12 — batch order preview and Excel copy
 
 - User asked to continue improving Malenia, without setting up personal Gmail OAuth now.
