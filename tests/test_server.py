@@ -118,6 +118,34 @@ class LocalApiTests(unittest.TestCase):
         self.assertNotIn("cargo_place", json.dumps(report))
         self.assertEqual(set(report["audit"]), {"checked_at", "total", "summary", "read_only", "source"})
 
+    def test_skill_catalog_drafts_approval_and_feedback_require_auth(self):
+        from uuid import uuid4
+        code, initial = self.api("/v1/skills")
+        self.assertEqual(code, 200)
+        self.assertTrue(initial["skills"])
+        self.assertFalse(initial["executable"])
+        self.assertEqual(self.api("/v1/skills", authenticated=False)[0], 401)
+        identity = str(uuid4())
+        draft = {"request_id": identity, "title": "Рабочие письма",
+                 "description": "Написание и проверка рабочих писем",
+                 "instructions": "Составь понятный черновик, не отправляй без команды",
+                 "terms": "почта письмо ответ клиент"}
+        self.assertEqual(self.api("/v1/skills/draft", draft, authenticated=False)[0], 401)
+        code, result = self.api("/v1/skills/draft", draft)
+        self.assertEqual(code, 200)
+        self.assertEqual(result["skill"]["status"], "draft")
+        self.assertEqual(self.api("/v1/skills/feedback",
+            {"request_id": str(uuid4()), "skill_id": identity, "helpful": True})[0], 422)
+        code, approved = self.api("/v1/skills/approve", {"id": identity})
+        self.assertEqual(code, 200)
+        self.assertEqual(approved["skill"]["status"], "approved")
+        code, response = self.api("/v1/skills/feedback",
+            {"request_id": str(uuid4()), "skill_id": identity, "helpful": True})
+        self.assertEqual(code, 200)
+        self.assertTrue(response["recorded"])
+        self.assertEqual(self.api("/v1/skills/delete", {"id": identity})[1]["deleted"], True)
+        self.assertEqual(self.api("/v1/skills/draft", {**draft, "extra": "x"})[0], 422)
+
     def test_internal_browser_request_http_approval_and_local_preparation(self):
         browser = BrowserPermissionSession(self.inbox)
         connection = browser.connect()
