@@ -1,6 +1,6 @@
 ## Latest continuation — 2026-11-12 — Google Sheets read-only connector
 
-- Current branch HEAD before this handoff update: `b05c7505f724e1b2fcf5819d6bec2fc493af829d`.
+- Current branch HEAD before this handoff update: `f32d0c223e171870ec6a4b21830a33059b4fa374`.
 - PR #2 remains draft/open/unmerged; PR #1 remains open. `main` is unchanged. Never merge without explicit user approval.
 - The user confirmed Malenia 0.6.0 is installed and the app works on their PC. The current feature-branch UX/Google Sheets changes have not been installed on the user's PC.
 - Order rules: `docs/ORDER_CHECKING.md`, pure evaluator `agent/malenia/order_check.py`. It uses only supplied source snapshots and always returns `write_enabled: false`. DataLens rules and exact Asgard mappings are recorded there.
@@ -12,7 +12,7 @@
 - UI reports «Авторизация сохранена» after OAuth, and «Подключён» only after the selected range is successfully read. Changing the spreadsheet/range clears the previous preview. Disconnect removes local credentials; the Google grant must be revoked separately in Google Account settings.
 - Google OAuth setup: create an OAuth Desktop client, enable Sheets API, configure consent screen/Test users, enter Client ID in Malenia and approve in the system browser. Client Secret is optional; if a particular project requires it, enter it only in the local UI. Never paste Client Secret or refresh token into chat.
 - DataLens and Asgard remain disconnected pending separate read-only permission review. Browser Bridge still sends only manually shared title and sanitized URL; no DOM/screenshots/cookies/history.
-- CI for current head `bd157e13a80ef9ba6e2db95384b69ee95b9ecc60`: Python run `43237513372` queued; Desktop checks `43237513501` queued; Windows installer `43237513420` in progress. Earlier baseline Python matrix passed 157 tests before optional-secret/fragment-bridge additions; do not claim the current head green until the latest three runs finish.
+- CI for current code head `f32d0c2`: Python run `43238146809` queued; Desktop checks `43238146766` queued; Windows installer `43238146811` pending. Earlier baseline Python matrix passed 157 tests before optional-secret/fragment-bridge additions; latest expanded tests still need to pass. Windows installer run `43237513420` failed at bundled-agent smoke test because PyInstaller omitted `malenia.google_sheets`; explicit hidden imports for google_sheets/google_oauth/secret_store/order_check were added in workflow commit `ac5ca13`. That corrected installer run was cancelled by the following code commit, so current installer run must verify the fix.
 - Next: verify CI including the Windows Credential Manager integration test; then ask user to configure OAuth Client ID and test a real selected ИНВента spreadsheet/range. Confirm column mapping with the user before connecting `evaluate_order()` to a dry-run report. No writes to ИНВента, DataLens, or Asgard.
 
 ## Secure secret vault follow-up — 2026-11-12
