@@ -68,6 +68,34 @@ fn api_get(token: &str, path: &str) -> Result<Value, String> {
         .map_err(|error| format!("Некорректный ответ локального API: {error}"))
 }
 
+fn api_post_json(token: &str, path: &str, payload: Value, timeout: Duration) -> Result<Value, String> {
+    let response = reqwest::blocking::Client::builder()
+        .timeout(timeout)
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|_| "Не удалось создать HTTP-клиент".to_string())?
+        .post(format!("http://{API_HOST}:{API_PORT}{path}"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&payload)
+        .send()
+        .map_err(|_| "Локальный агент недоступен. Результат не подтверждён".to_string())?;
+    let status = response.status();
+    let body = response.json::<Value>().map_err(|_| "Некорректный ответ локального API".to_string())?;
+    if !status.is_success() {
+        let code = body.get("error").and_then(Value::as_str).unwrap_or("google_sheets_request_failed");
+        return Err(match code {
+            "windows_credential_store_unavailable" => "Хранилище секретов Windows недоступно. Токены не будут сохранены в обычных файлах.".to_string(),
+            "invalid_google_oauth_client_id" => "Проверьте формат Google OAuth Desktop Client ID.".to_string(),
+            "google_sheets_not_connected" => "Сначала подключите Google Sheets.".to_string(),
+            "invalid_spreadsheet_id" => "Некорректный ID таблицы Google Sheets.".to_string(),
+            "invalid_spreadsheet_range" => "Проверьте диапазон ячеек (например, Orders!A1:Z100).".to_string(),
+            _ => format!("Google Sheets: {code}"),
+        });
+    }
+    Ok(body)
+}
+
 fn agent_directory() -> Result<PathBuf, String> {
     if let Ok(path) = std::env::var("MALENIA_AGENT_DIR") {
         return Ok(PathBuf::from(path));
@@ -175,7 +203,7 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
                 runtime.get("release").and_then(Value::as_str) == Some(env!("CARGO_PKG_VERSION"))
                     && runtime.get("protocol").and_then(Value::as_u64) == Some(1)
                     && runtime.get("capabilities").and_then(Value::as_array)
-                        .map(|items| ["task_idempotency", "explicit_knowledge", "knowledge_only", "public_search"].iter().all(|cap| items.iter().any(|item| item.as_str() == Some(*cap))))
+                        .map(|items| ["task_idempotency", "explicit_knowledge", "knowledge_only", "public_search", "google_sheets_readonly"].iter().all(|cap| items.iter().any(|item| item.as_str() == Some(*cap))))
                         .unwrap_or(false)
             }).unwrap_or(false);
             if !compatible {
@@ -406,6 +434,63 @@ async fn install_sherlock(model: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn get_google_sheets_status(state: State<'_, AgentState>) -> Result<Value, String> {
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
+    api_get(&token, "/v1/integrations/google-sheets/status")
+}
+
+#[tauri::command]
+async fn connect_google_sheets(
+    app: tauri::AppHandle, state: State<'_, AgentState>, client_id: String,
+) -> Result<String, String> {
+    if client_id.trim().len() < 20 || client_id.len() > 300 || client_id.chars().any(|c| c.is_control()) {
+        return Err("Укажите Google OAuth Desktop Client ID из Google Cloud Console".to_string());
+    }
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
+    let body = tauri::async_runtime::spawn_blocking(move || {
+        api_post_json(&token, "/v1/integrations/google-sheets/connect",
+            serde_json::json!({"client_id": client_id}), Duration::from_secs(10))
+    }).await.map_err(|_| "Ошибка запуска подключения Google Sheets".to_string())??;
+    let url = body.get("authorization_url").and_then(Value::as_str)
+        .ok_or_else(|| "Google OAuth не вернул ссылку авторизации".to_string())?;
+    let parsed = reqwest::Url::parse(url).map_err(|_| "Некорректная ссылка Google OAuth".to_string())?;
+    if parsed.scheme() != "https" || parsed.host_str() != Some("accounts.google.com")
+        || parsed.path() != "/o/oauth2/v2/auth" || parsed.username() != "" || parsed.password().is_some()
+        || parsed.port().is_some() || url.len() > 4096 {
+        return Err("Отклонена небезопасная ссылка авторизации".to_string());
+    }
+    use tauri_plugin_opener::OpenerExt;
+    app.opener().open_url(parsed.as_str(), None::<&str>)
+        .map_err(|_| "Не удалось открыть системный браузер для Google OAuth".to_string())?;
+    Ok("Открыл системный браузер. Подтвердите доступ только для чтения и вернитесь в Malenia.".to_string())
+}
+
+#[tauri::command]
+async fn read_google_sheet(
+    state: State<'_, AgentState>, spreadsheet_id: String, range: String,
+) -> Result<Value, String> {
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        api_post_json(&token, "/v1/integrations/google-sheets/read",
+            serde_json::json!({"spreadsheet_id": spreadsheet_id, "range": range}),
+            Duration::from_secs(30))
+    }).await.map_err(|_| "Ошибка чтения Google Sheets".to_string())?
+}
+
+#[tauri::command]
+async fn disconnect_google_sheets(state: State<'_, AgentState>) -> Result<Value, String> {
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        api_post_json(&token, "/v1/integrations/google-sheets/disconnect",
+            serde_json::json!({}), Duration::from_secs(10))
+    }).await.map_err(|_| "Ошибка отключения Google Sheets".to_string())?
+}
+
+#[tauri::command]
 fn get_knowledge(state: State<'_, AgentState>) -> Result<Value, String> {
     let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
         .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
@@ -462,7 +547,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_opener::init())
         .manage(AgentState::default())
-        .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, install_sherlock])
+        .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, disconnect_google_sheets])
         .run(tauri::generate_context!())
         .expect("error while running Malenia");
 }
