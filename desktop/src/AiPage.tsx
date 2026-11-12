@@ -33,6 +33,7 @@ export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCrea
   const [useKnowledge,setUseKnowledge]=useState(true);
   const [knowledgeOnly,setKnowledgeOnly]=useState(false);
   const [useWeb,setUseWeb]=useState(false);
+  const [reasoningMode,setReasoningMode]=useState<"auto"|"fast"|"deep">("auto");
   const [setupStatus,setSetupStatus]=useState("");
   const [installModel,setInstallModel]=useState("qwen3:8b");
   const saveTask=async()=>{
@@ -87,7 +88,7 @@ export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCrea
     const request: Message[] = [...history.map(({role,content})=>({role,content})), {role:"user",content:text}];
     setMessages([...history,{role:"user",content:text}]);setDraft("");
     try {
-      const reply = await invoke<Reply>("chat_ai", {model,messages:request,useKnowledge,knowledgeOnly,useWeb});
+      const reply = await invoke<Reply>("chat_ai", {model,messages:request,useKnowledge,knowledgeOnly,useWeb,reasoningMode});
       setMessages([...history,{role:"user",content:text}, {...reply.message,sources:reply.sources,answer_mode:reply.answer_mode,cited_source_ids:reply.cited_source_ids,skill_ids:reply.skill_ids}]);
     } catch(reason) {setMessages(history);setDraft(text);setError(String(reason));}
     finally {pending.current=false;setBusy(false);}
@@ -150,6 +151,13 @@ export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCrea
           <button className="secondary" disabled={busy || !messages.length} onClick={()=>{setMessages([]);setError("");}}>Очистить чат</button>
         </div>
         <p className="assistant-privacy">Сообщения обрабатываются локально. Интернет-поиск выключен по умолчанию: при включении в Bing отправляется только текущий вопрос, без заметок и истории. Полная переписка не сохраняется.</p>
+        <label className="note">Глубина рассуждения Шерлока
+          <select value={reasoningMode} disabled={busy} onChange={e=>setReasoningMode(e.target.value as "auto"|"fast"|"deep")}>
+            <option value="auto">Автоматически — глубже для сложных задач</option>
+            <option value="fast">Быстро — простые ответы</option>
+            <option value="deep">Глубоко — больше анализа, медленнее</option>
+          </select>
+        </label>
         <label className="note"><input type="checkbox" checked={useKnowledge} disabled={busy || useWeb} onChange={e=>{setUseKnowledge(e.target.checked);if(!e.target.checked)setKnowledgeOnly(false);}}/> Использовать подтверждённую память и заметки</label>
         <label className="note"><input type="checkbox" aria-label="Только по знаниям" checked={knowledgeOnly} disabled={busy || !useKnowledge || useWeb} onChange={e=>setKnowledgeOnly(e.target.checked)}/> Только по знаниям: отвечать по найденным записям</label>
         <label className="note"><input type="checkbox" aria-label="Интернет-поиск" checked={useWeb} disabled={busy} onChange={e=>{setUseWeb(e.target.checked);if(e.target.checked)setKnowledgeOnly(false);}}/> Искать в интернете — отправлять текущий вопрос в Bing</label>
