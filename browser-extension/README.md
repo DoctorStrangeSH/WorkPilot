@@ -139,3 +139,17 @@ The automatic read-only walker additionally recognizes visible WAI-ARIA tables/g
 To prevent false conclusions from virtual scrolling, an ARIA grid is eligible only if its **explicit `aria-rowcount` exactly matches the number of currently rendered rows (including the header)**. Missing or mismatched counts, too many rows, malformed data or unknown headings make the corresponding reading require attention rather than proposing an order status. Some genuine small grids do not expose an explicit count and are therefore intentionally unsupported until a site-specific adapter verifies completeness.
 
 This is a generic capability, **not evidence** that actual ИНВента, DataLens or Asgard use these roles or expose compatible headings. Their concrete search/navigation logic remains unimplemented and requires inspection in the user's authorized browser session.
+
+
+## Opt-in exact cargo search (experimental)
+
+A new opt-in checkbox `Искать каждое грузоместо автоматически` enables a **read-only navigation-only** search mode. After collecting the current inventory table, the extension takes at most **20 unique cargo codes** and independently visits DataLens and Asgard once per code. It accepts only conservative identifiers containing ASCII letters/digits, dot, underscore or hyphen. Search never uses a guessed selector or executes a page-provided script.
+
+The limited generic adapter recognizes **exactly one** native HTML form on the corresponding site with:
+- `method="get"`, one named text/search input and no hidden/password inputs;
+- input `name="main_partner_code_original"` on DataLens, or `name="cargo_place"` on Asgard;
+- a plain action URL with the same permitted HTTPS origin and no existing query or fragment.
+
+It constructs one single-parameter URL using the form's own action, navigates only its own inactive tab and validates the resulting table rows against the **exact requested cargo code** before accepting them. Any missing/ambiguous form, unexpected row, disallowed redirect, unsupported cargo identifier, excess results, pagination error, or failed page validation requires attention. No data-changing form is submitted, and no record writes are implemented. Search parameters (cargo identifiers) can be visible in the browser's navigation URL and site server logs; they are not stored in extension progress or passed back as a URL to the native host. This mode requires the user to opt in once in the extension; the preference is remembered locally.
+
+**This is not a verified adapter for the actual private websites.** If they use JavaScript search buttons, POST search, arbitrary field labels or virtualized grids, this mode will refuse the action. Its purpose is to establish a safe, testable end-to-end per-cargo search path where the website exposes the stated native GET contract. Support for the real sites needs verified mappings and authorization; do not assert that live order processing works until exercised on those sites.
