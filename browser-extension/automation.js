@@ -53,12 +53,63 @@ var MaleniaAutomation = (() => {
     return to.href;
   }
 
-  async function visit(chromeApi, role, url, sendNative) {
+  const MAX_SEARCHES = 20;
+  async function exactGetSearch(chromeApi, tabId, role, cargo, origin) {
+    if (!["datalens", "asgard"].includes(role) ||
+        typeof cargo !== "string" || !/^[\\w\\-./]{1,128}$/.test(cargo)) {
+      throw new Error("invalid_search");
+    }
+    const results = await chromeApi.scripting.executeScript({
+      target: {tabId},
+      func: (resourceRole, code) => {
+        const fieldName = resourceRole === "datalens" ?
+          "main_partner_code_original" : "cargo_place";
+        const forms = [...document.querySelectorAll("form")].filter(form =>
+          form.method.toLowerCase() === "get" &&
+          form.querySelectorAll('input[type="password"],input[type="hidden"]').length === 0 &&
+          form.querySelectorAll('input[name="' + fieldName + '"]').length === 1 &&
+          form.querySelectorAll("input[name]").length === 1);
+        if (forms.length !== 1) return null;
+        const form = forms[0];
+        const input = form.querySelector('input[name="' + fieldName + '"]');
+        if (!["search", "text"].includes(input.type.toLowerCase())) return null;
+        const action = new URL(form.getAttribute("action") || location.href, location.href);
+        if (action.origin !== location.origin || action.protocol !== "https:" ||
+            action.username || action.password || action.hash || action.search) return null;
+        action.searchParams.set(fieldName, code);
+        return {origin: location.origin, url: action.href};
+      },
+      args: [role, cargo]
+    });
+    const result = results?.[0]?.result;
+    if (!result || result.origin !== origin || typeof result.url !== "string") {
+      throw new Error("unmapped_search_form");
+    }
+    const target = new URL(result.url);
+    if (target.protocol !== "https:" || target.origin !== origin ||
+        target.username || target.password || target.hash ||
+        target.searchParams.size !== 1 ||
+        target.searchParams.get(role === "datalens" ?
+          "main_partner_code_original" : "cargo_place") !== cargo) {
+      throw new Error("unsafe_search_target");
+    }
+    await chromeApi.tabs.update(tabId, {url: target.href});
+  }
+
+  async function visit(chromeApi, role, url, sendNative, searchKey = null) {
     let tabId;
     try {
       const tab = await chromeApi.tabs.create({url, active: false});
       if (!Number.isInteger(tab.id)) throw new Error("invalid_tab");
       tabId = tab.id;
+      if (searchKey !== null) {
+        await waitLoaded(chromeApi, tabId);
+        const current = await chromeApi.tabs.get(tabId);
+        if (new URL(current.url || "").origin !== new URL(url).origin) {
+          throw new Error("search_origin_mismatch");
+        }
+        await exactGetSearch(chromeApi, tabId, role, searchKey, new URL(url).origin);
+      }
       const visited = new Set();
       let expected = url;
       let combinedTable = null;
@@ -198,16 +249,47 @@ var MaleniaAutomation = (() => {
     }
   }
 
-  async function run(chromeApi, input, sendNative, onProgress) {
+  async function run(chromeApi, input, sendNative, onProgress, options = {}) {
     const targets = normalizeTargets(input);
     const results = [];
     const snapshots = {};
     for (const role of ROLES) {
       await onProgress({phase: "reading", role, results: [...results]});
       try {
-        const visitResult = await visit(chromeApi, role, targets[role], sendNative);
-        if (visitResult.table) snapshots[role] = visitResult.table;
-        results.push({role, status: "read", characters: visitResult.characters, pages: visitResult.pages});
+        const searchKeys = role !== "inventory" && options.exactGetSearch ?
+          snapshots.inventory?.rows?.map(row =>
+            row[snapshots.inventory.columns.indexOf("cargo_place")]) : null;
+        if (role !== "inventory" && options.exactGetSearch &&
+            (!Array.isArray(searchKeys) || !searchKeys.length ||
+             searchKeys.length > MAX_SEARCHES || new Set(searchKeys).size !== searchKeys.length ||
+             searchKeys.some(key => typeof key !== "string" ||
+               !/^[\\w\\-./]{1,128}$/.test(key)))) {
+          throw new Error("invalid_inventory_search_keys");
+        }
+        const keys = searchKeys || [null];
+        let table = null, characters = 0, pages = 0;
+        for (const key of keys) {
+          const visitResult = await visit(chromeApi, role, targets[role], sendNative, key);
+          if (options.exactGetSearch && !visitResult.table) {
+            throw new Error("unmapped_search_results");
+          }
+          characters += visitResult.characters;
+          pages += visitResult.pages;
+          if (visitResult.table) {
+            if (!table) table = {columns: visitResult.table.columns,
+              rows: [...visitResult.table.rows]};
+            else {
+              if (table.columns.length !== visitResult.table.columns.length ||
+                  table.columns.some((col, i) => col !== visitResult.table.columns[i])) {
+                throw new Error("changed_search_schema");
+              }
+              table.rows.push(...visitResult.table.rows);
+              if (table.rows.length > 100) throw new Error("too_many_search_rows");
+            }
+          }
+        }
+        if (table) snapshots[role] = table;
+        results.push({role, status: "read", characters, pages});
       } catch {
         // Never expose or log raw page errors; some browser errors contain URLs.
         results.push({role, status: "needs_attention"});
@@ -232,5 +314,5 @@ var MaleniaAutomation = (() => {
     await onProgress(summary);
     return summary;
   }
-  return {ROLES, MAX_TEXT, MAX_PAGES, normalizeTargets, origins, nextPage, waitLoaded, run};
+  return {ROLES, MAX_TEXT, MAX_PAGES, MAX_SEARCHES, normalizeTargets, origins, nextPage, exactGetSearch, waitLoaded, run};
 })();
