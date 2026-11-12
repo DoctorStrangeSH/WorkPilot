@@ -122,3 +122,18 @@ test('browser workspace displays safe progress without order identifiers',()=>{
   assert.match(app,/job\.failed_role/);
   assert.match(app,/Обработано источников/);
 });
+
+test('skills are a first-class reviewed workspace not an inventory-only workflow',()=>{
+  assert.match(app,/label="Навыки" active=\{page==="skills"\}/);
+  assert.match(app,/<SkillsPage connected=\{connected\}\/>/);
+  const skills=fs.readFileSync(path.resolve(__dirname,'../desktop/src/SkillsPage.tsx'),'utf8');
+  assert.match(skills,/get_skills/);
+  assert.match(skills,/skill_action/);
+  assert.match(skills,/Сохранить черновик/);
+  assert.match(skills,/Утвердить/);
+  assert.match(skills,/Веса Qwen не переобучаются/);
+  const ai=fs.readFileSync(path.resolve(__dirname,'../desktop/src/AiPage.tsx'),'utf8');
+  assert.match(ai,/skill_ids:reply\.skill_ids/);
+  assert.match(ai,/Полезен/);
+  assert.match(ai,/Не помог/);
+});
