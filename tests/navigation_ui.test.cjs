@@ -100,7 +100,7 @@ test('browser workspace shows aggregate-only completed audit with no source rows
   assert.match(app, /только предложения, не изменения статусов/);
   const native = fs.readFileSync(path.resolve(__dirname, '../desktop/src-tauri/src/main.rs'), 'utf8');
   assert.match(native, /\/v1\/browser\/audit-summary/);
-  assert.match(native, /browser_audit, permissions/);
+  assert.match(native, /browser_audit, browser_audit_job, permissions/);
 });
 
 test('desktop audit launch is a real command with visible queued and running states',()=>{
