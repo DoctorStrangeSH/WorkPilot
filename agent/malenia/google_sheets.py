@@ -152,7 +152,6 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
                 old.cancelled = True
                 old.status = "cancelled"
                 old.event.set()
-                old.server.server_close()
 
             state = create_oauth_state()
             verifier = create_pkce_verifier()
@@ -337,7 +336,6 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
                 attempt.cancelled = True
                 attempt.status = "cancelled"
                 attempt.event.set()
-                attempt.server.server_close()
             self._access_token = None
             self._access_expires_at = 0.0
         store = self._credential_store()
