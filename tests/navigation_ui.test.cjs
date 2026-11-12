@@ -21,3 +21,13 @@ test('the navigation groups work, knowledge, safety and system areas', () => {
   assert.match(app, /ЗНАНИЯ И БЕЗОПАСНОСТЬ/);
   assert.match(app, /СИСТЕМА/);
 });
+
+
+test('sources page shows truthful connection state and no fake connect actions', () => {
+  assert.match(app, /label="Источники" active=\{page==="sources"\}/);
+  assert.match(app, /Google Sheets · ИНВента/);
+  assert.match(app, /Доступ ChatGPT к вашим сервисам не переносится в Malenia/);
+  assert.match(app, /Malenia пока не читает статусы или историю коробок/);
+  assert.match(app, /Передаёт только заголовок и очищенный URL/);
+  assert.match(app, /Открыть Browser Bridge/);
+});
