@@ -64,3 +64,8 @@ OAuth credentials (Client ID) пользователь должен создат
 - [OAuth 2.0 для Desktop Apps](https://developers.google.com/identity/protocols/oauth2/native-app) — desktop client является public client; Google рекомендует PKCE и поддерживает loopback redirect для desktop apps.
 - [Scopes Google Sheets API](https://developers.google.com/workspace/sheets/api/scopes) — `spreadsheets.readonly` позволяет просматривать таблицы и классифицируется Google как sensitive scope.
 - [Миграция loopback IP flow](https://developers.google.com/identity/protocols/oauth2/resources/loopback-migration) — loopback flow остаётся поддерживаемым для desktop OAuth clients.
+
+
+## Важное ограничение Google OAuth Testing
+
+Для External OAuth consent screen в статусе Testing Google выдаёт refresh token, который истекает через 7 дней, если запрошен не только базовый профиль. Для постоянного использования не оставлять внешний проект в Testing. Для личного использования Google допускает исключение из полной проверки, но может показывать предупреждение о непроверенном приложении и ограничивать число пользователей; для Google Workspace можно рассмотреть Internal OAuth project, если это соответствует организации. После истечения/отзыва refresh token пользователь должен пройти OAuth заново. Источник: https://developers.google.com/identity/protocols/oauth2.
