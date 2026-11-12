@@ -220,7 +220,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
       <article className="panel source-card google-source-card">
         <div className="source-card-top"><span className="source-icon sheets"><Database size={19}/></span><span className={"source-state "+(sheetVerified?"ready":"pending")}>{statusLabel}</span></div>
         <h2>Google Sheets · ИНВента</h2>
-        <p>Отдельная авторизация Malenia. Запрашивается только <code>spreadsheets.readonly</code>: приложение может читать таблицы, но не изменять их.</p>
+        <p>Отдельная авторизация Malenia. Запрашивается только <code>spreadsheets.readonly</code>: приложение может читать таблицы, но не изменять их. Важно: сам Google scope разрешает просмотр всех доступных аккаунту таблиц; Malenia отправляет GET только для ID и диапазона, которые ты явно укажешь.</p>
         {!connected?<p className="source-help">Сначала запустите локальный агент на главной странице.</p>:null}
         {!sheetsAuthorized?
           <div className="google-connect-form">
