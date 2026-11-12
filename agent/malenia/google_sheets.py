@@ -159,7 +159,7 @@ class GoogleSheetsConnector:
 
             server = HTTPServer(("127.0.0.1", 0), CallbackHandler)
             server.timeout = 1.0
-            redirect_uri = f"http://127.0.0.1:{server.server_port}/oauth2/callback"
+            redirect_uri = f"http://127.0.0.1:{server.server_port}"
             try:
                 auth_url = build_authorization_url(client_id, redirect_uri, state, verifier)
             except GoogleOAuthError as error:
