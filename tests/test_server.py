@@ -23,8 +23,8 @@ class FakeGoogleSheets:
     def status(self):
         return {"connected": False, "status": "not_connected", "error": None}
 
-    def start_connect(self, client_id):
-        self.calls.append(("connect", client_id))
+    def start_connect(self, client_id, client_secret=None):
+        self.calls.append(("connect", client_id, client_secret))
         return {"status": "authorizing", "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth?fixture"}
 
     def read_values(self, spreadsheet_id, range_a1):
@@ -169,6 +169,9 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual(auth["status"], "authorizing")
         self.assertTrue(auth["authorization_url"].startswith("https://accounts.google.com/"))
+        self.assertIn(("connect", "fixture", None), self.google_sheets.calls)
+        self.assertEqual(self.api(connect_path, {"client_id": "fixture", "client_secret": "optional"})[0], 200)
+        self.assertIn(("connect", "fixture", "optional"), self.google_sheets.calls)
 
         self.assertEqual(self.api(read_path, {"spreadsheet_id": "fixture"})[0], 422)
         code, read = self.api(read_path, {"spreadsheet_id": "sheet-id-fixture", "range": "Orders!A1:B2"})
