@@ -397,7 +397,9 @@ test('dynamic search widget is recognized without reading its value or clicking 
     scripting:{async executeScript({func,args}) {
       const document={querySelectorAll:selector=>
         selector==='form'?[]:
-        selector==='[role="searchbox"],input[type="search"]'?[{type:'search'}]:[]};
+        selector==='input[type="search"],input[role="searchbox"]'?
+          [{type:'search',closest:()=>null,getAttribute:key=>
+            key==='aria-label'?'main_partner_code_original':null}]:[]};
       const location={origin:'https://analytics.example',href:'https://analytics.example/orders'};
       return [{result:vm.runInNewContext('('+func.toString()+')(...args)',
         {document,location,URL,args})}];
