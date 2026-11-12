@@ -390,14 +390,14 @@ fn get_ai_status(state: State<'_, AgentState>) -> Result<Value, String> {
 }
 
 #[tauri::command]
-async fn chat_ai(state: State<'_, AgentState>, model: String, messages: Value, use_knowledge: Option<bool>, knowledge_only: Option<bool>, use_web: Option<bool>) -> Result<Value, String> {
+async fn chat_ai(state: State<'_, AgentState>, model: String, messages: Value, use_knowledge: Option<bool>, knowledge_only: Option<bool>, use_web: Option<bool>, reasoning_mode: Option<String>) -> Result<Value, String> {
     let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
         .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
         let response = reqwest::blocking::Client::new()
             .post(format!("http://{API_HOST}:{API_PORT}/v1/ai/chat"))
             .header("Authorization", format!("Bearer {token}"))
-            .json(&serde_json::json!({"model": model, "messages": messages, "use_knowledge": use_knowledge.unwrap_or(true), "knowledge_only": knowledge_only.unwrap_or(false), "use_web": use_web.unwrap_or(false)}))
+            .json(&serde_json::json!({"model": model, "messages": messages, "use_knowledge": use_knowledge.unwrap_or(true), "knowledge_only": knowledge_only.unwrap_or(false), "use_web": use_web.unwrap_or(false), "reasoning_mode": reasoning_mode.unwrap_or_else(|| "fast".to_string())}))
             .timeout(Duration::from_secs(120))
             .send().map_err(|_| "Модель не ответила. Запрос не повторён автоматически".to_string())?;
         let status = response.status();
