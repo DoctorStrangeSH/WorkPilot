@@ -47,9 +47,10 @@ class BatchPreviewTests(unittest.TestCase):
         result = preview_batch([first, second])
         self.assertEqual(result["total"], 2)
         self.assertEqual(result["results"][1]["source_row"], 42)
-        self.assertEqual(result["results"][1]["proposal"]["reason_code"],
-                         "duplicate_cargo_place_and_date")
-        self.assertIsNone(result["results"][1]["proposal"]["proposed_status"])
+        self.assertEqual(result["summary"]["manual_review"], 2)
+        for row in result["results"]:
+            self.assertEqual(row["proposal"]["reason_code"], "duplicate_cargo_place_and_date")
+            self.assertIsNone(row["proposal"]["proposed_status"])
 
     def test_same_cargo_place_on_different_inventory_date_is_not_duplicate(self):
         result = preview_batch([
