@@ -5,7 +5,7 @@ Last updated: 2026-11-12
 ## Current request and decisions
 
 - User confirmed manual tab sharing worked on the previous installed build and now requests a **complete** Malenia rename. User states there are no tabs/tasks to preserve. The prior display-only compatibility policy is superseded: no implicit import or migration of previous product data.
-- Desktop version 0.3.0; Python runtime 0.2.0; extension 1.1.0. All internal identifiers/resources/environment variables/package names now use Malenia.
+- Current installed desktop: 0.4.1 (release/protocol handshake); Python package metadata: 0.2.0; extension: 1.1.0. Historical milestones below describe their state at the time. All internal identifiers/resources/environment variables/package names now use Malenia.
 - Python package `agent/malenia`, entry point `malenia-agent`, desktop crate `malenia-desktop`, main binary `Malenia.exe`, app ID `com.malenia.desktop`, native host `com.malenia.browser`.
 - Data/config: `%LOCALAPPDATA%/Malenia`, database `malenia.sqlite3`, extension config `browser_bridge.json`, manifest `browser-bridge/com.malenia.browser.json`. Old installations/data are not read, imported or automatically deleted.
 - Frozen resources: `resources/malenia-agent/malenia-agent.exe` and `resources/malenia-native-host/malenia-native-host.exe` with adjacent PyInstaller `_internal` directories. Entry scripts: `packaging/malenia_agent_entry.py` and `packaging/malenia_native_host_entry.py`.
@@ -224,7 +224,7 @@ See LOCAL_AI.md. main must stay unchanged and PR #2 unmerged.
   existing user data and restrict any process stops to owned Malenia processes.
 
 
-## 0.4.1 task review and upgrade safeguards (source prepared)
+## 0.4.1 task review and upgrade safeguards (delivered)
 
 - AI replies offer an explicit Create task button, editable title/description
   review and a separate queue confirmation. No tool execution is enabled.
@@ -248,6 +248,40 @@ See LOCAL_AI.md. main must stay unchanged and PR #2 unmerged.
   Access denial now discards at most 32 KiB without parsing, with a 250 ms bound,
   before sending 401/403. This never invokes chat or task creation.
 - Local: 94 Python tests, 16 Node tests and production frontend build passed.
-  Rust/NSIS build and installed-upgrade execution still require Windows CI.
-  Installed user version remains 0.4.0 until successful verified delivery.
+  Rust/NSIS build and installed-upgrade execution subsequently passed Windows CI.
+  Installed version 0.4.1 was verified as recorded below.
 - main baseline and draft/unmerged PR #2 were checked unchanged before publication.
+
+
+## Verified 0.4.1 delivery (2026-11-12)
+
+- Published implementation 6d04ea98f31798db3b0faef03bad85fe5ba68f52; all 18
+  changed files fetched and compared. First installed-upgrade CI failed because
+  the test's 2-second HTTP timeout was shorter than Ollama status's 3-second
+  timeout. Fixed only the test to allow 10 seconds in source revision
+  ba8aced1180bc28ad95695a9e325773bb0513b7f; fetched and compared that file too.
+- Successful Windows installer run 43196940816; Desktop checks 43196940746;
+  Python tests 43196940748. PS5.1 registration passed 43195638724 on unchanged
+  registration source. 94 Python / 16 Node tests, frontend, Rust, frozen agent,
+  native host, registration and real desktop single-instance checks passed.
+- CI installed-upgrade test passed: initial hashes match, running agent causes
+  nonzero setup exit without killing it, stopped-agent reinstall restores a
+  deliberately stale executable, and fixture task/key/data survive. No user
+  database or browser profile is involved in this test.
+- Installer artifact 13934495192 ZIP SHA256:
+  a422038b12b48aeba9aa9a5bfc24dbb7a02feddbae0c87b3938632cc25e8364e.
+  Verified before extraction/install. Installed with /S /UPDATE /NS after
+  confirming no processes from the installed Malenia directory were running.
+  Setup returned zero; all 125 installed resource files AND desktop executable
+  matched the extracted verified payload. Desktop file version is 0.4.1.
+- Actual installed frozen agent passed /v1/runtime release/capability check and
+  duplicate-task submission check using an isolated temporary database. Actual
+  installed agent -> existing local Ollama -> Qwen 0.5B answered 2 + 2 = 4.
+  The verification-owned agent was stopped; existing model server preserved.
+  User model/settings/tasks/extension registration were not removed or replaced.
+- GitHub API, commit-pinned raw and cache-busted branch raw registration script
+  were fetched again and are identical ASCII. SHA256 remains
+  f80ece220c84267ba9f0bb5ebdbaa47e8e43046cb674a552983187a2275a7392.
+- Task creation queues only reviewed text. No automatic execution, browser DOM
+  access or automatic context was added. User click-through remains a user test.
+- main must remain 712d0a8e1885cca402eaa4fdda041bb09b50e397; PR #2 draft/unmerged.

@@ -53,7 +53,7 @@ planning probe. Treat it as an experimental baseline, never as verified business
 facts. Tasks and browser actions are still not executed by the model.
 
 
-### Reviewed task creation (0.4.1 source)
+### Reviewed task creation (0.4.1)
 
 An assistant reply can be copied into an editable task review. Saving requires
 an explicit click and only queues the reviewed text; the model cannot execute
