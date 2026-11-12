@@ -60,7 +60,7 @@ test('offline order-checking skill is reachable and has no write actions', () =>
   assert.match(order, /invoke<Preview>\("preview_order"/);
   assert.match(order, /"В пути"/);
   assert.match(order, /"Принят на ФФ"/);
-  assert.match(order, /2 ШК Выдан/);
+  assert.match(order, /outcome\?\.comment/);
   assert.match(order, /ничего не отправляет в эти системы/);
   assert.match(order, /Строка в ИНВенте не изменена/);
   assert.doesNotMatch(order, /update_sheet|write_sheet|fetch\(/);
