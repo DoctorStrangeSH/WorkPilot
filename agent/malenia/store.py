@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import time
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -72,6 +73,15 @@ class TaskStore:
                     message TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     FOREIGN KEY(task_id) REFERENCES tasks(id)
+                );
+
+                CREATE TABLE IF NOT EXISTS browser_audit_job (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    job_id TEXT NOT NULL,
+                    status TEXT NOT NULL CHECK(status IN ('pending','running','completed','failed','expired')),
+                    created_at TEXT NOT NULL,
+                    created_unix REAL NOT NULL,
+                    updated_at TEXT NOT NULL
                 );
 
                 CREATE TABLE IF NOT EXISTS browser_audit_summary (
@@ -252,3 +262,78 @@ class TaskStore:
                 "summary": {"found": row["found"], "in_progress": row["in_progress"],
                             "manual_review": row["manual_review"]},
                 "read_only": True, "source": "browser_tables"}
+
+    def _expire_browser_audit(self, db: sqlite3.Connection) -> None:
+        # Never leave a job indefinitely stuck after the extension crashes.
+        now = time.time()
+        db.execute(
+            """UPDATE browser_audit_job SET status='expired', updated_at=?
+               WHERE id=1 AND ((status='pending' AND created_unix < ?)
+                  OR (status='running' AND created_unix < ?))""",
+            (_now(), now - 900, now - 1800),
+        )
+
+    def latest_browser_audit_job(self) -> dict[str, Any] | None:
+        with self._session() as db:
+            self._expire_browser_audit(db)
+            row = db.execute(
+                "SELECT job_id, status, created_at, updated_at "
+                "FROM browser_audit_job WHERE id=1"
+            ).fetchone()
+        return dict(row) if row else None
+
+    def request_browser_audit(self) -> dict[str, Any]:
+        """Single bounded browser audit requested through the authenticated desktop API."""
+        with self._session() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._expire_browser_audit(db)
+            active = db.execute(
+                "SELECT status FROM browser_audit_job WHERE id=1"
+            ).fetchone()
+            if active and active["status"] in {"pending", "running"}:
+                raise SubmissionConflict("browser_audit_already_active")
+            now = _now()
+            job_id = str(uuid.uuid4())
+            db.execute(
+                """INSERT INTO browser_audit_job
+                   (id,job_id,status,created_at,created_unix,updated_at)
+                   VALUES (1,?,'pending',?,?,?)
+                   ON CONFLICT(id) DO UPDATE SET
+                   job_id=excluded.job_id,status=excluded.status,
+                   created_at=excluded.created_at,created_unix=excluded.created_unix,
+                   updated_at=excluded.updated_at""",
+                (job_id, now, time.time(), now),
+            )
+        return {"job_id": job_id, "status": "pending", "created_at": now,
+                "updated_at": now}
+
+    def claim_browser_audit(self) -> dict[str, Any] | None:
+        """Native host may atomically claim a pending desktop-requested job once."""
+        with self._session() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._expire_browser_audit(db)
+            row = db.execute(
+                "SELECT job_id,created_at FROM browser_audit_job "
+                "WHERE id=1 AND status='pending'"
+            ).fetchone()
+            if row is None:
+                return None
+            db.execute(
+                "UPDATE browser_audit_job SET status='running',updated_at=? WHERE id=1",
+                (_now(),),
+            )
+        return {"job_id": row["job_id"], "status": "running"}
+
+    def finish_browser_audit(self, job_id: str, succeeded: bool) -> bool:
+        if (not isinstance(job_id, str) or len(job_id) != 36
+                or not isinstance(succeeded, bool)):
+            return False
+        with self._session() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._expire_browser_audit(db)
+            cursor = db.execute(
+                """UPDATE browser_audit_job SET status=?,updated_at=?
+                   WHERE id=1 AND job_id=? AND status='running'""",
+                ("completed" if succeeded else "failed", _now(), job_id),
+            )
+            return cursor.rowcount == 1
