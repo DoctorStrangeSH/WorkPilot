@@ -59,11 +59,13 @@ var MaleniaAutomation = (() => {
         func: () => {
           // Only rendered text: no fields, form input values, cookies or hidden DOM.
           const text = document.body ? document.body.innerText : "";
-          return typeof text === "string" ? text.slice(0, 16000) : "";
+          return {origin: location.origin, text: typeof text === "string" ? text.slice(0, 16000) : ""};
         }
       });
-      const text = results?.[0]?.result;
-      if (typeof text !== "string" || !text.trim()) throw new Error("empty_page");
+      const snapshot = results?.[0]?.result;
+      if (!snapshot || snapshot.origin !== finalUrl.origin ||
+          typeof snapshot.text !== "string" || !snapshot.text.trim()) throw new Error("unexpected_document");
+      const text = snapshot.text;
       const response = await sendNative({
         type: "inspect_active_page",
         page: {url: finalUrl.origin + finalUrl.pathname, text},
