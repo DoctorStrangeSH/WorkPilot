@@ -66,3 +66,24 @@
 - Не читаются DOM, содержимое страницы, формы, cookies, пароли, история, localStorage или файлы профиля.
 - Native Messaging host использует бинарный length-prefixed JSON, ограничение 1 MiB и пишет диагностику только в stderr.
 - Поддержка и поиск Native Messaging host должны быть проверены на точной версии/канале Яндекс Браузера пользователя; наличие корпоративных политик само по себе не доказывает совместимость каждой потребительской сборки.
+
+
+## Explicit runtime installation and public search (0.6.0)
+
+- Runtime setup downloads only the pinned official Windows x64 archive over HTTPS,
+  validates exact size and SHA256 before extraction, rejects unsafe paths/symlinks
+  and oversized archives, and stages in a unique app-owned directory. It preserves
+  bundled upstream licenses. No system installer, administrator privileges, startup
+  entry, driver changes or changes to an existing server. Failed staging is removed;
+  a retry downloads again. Closing during download may leave an unused staging folder.
+- Public search is off by default and explicit per chat setting. Only the current
+  question is sent to Bing; search queries are processed under that provider's terms.
+  Stored memories, notes, tasks and previous turns are never added to the query.
+- The network endpoint is fixed, proxy use disabled, redirects rejected, and the XML
+  response is bounded with DTD/entities rejected. Result pages are never fetched.
+  Only HTTP(S) source links are displayed; opening one is a separate user click in
+  their ordinary browser. Browser profiles/cookies/passwords/history are not accessed
+  by Malenia. The browser's normal behavior applies when the user opens a source.
+- Web snippets are untrusted data, not action authorization. Web mode excludes local
+  knowledge/history and requires structured, validated known source IDs. A citation
+  establishes which supplied snippet was referenced, not truth or relevance.

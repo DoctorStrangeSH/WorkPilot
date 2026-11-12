@@ -51,3 +51,17 @@ The current MVP persists and lists tasks but does not execute them. Browser Brid
 There is currently no live request producer. Only a future trusted internal
 adapter may create requests after obtaining browser-authoritative target identity.
 See BROWSER_PERMISSIONS.md for lifecycle and integration requirements.
+
+
+## Local chat and explicit public search (0.6.0)
+
+POST `/v1/ai/chat` requires the private loopback bearer. Fields: `model`, `messages`,
+optional booleans `use_knowledge` (default true), `knowledge_only` (false), `use_web` (false).
+`use_web` and `knowledge_only` cannot both be true. Public search sends only the last
+user message to the fixed Bing RSS endpoint, never chat history or the knowledge store.
+Only bounded snippets and source links are returned, not full pages. Search mode uses
+only the current question and search snippets for local inference. Known citation IDs
+are validated, not factual correctness. Reply `answer_mode` is `general`, `knowledge_only`
+or `web`; `local_only` is false after external search, although inference remains local.
+No results returns `generated=false`; network/parse failures return `web_*` errors.
+GET `/v1/runtime` release is `0.6.0` and includes `public_search` capability.

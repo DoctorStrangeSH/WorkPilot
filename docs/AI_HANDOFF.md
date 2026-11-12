@@ -393,7 +393,7 @@ See LOCAL_AI.md. main must stay unchanged and PR #2 unmerged.
   answers follow from source text. No autonomous actions or internet lookup added.
 
 
-## 0.6.0 — runtime setup and explicit public search (development)
+## 0.6.0 — runtime setup and explicit public search (implemented; see verified delivery below)
 
 - User requests in-app Ollama installation and internet access; publication to feat/desktop-shell is authorized. main and draft PR #2 stay unchanged/unmerged.
 - Added pinned official full portable runtime with size/SHA256 checks before extraction, safe ZIP paths, symlink/size bounds, unique staging, free-space preflight, download progress and async shell start. Existing healthy server or standard Ollama reused. No administrator/startup/driver changes. Model download first prepares runtime.
@@ -401,3 +401,15 @@ See LOCAL_AI.md. main must stay unchanged and PR #2 unmerged.
 - Runtime source/schema release 0.6.0; public_search capability required by shell. Installed current-PC version remains 0.4.1 until actual verified installation. Target 32GB/NVIDIA PC is separate; exact GPU still unknown. No heavy model downloaded here.
 - Windows CI includes Rust archive verification tests and a separate real official-runtime download/hash/extract/version/start test on an isolated loopback port without model weights.
 - Local checks and Windows CI delivery evidence will be appended after completion. This section describes code, not an installed update.
+
+
+## Verified 0.6.0 delivery (2026-11-12)
+
+- Final executable code revision: `1ce83249358a4904cc025a616632623dc34cc234` on feat/desktop-shell. Initial actual Windows install test caught a stack overflow in nested 1MiB stack buffers; fixed with heap-backed 64KiB streaming buffers. Do not distribute the earlier 9c2ec92 build.
+- Python matrix: successful run `43211292056`; local Python 120 tests and Node 22 tests passed, frontend build and diff whitespace checks passed.
+- Windows desktop checks `43211292311` / job `131159270187`: cargo check, archive hash/size and traversal unit tests, and REAL official 1.6GB runtime download + SHA256 + full CUDA extraction + version + serve/readiness on isolated loopback port all passed. Official runtime smoke took 89.02s; no model weights downloaded there.
+- Windows installer `43211292109` / job `131159271354`: Windows PowerShell 5.1 ASCII/parse checks and actual registration/re-registration/data-preservation path passed; frozen/native-host/single-instance checks passed; actual NSIS install/resource-hash/locked-agent refusal/reinstall/preserved task-and-knowledge tests passed.
+- Installer artifact `13940079950`, ZIP SHA256 `9d0b491299f309465b3ea175d2a4c9cd8deda5f91bc177ec32dabff8294b9317`, verified before extraction. Installer ProductVersion confirmed 0.6.0.
+- Extracted frozen agent was started with temporary app data, random bearer and ephemeral port. Live public query «столица Японии» via web mode returned «Токио», four snippets and three valid cited IDs. Empty local knowledge mode returned deterministic refusal without generation; combining web/knowledge-only rejected with 422. Temporary process/data cleaned up; no working install/registration changed.
+- Prepared `outputs/Malenia-0.6.0-Sherlock-Windows.zip`, 11119309 bytes, 19 files, outer SHA256 `a91bc6aa55be55698211f130522f255fb1775b8df49ea64be5415f4a97a488ec`. Includes verified installer, in-app runtime/search guide, sample notes, generic extension-ID setup and UTF-8 per-file SHA256 manifest; all ZIP CRCs and manifest hashes verified. Contains no engine/model weights or personal extension ID/path.
+- Current-PC existing installation was not upgraded; this is a prepared/tested kit for the separate target PC. Actual target GPU/VRAM and 8B model quality/performance still require testing there. Search uses snippets, not full-page browsing; validated citations do not prove factual truth. main stays at `712d0a8e1885cca402eaa4fdda041bb09b50e397`, PR #2 stays draft/open/unmerged.

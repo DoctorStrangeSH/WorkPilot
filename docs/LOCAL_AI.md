@@ -1,4 +1,4 @@
-# Malenia 0.5.1 / Sherlock local assistant
+# Malenia 0.6.0 / Sherlock local assistant
 
 Sherlock is the assistant's display name; Malenia is the application. The ordinary
 UI shows Sherlock variants; underlying model IDs and upstream notices are recorded
@@ -11,7 +11,7 @@ model/VRAM is not yet supplied. Development machine has 15.55 GiB RAM, Intel
 integrated graphics and roughly 1.4 GiB available. Do not install/load an 8B model
 on the development PC. Its existing 0.4.1 installation is preserved at this stage.
 
-On the target PC install the full official Ollama Windows runtime, then Malenia.
+On the target PC install Malenia. It automatically prepares the official portable runtime on an explicit start/install click if needed.
 Start the agent, open AI models, start Sherlock, expand Install Sherlock and click
 Download chosen Sherlock. Main is qwen3:8b (about 5 GB download), light qwen3:4b
 (about 3 GB), extended qwen3:14b (about 9 GB). Downloads are explicit, local-runtime
@@ -20,8 +20,7 @@ only, allowlisted, proxy-free and reject redirects. They require respectively
 Only one loaded model/request is configured. Ollama handles NVIDIA offload based
 on actual VRAM; GPU utilization on the target PC has not been verified.
 
-Start searches portable LOCALAPPDATA/Malenia/ollama first, then the standard
-LOCALAPPDATA/Programs/Ollama runtime. An already healthy local server is reused
+Start reuses a healthy server or the standard LOCALAPPDATA/Programs/Ollama runtime; otherwise it installs/reuses the full pinned LOCALAPPDATA/Malenia/ollama-0.40.16 runtime. An already healthy local server is reused
 without adopting or killing it. App-owned runtime is loopback only with cloud
 models disabled, one parallel request/model, context 2048 default, keep-alive 30s.
 Explicit inference sets context 4096 for Sherlock or retrieved knowledge. A full
@@ -59,7 +58,7 @@ from the development machine is not a GPU installation kit.
 
 Ollama destination fixed 127.0.0.1:11434; proxies ignored, redirects rejected.
 Allowed legacy local tags plus Qwen3 0.6b/4b/8b/14b; cloud metadata excluded.
-POST /v1/ai/chat accepts model/messages and optional booleans use_knowledge/knowledge_only, returns
+POST /v1/ai/chat accepts model/messages and optional booleans use_knowledge/knowledge_only/use_web, returns
 actual retrieved source metadata. <=12 alternating messages, <=2000 characters
 per message, <=8000 total; backend trims oldest pairs if reference+history exceeds
 6500 characters. Deterministic temperature 0, output <=384 tokens, 90s timeout,
@@ -79,7 +78,7 @@ has run on the second PC. Keep these claims separate from passing software tests
 Intel integrated graphics on the development PC shares RAM. Earlier tiny-model
 probe: CPU 50.17 vs iGPU 45.93 tokens/s on a short test, so CPU stayed default.
 This says nothing about the second PC's NVIDIA performance. No drivers/global
-environment variables were changed. Internet factual search is not implemented.
+environment variables were changed. Opt-in public search snippets are available in 0.6.0 (see below).
 
 
 ## 0.5.1: exact identifiers, passage search and knowledge-only mode
@@ -97,7 +96,7 @@ returns a deterministic insufficient-information response before contacting Olla
 Malformed replies, missing citations, duplicate/unknown IDs and wrong field types
 are rejected. The schema and validation establish reference integrity, not factual
 entailment: a model can still draw an incorrect conclusion from a genuine excerpt.
-No internet fact checking, embedding model or autonomous tools were added.
+The 0.5.1 milestone did not add internet search, embeddings or autonomous tools.
 
 
 ## Malenia 0.6.0: установка движка и интернет
