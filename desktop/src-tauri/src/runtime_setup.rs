@@ -10,7 +10,7 @@ fn progress(s: String) { if let Ok(mut slot) = STATUS.lock() { *slot = s; } }
 fn verify(path: &Path, size: u64, hash: &str) -> Result<(), String> {
     let mut file = File::open(path).map_err(|_| "Не удалось прочитать архив")?;
     if file.metadata().map_err(|_| "Не удалось проверить архив")?.len() != size { return Err("Неполная загрузка движка".into()); }
-    let mut digest = Sha256::new(); let mut buf = [0u8; 1024 * 1024];
+    let mut digest = Sha256::new(); let mut buf = vec![0u8; 64 * 1024];
     loop { let n = file.read(&mut buf).map_err(|_| "Ошибка чтения архива")?; if n == 0 { break; } digest.update(&buf[..n]); }
     if format!("{:x}", digest.finalize()) != hash { return Err("Контрольная сумма движка не совпала. Установка остановлена".into()); }
     Ok(())
@@ -60,7 +60,7 @@ pub fn ensure(root: &Path) -> Result<PathBuf, String> {
         let client = reqwest::blocking::Client::builder().https_only(true).timeout(Duration::from_secs(1800)).connect_timeout(Duration::from_secs(20)).build().map_err(|_| "Не удалось начать загрузку")?;
         let mut response = client.get(URL).send().map_err(|_| "Не удалось скачать движок. Проверьте интернет")?.error_for_status().map_err(|_| "Сервер загрузки движка недоступен")?;
         let mut output = File::create(&archive).map_err(|_| "Не удалось сохранить архив")?;
-        let mut buf = [0u8; 1024 * 1024]; let mut received = 0u64; let mut percent = 0;
+        let mut buf = vec![0u8; 64 * 1024]; let mut received = 0u64; let mut percent = 0;
         loop {
             let n = response.read(&mut buf).map_err(|_| "Загрузка прервана. Повторите установку")?;
             if n == 0 { break; }
