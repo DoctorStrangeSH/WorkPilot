@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {KnowledgePage} from "./KnowledgePage";
+import {SkillsPage} from "./SkillsPage";
 import { AiPage } from "./AiPage";
 import { OrderCheckPage } from "./OrderCheckPage";
 import { OrderBatchPage } from "./OrderBatchPage";
@@ -19,9 +20,9 @@ type BrowserAudit = { checked_at:string; total:number; summary:{found:number;in_
 type BrowserAuditJob = { job_id:string; status:"pending"|"running"|"completed"|"failed"|"expired"; created_at:string; updated_at:string; current_role:"inventory"|"datalens"|"asgard"|null; completed_sources:number; attention_sources:number; failed_role:"inventory"|"datalens"|"asgard"|null };
 type Resources = { total_memory_bytes:number; available_memory_bytes:number; used_memory_percent:number; logical_processors:number; cpu_usage_percent:number; mode:"normal"|"economy"|"emergency"; recommended_parallel_jobs:number; };
 type Dashboard = { running:boolean; resources:Resources; tasks:Task[]; events:EventItem[]; browser_tabs:BrowserTab[]; browser_audit:BrowserAudit|null; browser_audit_job:BrowserAuditJob|null; permissions:PermissionRequest[]; };
-type Page = "overview"|"tasks"|"browser"|"sources"|"orders"|"order_batch"|"ai"|"settings"|"permissions"|"knowledge";
+type Page = "overview"|"tasks"|"browser"|"sources"|"orders"|"order_batch"|"ai"|"settings"|"permissions"|"knowledge"|"skills";
 
-const labels:Record<Page,string>={overview:"Главная",tasks:"Задания",browser:"Браузер",sources:"Источники",orders:"Проверка заказа",order_batch:"Список заказов",ai:"Ассистент",settings:"Настройки",permissions:"Разрешения",knowledge:"Память и знания"};
+const labels:Record<Page,string>={overview:"Главная",tasks:"Задания",browser:"Браузер",sources:"Источники",orders:"Проверка заказа",order_batch:"Список заказов",ai:"Ассистент",settings:"Настройки",permissions:"Разрешения",knowledge:"Память и знания",skills:"Навыки"};
 const bytes=(n:number)=>n ? (n/1024/1024/1024).toFixed(1)+" ГБ" : "—";
 const time=(v:string)=>{try{return new Intl.DateTimeFormat("ru-RU",{hour:"2-digit",minute:"2-digit"}).format(new Date(v));}catch{return v;}};
 
@@ -76,6 +77,7 @@ export default function App(){
       </nav>
       <div className="nav-label separated">ЗНАНИЯ И БЕЗОПАСНОСТЬ</div>
       <nav>
+        <Nav icon={<BrainCircuit/>} label="Навыки" active={page==="skills"} onClick={()=>setPage("skills")}/>
         <Nav icon={<Database/>} label="Память и знания" active={page==="knowledge"} onClick={()=>setPage("knowledge")}/>
         <Nav icon={<ShieldCheck/>} label="Разрешения" active={page==="permissions"} count={data?.permissions.filter(p=>p.status==="pending").length} onClick={()=>setPage("permissions")}/>
       </nav>
@@ -121,6 +123,7 @@ export default function App(){
         {page==="orders"&&<OrderCheckPage connected={connected}/>}
         {page==="order_batch"&&<OrderBatchPage connected={connected}/>}
         {page==="knowledge"&&<KnowledgePage connected={connected}/>}
+        {page==="skills"&&<SkillsPage connected={connected}/>}
         {page==="ai"&&<AiPage connected={connected} onTaskCreated={()=>void refresh()}/>}
         {page==="settings"&&<section className="page"><div className="page-head"><div><div className="eyebrow">КОНФИГУРАЦИЯ</div><h1>Настройки</h1><p>Состояние локальной среды и параметры запуска.</p></div></div><div className="settings-grid"><Setting icon={<Database/>} title="Локальный агент" text="Python Runtime слушает только localhost." value={connected?"Запущен":"Остановлен"} action={<button className={connected?"danger":"primary"} onClick={connected?stopAgent:runAgent} disabled={busy}>{connected?<Square size={14}/>:<Play size={14}/>} {connected?"Остановить":"Запустить"}</button>}/><Setting icon={<ShieldCheck/>} title="Приватность" text="Секреты браузера не извлекаются. API доступен только локально." value="Local-first"/><Setting icon={<Cpu/>} title="Среда разработки" text="Windows · Python 3.11+ · SQLite · Tauri 2" value="Версия 0.6.0"/><Setting icon={<Globe2/>} title="Будущие подключения" text="Ручная передача вкладок Яндекс Браузера доступна через Browser Bridge. Шерлок поддерживает локальную модель и включаемый интернет-поиск." value="Доступны"/></div></section>}
       </div>
