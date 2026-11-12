@@ -304,6 +304,11 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
                 attempt.server.server_close()
             except OSError:
                 pass
+            # Do not retain one-use authorization material after completion.
+            attempt.code = None
+            attempt.verifier = ""
+            attempt.state = ""
+            attempt.client_secret = None
 
     def status(self) -> dict[str, Any]:
         with self._lock:
