@@ -55,6 +55,10 @@ DataLens adapter должен передавать исходное поле `ma
 OAuth credentials (Client ID) пользователь должен создать в своём Google Cloud проекте и передать приложению через локальный экран настройки. Не добавлять credentials в Git и не просить пользователя присылать refresh token.
 
 
+## Подготовленные OAuth building blocks
+
+`agent/malenia/google_oauth.py` содержит чистые функции для Desktop OAuth client ID validation, PKCE S256, random state, строго локального redirect `127.0.0.1`, проверки callback и строгой проверки выданного scope/token response. Сетевого flow, запуска браузера, callback listener и Sheets API client пока нет; это ещё не подключение Google.
+
 ## Официальные ссылки Google для OAuth этапа
 
 - [OAuth 2.0 для Desktop Apps](https://developers.google.com/identity/protocols/oauth2/native-app) — desktop client является public client; Google рекомендует PKCE и поддерживает loopback redirect для desktop apps.
