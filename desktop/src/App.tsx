@@ -228,7 +228,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
               <input value={clientId} onChange={e=>setClientId(e.target.value)} maxLength={300} autoComplete="off" spellCheck={false} placeholder="…apps.googleusercontent.com" disabled={!connected||busy}/>
             </label>
             <button className="primary source-action" disabled={!connected||busy||!clientId.trim()||sheetsStatus.status==="authorizing"} onClick={()=>void connectSheets()}>{busy?"Подключаем…":"Подключить Google"}</button>
-            <small>Client ID создаётся в Google Cloud Console для приложения типа Desktop. Client Secret не нужен. После нажатия откроется системный браузер, где ты сам подтвердишь доступ.</small>
+            <small>Client ID создаётся в Google Cloud Console для приложения типа Desktop. Включи Google Sheets API и добавь свой аккаунт в Test users, если экран согласия находится в режиме Testing. Client Secret не нужен. После нажатия откроется системный браузер, где ты сам подтвердишь доступ.</small>
           </div>:
           <div className="google-read-form">
             <label>ID таблицы
