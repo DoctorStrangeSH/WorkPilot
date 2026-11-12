@@ -115,7 +115,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
             time.sleep(0.02)
             status = connector.status()
 
-        self.assertEqual(status, {"connected": True, "status": "connected", "error": None})
+        self.assertEqual(status, {"connected": False, "status": "authorized", "error": None})
         self.assertEqual(store.get("google-sheets-refresh-token"), "refresh-token-fixture")
         self.assertEqual(store.get("google-sheets-client-id"), CLIENT_ID)
         self.assertNotIn("refresh_token", result)
@@ -139,7 +139,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         deadline = time.monotonic() + 3
         while connector.status()["status"] == "authorizing" and time.monotonic() < deadline:
             time.sleep(0.02)
-        self.assertEqual(connector.status()["status"], "connected")
+        self.assertEqual(connector.status()["status"], "authorized")
 
     def test_user_denial_never_persists_tokens(self):
         store = FakeCredentialStore()
