@@ -130,3 +130,12 @@ Follow-up work: permission-reviewed site adapters for in-page search/pagination 
 Read-only audit now supports ordinary HTML pagination through an explicit `<a rel="next" href="...">` link. For each of the three configured resources the extension opens one inactive tab and automatically follows at most **five pages** on the exact same HTTPS origin, appending matching table rows before attempting reconciliation. The next URL is taken from the rendered page, not generated or guessed; credentials, fragments, custom ports, cross-origin redirects and circular page links are rejected. Each page remains read-only and each result is sent to the trusted local host without storing source text. The extension closes only its own tab even after an error.
 
 If a table changes columns, contains more than 100 total rows, has malformed cells, exposes an unrecognized pagination scheme (such as JavaScript buttons), or continues beyond five pages, Malenia must not claim a complete audit. The supported link navigation is still only a **prototype for conventional HTML tables**. DataLens, ИНВента and Asgard may use SPA grids, custom pagination or internal search; those require dedicated reviewed adapters before real unattended order checking works. Reading the visible last page does not prove there are no additional records in a virtualized source. No status writes are performed.
+
+
+## Accessible SPA grid reading (experimental)
+
+The automatic read-only walker additionally recognizes visible WAI-ARIA tables/grids using `role="grid"` or `role="table"`, `role="row"`, `role="columnheader"` and `role="gridcell"`/`role="cell"`. The same strict, literal per-resource column contract applies as for HTML tables. It never reads form inputs or site credentials, and does not click controls.
+
+To prevent false conclusions from virtual scrolling, an ARIA grid is eligible only if its **explicit `aria-rowcount` exactly matches the number of currently rendered rows (including the header)**. Missing or mismatched counts, too many rows, malformed data or unknown headings make the corresponding reading require attention rather than proposing an order status. Some genuine small grids do not expose an explicit count and are therefore intentionally unsupported until a site-specific adapter verifies completeness.
+
+This is a generic capability, **not evidence** that actual ИНВента, DataLens or Asgard use these roles or expose compatible headings. Their concrete search/navigation logic remains unimplemented and requires inspection in the user's authorized browser session.
