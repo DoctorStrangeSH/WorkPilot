@@ -200,3 +200,37 @@ test('pagination cycle never produces a partial reconciliation', async () => {
   assert.equal(reconciles,0);
   assert.equal(chrome.stats.removed,3);
 });
+
+test('virtualized grid with missing rows fails closed without reconciliation', async () => {
+  const api=runner(), chrome=fakeBrowser();
+  chrome.scripting.executeScript=async ({args})=>[{
+    result:{origin:'https://' + ({
+      inventory:'inventory.example',datalens:'analytics.example',asgard:'asgard.example'
+    }[args[0]]),text:'Visible rows',
+      incomplete:args[0]==='inventory',
+      table:{columns:args[0]==='inventory'?['cargo_place','inventory_date']:
+        args[0]==='datalens'?['main_partner_code_original','sc_id','result','scanned_at']:
+        ['cargo_place','status'],rows:[]},next:null}
+  }];
+  let reconciles=0;
+  const result=await api.run(chrome,{
+    inventory:'https://inventory.example/orders',
+    datalens:'https://analytics.example/reports',
+    asgard:'https://asgard.example/history'
+  },async msg=>{
+    if(msg.type==='reconcile_site_tables')reconciles++;
+    return {ok:true,type:'page_inspected',persisted:false,
+      characters:msg.page?.text?.length??0};
+  },async()=>{});
+  assert.equal(result.phase,'needs_attention');
+  assert.equal(result.results[0].status,'needs_attention');
+  assert.equal(reconciles,0);
+  assert.equal(chrome.stats.removed,3);
+});
+
+test('ARIA grid extractor rejects known rowcount larger than rendered rows', () => {
+  assert.match(source, /querySelectorAll\('\[role="grid"\],\[role="table"\]'\)/);
+  assert.match(source, /count > rows\.length/);
+  assert.match(source, /virtualized_or_incomplete_grid/);
+  assert.match(source, /\[role="columnheader"\]/);
+});
