@@ -67,7 +67,7 @@ class NativeMessagingProtocolTests(unittest.TestCase):
     def test_hello_reports_only_explicit_capability(self):
         response = handle_message({"type": "hello", "request_id": "1"}, self.store)
         self.assertEqual(response["host"], HOST_NAME)
-        self.assertEqual(response["capabilities"], ["share_active_tab", "inspect_active_page"])
+        self.assertEqual(response["capabilities"], ["share_active_tab", "inspect_active_page", "reconcile_site_tables"])
         self.assertTrue(response["ok"])
 
     def test_user_shared_tab_is_sanitized_and_persisted(self):
@@ -120,6 +120,36 @@ class NativeMessagingProtocolTests(unittest.TestCase):
         ):
             self.assertFalse(handle_message({"type": "inspect_active_page", **payload},
                                             self.store)["ok"])
+
+    def test_reconcile_site_tables_remains_ephemeral(self):
+        snapshots = {
+            "inventory": {
+                "columns": ["cargo_place", "inventory_date"],
+                "rows": [["TEST-001", "2026-09-12"]],
+            },
+            "datalens": {
+                "columns": ["main_partner_code_original", "sc_id", "result", "scanned_at"],
+                "rows": [["TEST-001", "101366", "OK", "2026-09-19T11:00:00"]],
+            },
+            "asgard": {"columns": ["cargo_place", "status"], "rows": []},
+        }
+        before_tabs = self.store.list_browser_tabs()
+        before_events = self.store.list_events()
+        response = handle_message({
+            "type": "reconcile_site_tables", "request_id": "safe", "snapshots": snapshots,
+        }, self.store)
+        self.assertTrue(response["ok"])
+        self.assertEqual(response["summary"]["found"], 1)
+        self.assertEqual(response["type"], "site_tables_reconciled")
+        self.assertFalse(response["persisted"])
+        self.assertFalse(response["write_enabled"])
+        self.assertNotIn("TEST-001", json.dumps(response))
+        self.assertEqual(self.store.list_browser_tabs(), before_tabs)
+        self.assertEqual(self.store.list_events(), before_events)
+        snapshots["inventory"]["columns"] = ["unknown", "inventory_date"]
+        bad = handle_message({"type": "reconcile_site_tables",
+                              "snapshots": snapshots}, self.store)
+        self.assertFalse(bad["ok"])
 
     def test_unknown_messages_are_rejected(self):
         response = handle_message({"type": "execute_script"}, self.store)
