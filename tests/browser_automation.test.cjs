@@ -325,3 +325,40 @@ test('search limits and GET-only form guard are present',()=>{
   assert.match(source,/querySelectorAll\('input\[type="password"\],input\[type="hidden"\]'\)/);
   assert.match(source,/unverified_search_result_identity/);
 });
+
+test('browser GET-search extractor only accepts an unambiguous read-only form', async () => {
+  const api=runner();
+  const current='https://analytics.example/orders';
+  const normalForm = (method='get', extra=false) => ({
+    method,
+    getAttribute:()=>'/search',
+    querySelectorAll(selector) {
+      if (selector.includes('password') || selector.includes('hidden')) return extra?[{}]:[];
+      if (selector.includes('main_partner_code_original')) return [{type:'search'}];
+      if (selector==='input[name]') return [{type:'search'}];
+      return [];
+    },
+    querySelector:()=>({type:'search'})
+  });
+  let form=normalForm();
+  const chrome={
+    scripting:{async executeScript({func,args}) {
+      const document={querySelectorAll:()=>[form]};
+      const location={origin:'https://analytics.example',href:current};
+      const context={document,location,URL};
+      return [{result:vm.runInNewContext('('+func.toString()+')(...args)',{...context,args})}];
+    }},
+    tabs:{async update(_,{url}){return {url};}}
+  };
+  let result=await api.exactGetSearch(chrome,7,'datalens','ABC-1','https://analytics.example');
+  assert.equal(result,undefined);
+  for(const [method,extra] of [['post',false],['get',true]]) {
+    form=normalForm(method,extra);
+    await assert.rejects(
+      ()=>api.exactGetSearch(chrome,7,'datalens','ABC-1','https://analytics.example'),
+      /unmapped_search_form/);
+  }
+  await assert.rejects(
+    ()=>api.exactGetSearch(chrome,7,'datalens','SECRET?','https://analytics.example'),
+    /invalid_search/);
+});
