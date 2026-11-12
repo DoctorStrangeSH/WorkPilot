@@ -234,3 +234,94 @@ test('ARIA grid extractor rejects known rowcount larger than rendered rows', () 
   assert.match(source, /virtualized_or_incomplete_grid/);
   assert.match(source, /\[role="columnheader"\]/);
 });
+
+test('opted-in GET search automatically queries both sites for inventory cargo codes', async () => {
+  const api=runner(), chrome=fakeBrowser();
+  const originalGet=chrome.tabs.get, urls=[];
+  chrome.tabs.update=async (id,{url})=>{
+    const tab=await originalGet(id);
+    tab.url=url;tab.status='complete';urls.push(url);
+    return tab;
+  };
+  chrome.scripting.executeScript=async ({args})=>{
+    const tab=await originalGet(7), url=new URL(tab.url);
+    if(args?.length===2) {
+      const role=args[0],code=args[1];
+      const field=role==='datalens'?'main_partner_code_original':'cargo_place';
+      const search=new URL(url.origin + '/search');
+      search.searchParams.set(field,code);
+      return [{result:{origin:url.origin,url:search.href}}];
+    }
+    const role=args[0];
+    const code=url.searchParams.get('main_partner_code_original') ||
+      url.searchParams.get('cargo_place');
+    const table=role==='inventory'?{
+      columns:['cargo_place','inventory_date'],
+      rows:[['ABC-1','2026-09-12'],['ABC-2','2026-09-12']]
+    }:role==='datalens'?{
+      columns:['main_partner_code_original','sc_id','result','scanned_at'],
+      rows:[[code,'101366','OK','2026-09-14T08:30:00']]
+    }:{columns:['cargo_place','status'],rows:[[code,'Принят на ФФ']]};
+    return [{result:{origin:url.origin,text:'Visible table',table,next:null}}];
+  };
+  const calls=[];
+  const result=await api.run(chrome,{
+    inventory:'https://inventory.example/orders',
+    datalens:'https://analytics.example/orders',
+    asgard:'https://asgard.example/orders'
+  },async msg=>{
+    calls.push(msg);
+    if(msg.type==='reconcile_site_tables') {
+      assert.equal(msg.snapshots.datalens.rows.length,2);
+      assert.equal(msg.snapshots.asgard.rows.length,2);
+      return {ok:true,type:'site_tables_reconciled',read_only:true,write_enabled:false,
+        persisted:false,total:2,summary:{found:2,in_progress:0,manual_review:0}};
+    }
+    return {ok:true,type:'page_inspected',persisted:false,characters:msg.page.text.length};
+  },async()=>{}, {exactGetSearch:true});
+  assert.equal(result.phase,'reconciled');
+  assert.equal(urls.length,4);
+  assert.equal(chrome.stats.created,5);
+  assert.equal(chrome.stats.removed,5);
+  assert.equal(calls.filter(m=>m.type==='reconcile_site_tables').length,1);
+  assert.ok(urls.every(url=>new URL(url).searchParams.size===1));
+});
+
+test('opted-in search rejects rows belonging to a different cargo place',async()=>{
+  const api=runner(), chrome=fakeBrowser();
+  const originalGet=chrome.tabs.get;
+  chrome.tabs.update=async (id,{url})=>{
+    const tab=await originalGet(id);tab.url=url;return tab;
+  };
+  chrome.scripting.executeScript=async ({args})=>{
+    const tab=await originalGet(7),url=new URL(tab.url);
+    if(args.length===2)return [{result:{
+      origin:url.origin,
+      url:url.origin+'/search?main_partner_code_original=ABC-1'
+    }}];
+    return [{result:{origin:url.origin,text:'Visible table',next:null,
+      table:args[0]==='inventory'?
+        {columns:['cargo_place','inventory_date'],rows:[['ABC-1','2026-09-12']]}:
+        {columns:['main_partner_code_original','sc_id','result','scanned_at'],
+         rows:[['SOMEONE-ELSE','101366','OK','2026-09-14T08:30:00']]}}];
+  };
+  let reconciles=0;
+  const result=await api.run(chrome,{
+    inventory:'https://inventory.example/orders',
+    datalens:'https://analytics.example/orders',
+    asgard:'https://asgard.example/orders'
+  },async msg=>{
+    if(msg.type==='reconcile_site_tables')reconciles++;
+    return {ok:true,type:'page_inspected',persisted:false,characters:msg.page.text.length};
+  },async()=>{}, {exactGetSearch:true});
+  assert.equal(result.phase,'needs_attention');
+  assert.equal(result.results[1].status,'needs_attention');
+  assert.equal(reconciles,0);
+});
+
+test('search limits and GET-only form guard are present',()=>{
+  assert.match(source,/MAX_SEARCHES = 20/);
+  assert.match(source,/form\.method\.toLowerCase\(\) === "get"/);
+  assert.match(source,/querySelectorAll\('input\[type="password"\],input\[type="hidden"\]'\)/);
+  assert.match(source,/unverified_search_result_identity/);
+});
