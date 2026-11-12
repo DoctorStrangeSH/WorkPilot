@@ -196,3 +196,10 @@ The Browser Bridge extension creates a local `chrome.alarms` check approximately
 Pending jobs expire after 15 minutes, and running jobs after 30 minutes from creation. A claimed job is not automatically retried if the extension exits or crashes: the user can request a fresh audit after it expires. The extension must be installed, registered and active, the user's browser must be running, site sessions must already be authorized, the three targets must be configured from the popup once, and optional host permissions must already be granted. This does not circumvent login, browser policies, or CAPTCHA.
 
 The **desktop launches a read-only audit**, not an authorized corporate write. It does not edit orders or automate the Asgard extended box-history path. Live compatibility with the actual ИНВента, DataLens and Asgard websites is still unverified.
+
+
+## Live source-level audit progress in desktop
+
+While a desktop-initiated audit is running, the extension now reports **only** fixed source roles (`inventory`, `datalens`, `asgard`), number of completed sources (0–3), number requiring attention (0–3), and the last source with a failed read. Progress is sent through the registered Native Messaging host, accepted only for the **matching active claimed job**, and displayed in Malenia's Browser page. New jobs reset counters, older/stale jobs cannot update newer work, and counters may never move backwards. No raw page text, URL, cargo place, source rows, or exception messages are transferred for this progress report.
+
+The popup still shows its own more detailed but nonidentifying diagnostic reason codes. The desktop shows the most recent active source and counts, not live per-record statuses. The existing summary of the latest successfully reconciled run remains separate; a failed run does not replace that summary. This does not enable corporate writes or prove the private sites have been tested.
