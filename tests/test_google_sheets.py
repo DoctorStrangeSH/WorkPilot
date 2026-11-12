@@ -4,7 +4,7 @@ import time
 import unittest
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlencode, urlsplit
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from malenia.google_oauth import GOOGLE_SHEETS_READONLY_SCOPE, GOOGLE_TOKEN_ENDPOINT
 from malenia.google_sheets import GoogleSheetsConnector, GoogleSheetsError
@@ -189,7 +189,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
             self.assertIn('fetch("/",', page)
 
         body = urlencode({"code": "fragment-state-code", "state": state}).encode("ascii")
-        request = __import__("urllib.request", fromlist=["Request"]).Request(
+        request = Request(
             redirect_uri + "/",
             data=body,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
