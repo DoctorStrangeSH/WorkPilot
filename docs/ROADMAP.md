@@ -148,8 +148,9 @@ Browser Bridge пока передаёт только вручную выбра�
 - [x] В подключённом состоянии главная ведёт в ассистента и Browser Bridge.
 - [x] Расширенные настройки модели, памяти и веб-поиска свёрнуты; добавлены стартовые подсказки, которые только заполняют поле ввода и не отправляют запрос автоматически.
 - [x] UI явно сообщает, что задачи пока только сохраняются в локальной очереди, а Google Sheets/DataLens/Asgard ещё не подключены непосредственно к Malenia.
+- [x] Добавлен раздел «Источники» с честными состояниями Google Sheets/ИНВента, DataLens, Asgard и Browser Bridge; единственная активная кнопка ведёт к уже существующей странице Browser Bridge, неподключённые интеграции не изображаются рабочими.
 - [x] Добавлены Node regression tests для навигации и стартовых подсказок, включены в Desktop checks workflow.
 - [ ] Проверить новую сборку на пользовательском ПК после прохождения CI.
 
 Последовательность коммитов UX:
-`6ec48ba` (primary assistant navigation), `3280383` (assistant page), `f98e339` (styles), `35765c4` (task queue clarity), `cb6e997` (assistant tests), `0f3f7f4` (navigation tests), `07f9c39` (CI test step).
+`6ec48ba` (primary assistant navigation), `3280383` (assistant page), `f98e339` (styles), `35765c4` (task queue clarity), `cb6e997` (assistant tests), `0f3f7f4` (navigation tests), `07f9c39` (CI test step), `21786c5` (icon imports after first CI catch), `61d5725`/`76a37b6` (sources hub), `4c50cf1` (source styles), `7dc482f`/`7c02d82` (source tests and selector correction).
