@@ -59,7 +59,7 @@ def evaluate_order(
       - inventory_date: ISO calendar date
 
     DataLens scan fields:
-      - cargo_place, sc_id, result, scanned_at
+      - main_partner_code_original, sc_id, result, scanned_at
 
     Asgard fields:
       - status
@@ -83,7 +83,7 @@ def evaluate_order(
     for scan in datalens_scans:
         if not isinstance(scan, dict):
             continue
-        if scan.get("cargo_place") != cargo_place:
+        if scan.get("main_partner_code_original") != cargo_place:
             continue
         if str(scan.get("sc_id", "")) != DATALENS_SC_ID:
             continue
