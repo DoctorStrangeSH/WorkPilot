@@ -1,6 +1,6 @@
 ## Latest continuation — 2026-11-12 — Google Sheets read-only connector
 
-- Current branch HEAD before this handoff update: `bd157e13a80ef9ba6e2db95384b69ee95b9ecc60`.
+- Current branch HEAD before this handoff update: `b05c7505f724e1b2fcf5819d6bec2fc493af829d`.
 - PR #2 remains draft/open/unmerged; PR #1 remains open. `main` is unchanged. Never merge without explicit user approval.
 - The user confirmed Malenia 0.6.0 is installed and the app works on their PC. The current feature-branch UX/Google Sheets changes have not been installed on the user's PC.
 - Order rules: `docs/ORDER_CHECKING.md`, pure evaluator `agent/malenia/order_check.py`. It uses only supplied source snapshots and always returns `write_enabled: false`. DataLens rules and exact Asgard mappings are recorded there.
