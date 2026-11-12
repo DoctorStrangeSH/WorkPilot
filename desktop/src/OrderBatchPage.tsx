@@ -64,12 +64,13 @@ const parseRows=(raw:string):BatchInput[]=>{
   return body.map((line,i)=>{
     const cells=line.split("\t").map(v=>v.trim());
     if(cells.length<2||cells.length>9)throw new Error("Строка "+(i+1)+": ожидается от 2 до 9 столбцов, разделённых табуляцией.");
-    const [cargo,inv,scanned="",sc="101366",result="OK",status="",box="",history="",issued=""]=cells;
+    const [cargo,inv,scanned="",sc="",result="",status="",box="",history="",issued=""]=cells;
     if(!cargo||cargo.length>128||/[\r\n\u0000-\u001f]/.test(cargo))throw new Error("Строка "+(i+1)+": укажите штрихкод грузоместа (не более 128 символов).");
     let normalizedDate:string,normalizedScan="";
     try{normalizedDate=date(inv);if(scanned)normalizedScan=scanDate(scanned);}catch(e){throw new Error("Строка "+(i+1)+": "+String(e));}
-    if(!["","OK","ERROR"].includes(result))throw new Error("Строка "+(i+1)+": результат скана должен быть OK, ERROR либо пустым.");
-    if(!["","Принят на ФФ","Выдан","В пути"].includes(status))throw new Error("Строка "+(i+1)+": неизвестный статус Asgard. Оставьте пустым для ручной проверки.");
+    if(scanned&&(!sc||!result))throw new Error("Строка "+(i+1)+": для скана обязательно укажите SC ID и результат (OK или ERROR).");
+    if(result&&!["OK","ERROR"].includes(result))throw new Error("Строка "+(i+1)+": результат скана должен быть OK или ERROR.");
+    if(status.length>120)throw new Error("Строка "+(i+1)+": статус Asgard слишком длинный.");
     let verified=false,wasIssued=false;
     try{verified=checked(history,"История проверена");wasIssued=checked(issued,"Выдан в истории");}catch(e){throw new Error("Строка "+(i+1)+": "+String(e));}
     if(wasIssued&&!verified)throw new Error("Строка "+(i+1)+": нельзя отметить «Выдан в истории», не подтвердив её просмотр.");
@@ -77,7 +78,7 @@ const parseRows=(raw:string):BatchInput[]=>{
     return {
       source_row:i+1,
       order:{cargo_place:cargo,inventory_date:normalizedDate},
-      datalens_scans:normalizedScan?[{main_partner_code_original:cargo,sc_id:sc||"101366",result:result||"OK",scanned_at:normalizedScan}]:[],
+      datalens_scans:normalizedScan?[{main_partner_code_original:cargo,sc_id:sc,result:result,scanned_at:normalizedScan}]:[],
       asgard_record:status?{
         status,...(status==="В пути"?{box_id:box,...(verified?{extended_history_statuses:wasIssued?["Выдан"]:[]}:{})}:{})
       }:null
@@ -133,7 +134,7 @@ export function OrderBatchPage({connected}:{connected:boolean}){
       <div className="panel-head"><div><h3>Данные из Excel</h3><p>Вставьте выделенные строки с табуляцией между столбцами. Первая строка с названиями столбцов необязательна.</p></div><button className="secondary" onClick={()=>{setInput(demo);setBatch(null);setError("");setNotice("");}} disabled={busy}>Тестовый пример</button></div>
       <div className="batch-cols">{headers.map((h,i)=><span key={h}>{i+1}. {h}</span>)}</div>
       <textarea aria-label="Строки грузомест из Excel" value={input} onChange={e=>{setInput(e.target.value);setBatch(null);setError("");setNotice("");}} placeholder="Вставьте строки из Excel (Ctrl+V). Даты: ДД.ММ.ГГГГ, время скана: ДД.ММ.ГГГГ ЧЧ:ММ." rows={7} spellCheck={false} maxLength={100000}/>
-      <div className="batch-actions"><small>{count} строк (максимум 100). Если скана нет, оставьте его дату пустой. Неизвестный статус Asgard оставьте пустым.</small><button className="primary" disabled={!connected||busy||!input.trim()} onClick={()=>void check()}><ClipboardList size={15}/>{busy?"Проверяем…":"Проверить список"}</button></div>
+      <div className="batch-actions"><small>{count} строк (максимум 100). Если скана нет, оставьте его дату пустой. Новый статус Asgard можно указать текстом — Malenia направит его на ручную проверку.</small><button className="primary" disabled={!connected||busy||!input.trim()} onClick={()=>void check()}><ClipboardList size={15}/>{busy?"Проверяем…":"Проверить список"}</button></div>
       {!connected?<p className="source-help">Запустите локальный агент на главной странице.</p>:null}
     </div>
     {error?<p role="alert" className="alert error">{error}</p>:null}
