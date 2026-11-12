@@ -303,7 +303,7 @@ test('opted-in search rejects rows belonging to a different cargo place',async()
       table:args[0]==='inventory'?
         {columns:['cargo_place','inventory_date'],rows:[['ABC-1','2026-09-12']]}:
         {columns:['main_partner_code_original','sc_id','result','scanned_at'],
-         rows:[['SOMEONE-ELSE','101366','OK','2026-09-14T08:30:00']]}}];
+         rows:[['SOMEONE-ELSE','101366','OK','2026-09-14T08:30:00']]}}}];
   };
   let reconciles=0;
   const result=await api.run(chrome,{
