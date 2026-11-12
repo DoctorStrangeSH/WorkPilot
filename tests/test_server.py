@@ -154,6 +154,45 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(self.api("/v1/ai/chat",{"model":"remote","messages":[]})[0],422)
         self.ai._request.assert_not_called()
 
+    def test_batch_order_preview_requires_auth_and_never_writes(self):
+        path = "/v1/orders/batch-preview"
+        rows = [{
+            "source_row": 10,
+            "order": {"cargo_place": "TEST-BOX-001", "inventory_date": "2026-09-12"},
+            "datalens_scans": [{
+                "main_partner_code_original": "TEST-BOX-001",
+                "sc_id": "101366", "result": "OK", "scanned_at": "2026-09-26"
+            }],
+            "asgard_record": None
+        }, {
+            "source_row": 11,
+            "order": {"cargo_place": "TEST-BOX-002", "inventory_date": "2026-09-12"},
+            "datalens_scans": [],
+            "asgard_record": {"status": "Выдан"}
+        }]
+        body = {"rows": rows}
+        self.assertEqual(self.api(path, body, authenticated=False)[0], 401)
+        self.assertEqual(self.api(path, body, host="foreign.example:8765")[0], 403)
+        code, data = self.api(path, body)
+        self.assertEqual(code, 200)
+        self.assertEqual(data["summary"], {"found": 1, "in_progress": 1, "manual_review": 0})
+        self.assertEqual(data["results"][0]["source_row"], 10)
+        self.assertEqual(data["results"][1]["proposal"]["comment"], "Выдан")
+        self.assertTrue(data["read_only"])
+        self.assertFalse(data["write_enabled"])
+        self.assertEqual(self.store.list_tasks(), [])
+        self.assertEqual(self.store.list_events(), [])
+
+    def test_batch_order_preview_rejects_unknown_or_excessive_payloads(self):
+        path = "/v1/orders/batch-preview"
+        for payload in (
+            {}, {"rows": []}, {"rows": "wrong"},
+            {"rows": [{}] * 101}, {"rows": [], "extra": True},
+            {"rows": [{"order": {"cargo_place": "", "inventory_date": "x"}}]},
+        ):
+            with self.subTest(payload=str(payload)[:60]):
+                self.assertEqual(self.api(path, payload)[0], 422)
+
     def test_manual_order_preview_is_authenticated_and_never_persists(self):
         path = "/v1/orders/preview"
         order = {"cargo_place": "BOX-TEST-1", "inventory_date": "2026-09-26"}
@@ -254,6 +293,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertIn("task_idempotency", runtime["capabilities"])
         self.assertIn("google_sheets_readonly", runtime["capabilities"])
         self.assertIn("order_preview", runtime["capabilities"])
+        self.assertIn("order_batch_preview", runtime["capabilities"])
 
     def test_task_retry_conflict_validation_and_legacy_compatibility(self):
         body = {"title": "Reviewed", "description": "Text",
