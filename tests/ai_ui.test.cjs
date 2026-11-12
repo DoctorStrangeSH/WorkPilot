@@ -179,7 +179,7 @@ test('quick-start prompts populate the composer without sending a request',async
   assert.equal(h.find('textarea',p=>p.id==='ai-draft')[0].props.value,
     'Разбери эту таблицу и кратко объясни, что означают её столбцы.');
   assert.equal(calls.filter(call=>call.command==='chat_ai').length,0);
-  const settings=h.find('details',p=>p.className==='assistant-settings')[0];
+  const settings=h.find('details',p=>(p.className||'').includes('assistant-settings'))[0];
   assert.ok(settings);
   assert.equal(settings.props.open,undefined,'advanced controls stay collapsed by default');
 });
