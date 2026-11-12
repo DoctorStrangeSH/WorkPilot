@@ -153,3 +153,12 @@ The limited generic adapter recognizes **exactly one** native HTML form on the c
 It constructs one single-parameter URL using the form's own action, navigates only its own inactive tab and validates the resulting table rows against the **exact requested cargo code** before accepting them. Any missing/ambiguous form, unexpected row, disallowed redirect, unsupported cargo identifier, excess results, pagination error, or failed page validation requires attention. No data-changing form is submitted, and no record writes are implemented. Search parameters (cargo identifiers) can be visible in the browser's navigation URL and site server logs; they are not stored in extension progress or passed back as a URL to the native host. This mode requires the user to opt in once in the extension; the preference is remembered locally.
 
 **This is not a verified adapter for the actual private websites.** If they use JavaScript search buttons, POST search, arbitrary field labels or virtualized grids, this mode will refuse the action. Its purpose is to establish a safe, testable end-to-end per-cargo search path where the website exposes the stated native GET contract. Support for the real sites needs verified mappings and authorization; do not assert that live order processing works until exercised on those sites.
+
+
+## Safe diagnostics for site-specific adapters
+
+Automatic audit progress now includes one of a fixed set of **non-sensitive reason codes** when a source cannot be processed. The extension never persists raw browser exception text, a failed URL, cargo code, screenshot, page text or form values in its progress report. The popup maps codes to actionable Russian explanations.
+
+An unsupported native HTML form is reported as `unsupported_search_form`; a page with a non-form search widget (such as `role="searchbox"`) is reported as `dynamic_search_ui`. A missing search surface is `unmapped_search_form`. Other known cases include cross-origin login redirects, virtualized/incomplete grids, a returned cargo ID that does not match the exact query, pagination limit/cycle, and host rejection. Unknown browser exceptions become the generic `site_or_browser_error` to avoid leaking private URL parameters.
+
+These codes are diagnostic evidence for building a reviewed read-only adapter, **not permission** to click arbitrary controls, write to corporate sites, bypass login, or guess site selectors. The dynamic search widget is detected but is **not yet operated**.
