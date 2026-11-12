@@ -163,3 +163,23 @@ test('model download first installs/starts runtime and stops if preparation fail
   fail=false;click();await tick();
   assert.deepEqual(calls.slice(-3),['start_local_ai','install_sherlock','get_ai_status']);
 });
+
+
+test('quick-start prompts populate the composer without sending a request',async()=>{
+  const calls=[];
+  const h=harness(async(command,args)=>{
+    calls.push({command,args});
+    if(command==='get_ai_status')return {available:true,models:['qwen3:8b']};
+    throw Error(command);
+  });
+  h.render();await tick();
+  const prompt=h.find('button',p=>p.children==='Разобрать таблицу')[0];
+  assert.ok(prompt);
+  prompt.props.onClick();
+  assert.equal(h.find('textarea',p=>p.id==='ai-draft')[0].props.value,
+    'Разбери эту таблицу и кратко объясни, что означают её столбцы.');
+  assert.equal(calls.filter(call=>call.command==='chat_ai').length,0);
+  const settings=h.find('details',p=>p.className==='assistant-settings')[0];
+  assert.ok(settings);
+  assert.equal(settings.props.open,undefined,'advanced controls stay collapsed by default');
+});
