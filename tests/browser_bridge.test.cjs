@@ -6,7 +6,7 @@ const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '../browser-extension/popup.js'), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function popup(url = 'https://example.com/orders?secret=remove#private') {
-  const nodes = Object.fromEntries(['status', 'share', 'retry', 'inspect'].map(id => [id, {
+  const nodes = Object.fromEntries(['status', 'share', 'retry', 'inspect', 'audit', 'auditStatus', 'inventory', 'datalens', 'asgard'].map(id => [id, {
     disabled: true, textContent: '', className: '', handlers: {},
     addEventListener(type, callback) { this.handlers[type] = callback; }
   }]));
