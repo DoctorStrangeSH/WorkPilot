@@ -30,6 +30,8 @@ jobs:
         run: node --test tests/permissions_ui.test.cjs
       - name: Test AI task review and retry
         run: node --test tests/ai_ui.test.cjs
+      - name: Test primary assistant navigation and task labels
+        run: node --test tests/navigation_ui.test.cjs
       - name: Check Tauri host
         run: cargo check --manifest-path desktop/src-tauri/Cargo.toml
       - name: Test runtime archive verification
