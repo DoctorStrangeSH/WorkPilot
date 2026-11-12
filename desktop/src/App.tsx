@@ -16,8 +16,9 @@ type Task = { id:string; title:string; description:string; status:"pending"|"can
 type EventItem = { id:number; event_type:string; message:string; created_at:string; };
 type BrowserTab = { id:string; url:string; title:string; shared_at:string; };
 type BrowserAudit = { checked_at:string; total:number; summary:{found:number;in_progress:number;manual_review:number}; read_only:true; source:"browser_tables" };
+type BrowserAuditJob = { job_id:string; status:"pending"|"running"|"completed"|"failed"|"expired"; created_at:string; updated_at:string };
 type Resources = { total_memory_bytes:number; available_memory_bytes:number; used_memory_percent:number; logical_processors:number; cpu_usage_percent:number; mode:"normal"|"economy"|"emergency"; recommended_parallel_jobs:number; };
-type Dashboard = { running:boolean; resources:Resources; tasks:Task[]; events:EventItem[]; browser_tabs:BrowserTab[]; browser_audit:BrowserAudit|null; permissions:PermissionRequest[]; };
+type Dashboard = { running:boolean; resources:Resources; tasks:Task[]; events:EventItem[]; browser_tabs:BrowserTab[]; browser_audit:BrowserAudit|null; browser_audit_job:BrowserAuditJob|null; permissions:PermissionRequest[]; };
 type Page = "overview"|"tasks"|"browser"|"sources"|"orders"|"order_batch"|"ai"|"settings"|"permissions"|"knowledge";
 
 const labels:Record<Page,string>={overview:"Главная",tasks:"Задания",browser:"Браузер",sources:"Источники",orders:"Проверка заказа",order_batch:"Список заказов",ai:"Ассистент",settings:"Настройки",permissions:"Разрешения",knowledge:"Память и знания"};
@@ -115,7 +116,7 @@ export default function App(){
         {page==="tasks"&&<section className="page"><div className="page-head"><div><div className="eyebrow">УПРАВЛЕНИЕ ПРОЦЕССАМИ</div><h1>Задания</h1><p>Создавайте задачи и управляйте локальной очередью.</p></div><button className="primary" onClick={()=>setComposer(true)} disabled={!connected}><Plus size={15}/>Новая задача</button></div><div className="toolbar"><div className="search"><Search size={15}/><input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Поиск по заданиям..."/></div><small>{tasks.length} записей</small></div><div className="panel"><TaskList tasks={tasks} onCancel={cancelTask}/></div><div className="note"><CircleHelp size={15}/>Сейчас задания сохраняются локально в SQLite, но не запускаются автоматически. Выполнение будет подключено отдельным этапом.</div></section>}
 
         {page==="permissions"&&<PermissionsPage requests={data?.permissions??[]} connected={connected} busy={busy} onDecide={decidePermission}/>}
-        {page==="browser"&&<BrowserPage tabs={data?.browser_tabs??[]} audit={data?.browser_audit??null} connected={connected}/>}
+        {page==="browser"&&<BrowserPage tabs={data?.browser_tabs??[]} audit={data?.browser_audit??null} job={data?.browser_audit_job??null} connected={connected} onRequested={()=>void refresh()}/>}
         {page==="sources"&&<SourcesPage tabs={data?.browser_tabs??[]} connected={connected} onOpenBrowser={()=>setPage("browser")}/>}
         {page==="orders"&&<OrderCheckPage connected={connected}/>}
         {page==="order_batch"&&<OrderBatchPage connected={connected}/>}
@@ -134,10 +135,38 @@ function Nav({icon,label,active,count,onClick}:{icon:ReactNode;label:string;acti
 function Metric({icon,label,value,detail,tone,progress}:{icon:ReactNode;label:string;value:string;detail:string;tone:string;progress?:number}){return <div className="metric"><div className={"metric-icon "+tone}>{icon}</div><small>{label}</small><strong>{value}</strong><p>{detail}</p>{progress!==undefined&&<div className="progress"><i className={tone} style={{width:Math.max(0,Math.min(progress,100))+"%"}}/></div>}</div>;}
 function TaskList({tasks,onCancel}:{tasks:Task[];onCancel:(id:string)=>void}){if(!tasks.length)return <Empty title="Задач пока нет" text="Создайте задачу, чтобы она появилась здесь."/>;return <div className="task-list">{tasks.map(t=><div className="task-row" key={t.id}><span className={"task-state "+t.status}>{t.status==="pending"?<Clock3 size={14}/>:<X size={14}/>}</span><div className="task-copy"><b>{t.title}</b><small>{t.description||"Без дополнительного описания"} · {time(t.created_at)}</small></div><span className={"task-badge "+t.status}>{t.status==="pending"?"В очереди":"Отменено"}</span>{t.status==="pending"&&<button className="icon-btn tiny" title="Отменить" onClick={()=>onCancel(t.id)}><X size={14}/></button>}</div>)}</div>;}
 function Empty({title,text}:{title:string;text:string}){return <div className="empty"><div><ListTodo size={18}/></div><b>{title}</b><p>{text}</p></div>;}
-function BrowserPage({tabs,audit,connected}:{tabs:BrowserTab[];audit:BrowserAudit|null;connected:boolean}){
+function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];audit:BrowserAudit|null;job:BrowserAuditJob|null;connected:boolean;onRequested:()=>void}){
+  const [sending,setSending]=useState(false);
+  const [requestError,setRequestError]=useState("");
+  const requestAudit=async()=>{
+    if(sending || !connected || job?.status==="pending" || job?.status==="running")return;
+    setSending(true);setRequestError("");
+    try{
+      await invoke("request_browser_audit");
+      onRequested();
+    }catch(error){
+      setRequestError(String(error).includes("browser_audit_already_active")?
+        "Проверка уже ожидает выполнения.":
+        "Не удалось добавить проверку. Проверьте подключение локального агента.");
+    }finally{setSending(false);}
+  };
+  const statusLabel=job?.status==="pending"?"Ожидает Browser Bridge (проверка команд примерно раз в минуту)":
+    job?.status==="running"?"Выполняется в браузере":
+    job?.status==="completed"?"Последняя задача завершена":
+    job?.status==="failed"?"Проверка завершилась с ошибкой":
+    job?.status==="expired"?"Расширение не ответило вовремя":"Задачи пока нет";
   return <section className="page">
     <div className="page-head"><div><div className="eyebrow">BROWSER BRIDGE · PREVIEW</div><h1>Браузер</h1><p>Browser Bridge: ручная передача вкладки и автоматическое чтение трёх разрешённых HTTPS-страниц.</p></div><span className="browser-state"><i className={connected?"":"idle"}/>{connected?"Агент подключён":"Сначала запустите агента"}</span></div>
     <div className="browser-safety"><div><ShieldCheck size={19}/></div><section><b>Приватность по умолчанию</b><p>Расширение не читает cookies, пароли, историю браузера или поля форм. Отдельная команда может считать ограниченный видимый текст страницы, а автоматический обход — последовательно прочитать три явно разрешённых домена. Тексты не сохраняются. Экспериментальный поиск и сверка выполняются по разрешённым страницам, но на реальных корпоративных сайтах ещё не проверены. Изменение статусов не подключено.</p></section></div>
+    <div className="panel browser-panel" data-testid="browser-audit-runner">
+      <div className="panel-head"><div><h3>Проверить заказы автоматически</h3><p>Только чтение. Расширение использует ранее настроенные сайты и разрешения.</p></div>
+        <button className="primary" disabled={!connected||sending||job?.status==="pending"||job?.status==="running"} onClick={()=>void requestAudit()}>
+          <Play size={15}/>{sending?"Отправляем…":"Запустить проверку"}</button>
+      </div>
+      <p role="status">{statusLabel}</p>
+      {requestError?<p className="alert error" role="alert">{requestError}</p>:null}
+      <p className="note">Для выполнения требуется запущенный браузер с установленным Browser Bridge, предварительно настроенными тремя HTTPS-страницами и разрешённым доступом. При отсутствии расширения команда истечёт; повторный запуск возможен вручную.</p>
+    </div>
     <div className="panel browser-panel" data-testid="browser-audit-summary">
       <div className="panel-head"><div><h3>Последняя автоматическая сверка</h3><p>Только итоговые числа · без грузомест и содержимого сайтов</p></div></div>
       {audit ? <div className="batch-summary" role="status">
