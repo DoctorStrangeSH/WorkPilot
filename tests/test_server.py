@@ -154,6 +154,60 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(self.api("/v1/ai/chat",{"model":"remote","messages":[]})[0],422)
         self.ai._request.assert_not_called()
 
+    def test_manual_order_preview_is_authenticated_and_never_persists(self):
+        path = "/v1/orders/preview"
+        order = {"cargo_place": "BOX-TEST-1", "inventory_date": "2026-09-26"}
+        scans = [{
+            "main_partner_code_original": "BOX-TEST-1",
+            "sc_id": 101366,
+            "result": "OK",
+            "scanned_at": "2026-10-01T08:10:00"
+        }]
+        body = {"order": order, "datalens_scans": scans}
+        self.assertEqual(self.api(path, body, authenticated=False)[0], 401)
+        self.assertEqual(self.api(path, body, host="foreign.example:8765")[0], 403)
+        status, response = self.api(path, body)
+        self.assertEqual(status, 200)
+        self.assertEqual(response["source"], "manual_input")
+        self.assertTrue(response["read_only"])
+        self.assertEqual(response["proposal"]["proposed_status"], "Найден")
+        self.assertFalse(response["proposal"]["write_enabled"])
+        self.assertEqual(self.store.list_tasks(), [])
+        self.assertEqual(self.store.list_events(), [])
+
+    def test_order_preview_fails_closed_on_invalid_or_excessive_input(self):
+        path = "/v1/orders/preview"
+        valid = {"order": {"cargo_place": "BOX-TEST", "inventory_date": "2026-09-26"}}
+        for payload in (
+            {},
+            {"order": "invalid"},
+            {**valid, "datalens_scans": "invalid"},
+            {**valid, "datalens_scans": [{}] * 101},
+            {**valid, "asgard_record": []},
+            {**valid, "not_allowed": True},
+            {"order": {"cargo_place": "BOX-TEST", "inventory_date": "not-a-date"}},
+        ):
+            with self.subTest(payload=payload):
+                self.assertEqual(self.api(path, payload)[0], 422)
+
+    def test_manual_order_preview_uses_asgard_rules_without_data_writes(self):
+        path = "/v1/orders/preview"
+        body = {
+            "order": {"cargo_place": "BOX-TEST-2", "inventory_date": "2026-09-26"},
+            "datalens_scans": [],
+            "asgard_record": {
+                "status": "В пути",
+                "box_id": "BOX-TEST-2",
+                "extended_history_statuses": ["В пути", "Выдан"],
+            },
+        }
+        status, response = self.api(path, body)
+        self.assertEqual(status, 200)
+        self.assertEqual(response["proposal"]["comment"], "2 ШК Выдан")
+        self.assertEqual(response["proposal"]["proposed_status"], "В работе")
+        self.assertFalse(response["proposal"]["write_enabled"])
+        self.assertEqual(self.store.list_tasks(), [])
+
     def test_google_sheets_routes_are_authenticated_and_read_only(self):
         status_path = "/v1/integrations/google-sheets/status"
         connect_path = "/v1/integrations/google-sheets/connect"
