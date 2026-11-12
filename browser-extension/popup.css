@@ -41,3 +41,5 @@ button.secondary { margin-top: 8px; background: #243349; color: #d0dcf0; border:
 .automation input {display:block;width:100%;margin:7px 0;padding:10px;border:1px solid #3a506d;border-radius:8px;background:#101927;color:#e8f0ff;font-size:11px;}
 .automation #audit {margin-top:9px;}
 .automation #auditStatus {margin-top:10px;margin-bottom:0;}
+
+.search-option {display:flex;align-items:center;gap:8px;color:#bfcbe0;font-size:11px;line-height:1.5;margin:10px 0;}.search-option input {width:auto;margin:0;accent-color:#8daeff;}
