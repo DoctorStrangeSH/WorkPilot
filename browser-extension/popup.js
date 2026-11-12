@@ -3,6 +3,7 @@ const RESPONSE_TIMEOUT_MS = 5000;
 const statusNode = document.getElementById("status");
 const shareButton = document.getElementById("share");
 const retryButton = document.getElementById("retry");
+const inspectButton = document.getElementById("inspect");
 let busy = false;
 let connected = false;
 
@@ -13,6 +14,7 @@ function setStatus(message, kind = "") {
 
 function updateButtons() {
   shareButton.disabled = busy || !connected;
+  inspectButton.disabled = busy || !connected;
   retryButton.disabled = busy;
   retryButton.textContent = connected ? "Проверить соединение" : "Повторить подключение";
 }
@@ -133,3 +135,44 @@ shareButton.addEventListener("click", async () => {
 });
 
 void connect();
+
+inspectButton.addEventListener("click", async () => {
+  if (busy || !connected) return;
+  busy = true;
+  updateButtons();
+  setStatus("Читаем открытую страницу по вашему запросу…");
+  let sending = false;
+  try {
+    const [tab] = await chrome.tabs.query({active: true, lastFocusedWindow: true});
+    if (!tab || !Number.isInteger(tab.id) || typeof tab.url !== "string") throw new Error("No tab");
+    const page = new URL(tab.url);
+    if (!["http:", "https:"].includes(page.protocol) || page.username || page.password) throw new Error("Invalid URL");
+    const results = await chrome.scripting.executeScript({
+      target: {tabId: tab.id},
+      func: () => {
+        const value = document.body ? document.body.innerText : "";
+        return typeof value === "string" ? value.slice(0, 16000) : "";
+      }
+    });
+    const visibleText = results?.[0]?.result;
+    if (typeof visibleText !== "string" || !visibleText.trim()) throw new Error("Empty page");
+    sending = true;
+    const response = await sendNativeMessage({
+      type: "inspect_active_page",
+      request_id: crypto.randomUUID(),
+      page: {url: page.origin + page.pathname, text: visibleText}
+    });
+    if (!response.ok || response.type !== "page_inspected" || response.persisted !== false) throw bridgeError("protocol");
+    setStatus("Локальный хост прочитал " + response.characters + " символов. Автоматическая сверка заказов пока не подключена.", "ok");
+  } catch (error) {
+    if (sending) {
+      connected = false;
+      setStatus(diagnostic(error, true), "error");
+    } else {
+      setStatus("Не удалось прочитать страницу. Проверьте разрешения расширения и выберите обычный сайт.", "error");
+    }
+  } finally {
+    busy = false;
+    updateButtons();
+  }
+});
