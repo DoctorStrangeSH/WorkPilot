@@ -114,3 +114,11 @@ test('desktop audit launch is a real command with visible queued and running sta
   assert.match(native, /\/v1\/browser\/audit-request/);
   assert.match(native, /\/v1\/browser\/audit-job/);
 });
+
+test('browser workspace displays safe progress without order identifiers',()=>{
+  assert.match(app,/data-testid="browser-audit-progress"/);
+  assert.match(app,/job\.completed_sources/);
+  assert.match(app,/job\.attention_sources/);
+  assert.match(app,/job\.failed_role/);
+  assert.match(app,/Обработано источников/);
+});
