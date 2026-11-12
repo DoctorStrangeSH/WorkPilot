@@ -185,12 +185,19 @@ function showAudit(snapshot) {
   if (!snapshot || typeof snapshot !== "object") return;
   const parts = (snapshot.results || []).map(item =>
     RESOURCE_LABELS[item.role] + ": " + (item.status === "read" ? "прочитано" : "нужна проверка"));
-  const phase = snapshot.phase === "completed" ? "Обход завершён." :
+  const phase = snapshot.phase === "reconciled" ? "Сверка таблиц завершена (только предложения)." :
+    snapshot.phase === "read_only" ? "Страницы прочитаны, но таблицы не сопоставлены. Требуется настройка структуры сайтов." :
     snapshot.phase === "needs_attention" ? "Обход завершён с ошибками." :
     "Автоматический обход выполняется.";
-  auditStatus.textContent = phase + (parts.length ? " " + parts.join("; ") : "");
-  auditStatus.className = "status" + (snapshot.phase === "completed" ? " ok" :
-    snapshot.phase === "needs_attention" ? " error" : "");
+  const counts = snapshot.reconciliation?.summary;
+  const total = snapshot.reconciliation?.total;
+  const outcome = counts && Number.isInteger(total) &&
+    ["found","in_progress","manual_review"].every(key => Number.isInteger(counts[key])) ?
+    " Всего: " + total + "; найдено: " + counts.found +
+    "; в работе: " + counts.in_progress + "; ручная проверка: " + counts.manual_review + "." : "";
+  auditStatus.textContent = phase + (parts.length ? " " + parts.join("; ") : "") + outcome;
+  auditStatus.className = "status" + (snapshot.phase === "reconciled" ? " ok" :
+    snapshot.phase === "needs_attention" || snapshot.phase === "read_only" ? " error" : "");
 }
 if (chrome.storage?.local) {
   chrome.storage.local.get("maleniaTargets").then(saved => {
