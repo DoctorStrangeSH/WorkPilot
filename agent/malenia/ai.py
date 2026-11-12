@@ -122,9 +122,12 @@ class OllamaClient:
             self._generation.release()
 
     def chat(self, payload):
-        if not isinstance(payload, dict) or (not {"model", "messages"} <= set(payload) or set(payload) - {"model", "messages", "use_knowledge", "knowledge_only", "use_web"}):
+        if not isinstance(payload, dict) or (not {"model", "messages"} <= set(payload) or set(payload) - {"model", "messages", "use_knowledge", "knowledge_only", "use_web", "reasoning_mode"}):
             raise AIError("invalid_chat_request", 422)
         if any(key in payload and not isinstance(payload[key], bool) for key in ("use_knowledge", "knowledge_only", "use_web")):
+            raise AIError("invalid_chat_request", 422)
+        reasoning_mode = payload.get("reasoning_mode", "fast")
+        if reasoning_mode not in ("fast", "auto", "deep"):
             raise AIError("invalid_chat_request", 422)
         strict = payload.get("knowledge_only", False)
         web = payload.get("use_web", False)
@@ -193,19 +196,28 @@ class OllamaClient:
             history = [messages[-1]] if grounded else list(messages)
             while len(history) > 1 and sum(len(m["content"]) for m in history) + len(context) > 6500:
                 history = history[2:]
+            # Deep reasoning is for general Qwen chat; strict evidence-bound
+            # replies keep deterministic structured output and citation checks.
+            complex_terms = ("проанализ", "сравни", "спланир", "разработ",
+                             "проверь гипотез", "найди причину", "архитектур",
+                             "объясни почему", "обоснуй", "оптимизируй")
+            use_reasoning = (not grounded and model.startswith("qwen3:") and
+                (reasoning_mode == "deep" or (reasoning_mode == "auto" and
+                 (len(query) >= 220 or any(term in query.casefold()
+                                             for term in complex_terms)))))
             body = {"model": model,
                 "messages": [{"role": "system", "content": SYSTEM + context}] + history,
                 "stream": False, "keep_alive": "30s",
-                "options": {"num_ctx": 4096 if sources or model.startswith("qwen3:") else 2048,
-                            "num_predict": 384, "num_thread": 2, "temperature": 0}}
+                "options": {"num_ctx": 8192 if use_reasoning else 4096 if sources or model.startswith("qwen3:") else 2048,
+                            "num_predict": 768 if use_reasoning else 384, "num_thread": 2, "temperature": 0}}
             if grounded:
                 body["format"] = {"type": "object", "additionalProperties": False,
                     "properties": {"answer": {"type": "string"}, "sufficient": {"type": "boolean"},
                         "source_ids": {"type": "array", "items": {"type": "string", "enum": [s["id"] for s in sources]}, "uniqueItems": True}},
                     "required": ["answer", "sufficient", "source_ids"]}
             if model.startswith("qwen3:"):
-                body["think"] = False
-            result = self._request("/api/chat", body, timeout=90)
+                body["think"] = bool(use_reasoning)
+            result = self._request("/api/chat", body, timeout=180 if use_reasoning else 90)
             message = result.get("message")
             if (result.get("done") is not True or not isinstance(message, dict)
                     or not isinstance(message.get("content"), str)
@@ -240,6 +252,7 @@ class OllamaClient:
                     "local_only": not web, "tools_enabled": False, "sources": sources,
                     "answer_mode": "web" if web else "knowledge_only" if strict else "general",
                     "skill_ids": [skill["id"] for skill in selected_skills],
+                    "reasoning_used": use_reasoning,
                     "cited_source_ids": cited, "generated": True}
         finally:
             self._generation.release()
