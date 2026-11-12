@@ -76,6 +76,40 @@ class TaskStoreTests(unittest.TestCase):
         self.assertFalse(self.store.finish_browser_audit(second["job_id"], True))
         self.assertEqual(self.store.latest_browser_audit_job()["status"], "expired")
 
+    def test_browser_audit_progress_is_coarse_monotone_and_job_bound(self):
+        pending = self.store.request_browser_audit()
+        job_id = pending["job_id"]
+        self.assertFalse(self.store.update_browser_audit_progress(
+            job_id, "inventory", 0, 0, None))
+        self.assertIsNotNone(self.store.claim_browser_audit())
+        self.assertTrue(self.store.update_browser_audit_progress(
+            job_id, "inventory", 0, 0, None))
+        self.assertTrue(self.store.update_browser_audit_progress(
+            job_id, "datalens", 1, 0, None))
+        self.assertTrue(self.store.update_browser_audit_progress(
+            job_id, "asgard", 2, 1, "datalens"))
+        report = self.store.latest_browser_audit_job()
+        self.assertEqual(report["current_role"], "asgard")
+        self.assertEqual(report["completed_sources"], 2)
+        self.assertEqual(report["attention_sources"], 1)
+        self.assertEqual(report["failed_role"], "datalens")
+        for arguments in [
+            (job_id, "asgard", 1, 1, "datalens"),
+            (job_id, "asgard", 2, 0, "datalens"),
+            (job_id, "untrusted", 2, 1, None),
+            (job_id, "asgard", True, 1, None),
+            ("different-job", "asgard", 2, 1, None),
+        ]:
+            self.assertFalse(self.store.update_browser_audit_progress(*arguments))
+        self.assertTrue(self.store.finish_browser_audit(job_id, False))
+        self.assertFalse(self.store.update_browser_audit_progress(
+            job_id, "asgard", 3, 1, "datalens"))
+        new_job = self.store.request_browser_audit()
+        report = self.store.latest_browser_audit_job()
+        self.assertEqual(report["job_id"], new_job["job_id"])
+        self.assertEqual(report["completed_sources"], 0)
+        self.assertIsNone(report["failed_role"])
+
     def test_unknown_task_returns_none(self):
         self.assertIsNone(self.store.get_task("not-a-real-id"))
         self.assertIsNone(self.store.cancel_task("not-a-real-id"))
