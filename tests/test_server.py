@@ -16,6 +16,26 @@ from malenia.server import MaleniaHTTPServer, make_handler
 from malenia.store import TaskStore
 
 
+class FakeGoogleSheets:
+    def __init__(self):
+        self.calls = []
+
+    def status(self):
+        return {"connected": False, "status": "not_connected", "error": None}
+
+    def start_connect(self, client_id):
+        self.calls.append(("connect", client_id))
+        return {"status": "authorizing", "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth?fixture"}
+
+    def read_values(self, spreadsheet_id, range_a1):
+        self.calls.append(("read", spreadsheet_id, range_a1))
+        return {"range": range_a1, "values": [["fixture"]], "read_only": True}
+
+    def disconnect(self):
+        self.calls.append(("disconnect",))
+        return {"connected": False, "status": "not_connected", "local_credentials_deleted": True}
+
+
 class LocalApiTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -25,9 +45,10 @@ class LocalApiTests(unittest.TestCase):
         self.gate = PermissionGate(self.store, lambda: self.now, lambda: self.now)
         self.inbox = PermissionInbox(self.gate)
         self.ai = OllamaClient()
+        self.google_sheets = FakeGoogleSheets()
         self.server = MaleniaHTTPServer(
             ("127.0.0.1", 0),
-            make_handler(self.store, self.token, ResourceManager(), self.inbox, self.ai),
+            make_handler(self.store, self.token, ResourceManager(), self.inbox, self.ai, self.google_sheets),
         )
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -132,6 +153,40 @@ class LocalApiTests(unittest.TestCase):
         self.ai._request=Mock()
         self.assertEqual(self.api("/v1/ai/chat",{"model":"remote","messages":[]})[0],422)
         self.ai._request.assert_not_called()
+
+    def test_google_sheets_routes_are_authenticated_and_read_only(self):
+        status_path = "/v1/integrations/google-sheets/status"
+        connect_path = "/v1/integrations/google-sheets/connect"
+        read_path = "/v1/integrations/google-sheets/read"
+        disconnect_path = "/v1/integrations/google-sheets/disconnect"
+
+        self.assertEqual(self.api(status_path, authenticated=False)[0], 401)
+        self.assertEqual(self.api(connect_path, {"client_id": "fixture"}, authenticated=False)[0], 401)
+        self.assertEqual(self.api(status_path)[1]["status"], "not_connected")
+        self.assertEqual(self.api(connect_path, {"client_id": "fixture", "extra": "no"})[0], 422)
+
+        code, auth = self.api(connect_path, {"client_id": "fixture"})
+        self.assertEqual(code, 200)
+        self.assertEqual(auth["status"], "authorizing")
+        self.assertTrue(auth["authorization_url"].startswith("https://accounts.google.com/"))
+
+        self.assertEqual(self.api(read_path, {"spreadsheet_id": "fixture"})[0], 422)
+        code, read = self.api(read_path, {"spreadsheet_id": "sheet-id-fixture", "range": "Orders!A1:B2"})
+        self.assertEqual(code, 200)
+        self.assertTrue(read["read_only"])
+        self.assertEqual(read["values"], [["fixture"]])
+        self.assertIn(("read", "sheet-id-fixture", "Orders!A1:B2"), self.google_sheets.calls)
+
+        self.assertEqual(self.api("/v1/integrations/google-sheets/write", {})[0], 404)
+        self.assertEqual(self.api(disconnect_path, {"unexpected": True})[0], 422)
+        self.assertEqual(self.api(disconnect_path, {})[0], 200)
+        self.assertIn(("disconnect",), self.google_sheets.calls)
+
+    def test_google_sheets_routes_reject_foreign_hosts(self):
+        self.assertEqual(
+            self.api("/v1/integrations/google-sheets/status", host="foreign.example:8765")[0],
+            403,
+        )
 
     def test_runtime_descriptor_requires_authentication(self):
         self.assertEqual(self.api("/v1/runtime", authenticated=False)[0], 401)
