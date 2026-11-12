@@ -13,6 +13,7 @@ from .ai import OllamaClient, AIError
 from .knowledge import KnowledgeBase, KnowledgeError
 from .google_sheets import GoogleSheetsConnector, GoogleSheetsError
 from .order_check import evaluate_order
+from .order_batch import preview_batch, OrderBatchError
 from .permission_inbox import PermissionInbox
 from .permissions import PermissionGate
 from .resources import ResourceManager
@@ -124,7 +125,7 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
 
             if parsed.path == "/v1/runtime":
                 self._send(200, {"release": "0.6.0", "protocol": 1,
-                    "capabilities": ["local_chat", "task_idempotency", "explicit_knowledge", "knowledge_only", "public_search", "google_sheets_readonly", "order_preview"]})
+                    "capabilities": ["local_chat", "task_idempotency", "explicit_knowledge", "knowledge_only", "public_search", "google_sheets_readonly", "order_preview", "order_batch_preview"]})
             elif parsed.path == "/v1/knowledge":
                 self._send(200, {"records": knowledge.list()})
             elif parsed.path == "/v1/ai/status":
@@ -163,6 +164,21 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
             if not self._require_access():
                 return
             parsed = urlsplit(self.path)
+
+            if parsed.path == "/v1/orders/batch-preview":
+                payload = self._read_json(128 * 1024)
+                if payload is None:
+                    return
+                if set(payload) != {"rows"}:
+                    self._send(422, {"error": "invalid_batch_preview_payload"})
+                    return
+                try:
+                    result = preview_batch(payload["rows"])
+                except OrderBatchError as error:
+                    self._send(422, {"error": str(error)})
+                    return
+                self._send(200, result)
+                return
 
             if parsed.path == "/v1/orders/preview":
                 payload = self._read_json(16 * 1024)
