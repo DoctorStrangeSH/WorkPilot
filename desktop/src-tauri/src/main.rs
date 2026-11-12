@@ -93,6 +93,8 @@ fn api_post_json(token: &str, path: &str, payload: Value, timeout: Duration) -> 
             "google_reauthorization_required" => "[google_reauthorization_required] Доступ Google истёк или был отозван. Подключите Google Sheets заново.".to_string(),
             "invalid_spreadsheet_id" => "Некорректный ID таблицы Google Sheets.".to_string(),
             "invalid_spreadsheet_range" => "Проверьте диапазон ячеек (например, Orders!A1:Z100).".to_string(),
+            "browser_audit_already_active" => "Проверка уже ожидает запуска или выполняется.".to_string(),
+            "audit_job_unavailable" => "Очередь проверки браузера временно недоступна.".to_string(),
             _ => format!("Google Sheets: {code}"),
         });
     }
