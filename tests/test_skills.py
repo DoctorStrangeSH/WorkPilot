@@ -58,6 +58,38 @@ class SkillRegistryTests(unittest.TestCase):
             columns = set(dict(db.execute("SELECT * FROM assistant_skill_feedback").fetchone()))
         self.assertEqual(columns, {"request_id", "skill_id", "helpful", "created_at"})
 
+    def test_sherlock_suggests_skill_but_never_saves_it(self):
+        client = OllamaClient()
+        suggestion = {"title": "Рабочие письма",
+                      "description": "Подготовка профессиональных ответов",
+                      "instructions": "Проверь получателя и предложи черновик, ничего не отправляй",
+                      "terms": "письмо переписка ответ"}
+        client._request = Mock(side_effect=[
+            {"models": [{"name": "qwen3:8b"}]},
+            {"done": True, "message": {"content": __import__("json").dumps(suggestion)}}])
+        result = client.suggest_skill({
+            "model": "qwen3:8b", "request": "Как ответить на письмо?",
+            "response": "Проверьте адресата и составьте черновик."})
+        self.assertEqual(result["suggestion"], suggestion)
+        self.assertFalse(result["saved"])
+        self.assertFalse(result["approved"])
+        self.assertFalse(result["tools_enabled"])
+        self.assertEqual(len(self.skills.list()), 4)
+        self.assertNotIn("tools", client._request.call_args.args[1])
+
+    def test_suggestion_rejects_invalid_provider_output_and_input(self):
+        from malenia.ai import AIError
+        client = OllamaClient()
+        with self.assertRaises(AIError):
+            client.suggest_skill({"model": [], "request": "x", "response": "y"})
+        client._request = Mock(side_effect=[
+            {"models": [{"name": "qwen3:8b"}]},
+            {"done": True, "message": {"content": '{"title":"x"}'}}])
+        with self.assertRaises(AIError):
+            client.suggest_skill({"model": "qwen3:8b",
+                                  "request": "Подскажи", "response": "Шаги"})
+        self.assertEqual(len(self.skills.list()), 4)
+
     def test_ai_receives_only_relevant_approved_skill_not_executable_tool(self):
         client = OllamaClient()
         client.skills = self.skills
