@@ -16,7 +16,7 @@ type Task = { id:string; title:string; description:string; status:"pending"|"can
 type EventItem = { id:number; event_type:string; message:string; created_at:string; };
 type BrowserTab = { id:string; url:string; title:string; shared_at:string; };
 type BrowserAudit = { checked_at:string; total:number; summary:{found:number;in_progress:number;manual_review:number}; read_only:true; source:"browser_tables" };
-type BrowserAuditJob = { job_id:string; status:"pending"|"running"|"completed"|"failed"|"expired"; created_at:string; updated_at:string };
+type BrowserAuditJob = { job_id:string; status:"pending"|"running"|"completed"|"failed"|"expired"; created_at:string; updated_at:string; current_role:"inventory"|"datalens"|"asgard"|null; completed_sources:number; attention_sources:number; failed_role:"inventory"|"datalens"|"asgard"|null };
 type Resources = { total_memory_bytes:number; available_memory_bytes:number; used_memory_percent:number; logical_processors:number; cpu_usage_percent:number; mode:"normal"|"economy"|"emergency"; recommended_parallel_jobs:number; };
 type Dashboard = { running:boolean; resources:Resources; tasks:Task[]; events:EventItem[]; browser_tabs:BrowserTab[]; browser_audit:BrowserAudit|null; browser_audit_job:BrowserAuditJob|null; permissions:PermissionRequest[]; };
 type Page = "overview"|"tasks"|"browser"|"sources"|"orders"|"order_batch"|"ai"|"settings"|"permissions"|"knowledge";
@@ -164,6 +164,13 @@ function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];a
           <Play size={15}/>{sending?"Отправляем…":"Запустить проверку"}</button>
       </div>
       <p role="status">{statusLabel}</p>
+      {job?.status==="running" || job?.status==="completed" || job?.status==="failed" ?
+        <div className="batch-summary" data-testid="browser-audit-progress">
+          <span>Обработано источников: <b>{job.completed_sources}/3</b></span>
+          <span>Требуют внимания: <b>{job.attention_sources}</b></span>
+          {job.current_role?<span>Последний этап: <b>{{inventory:"ИНВента",datalens:"DataLens",asgard:"Asgard"}[job.current_role]}</b></span>:null}
+          {job.failed_role?<span>Ошибка при чтении: <b>{{inventory:"ИНВента",datalens:"DataLens",asgard:"Asgard"}[job.failed_role]}</b></span>:null}
+        </div>:null}
       {requestError?<p className="alert error" role="alert">{requestError}</p>:null}
       <p className="note">Для выполнения требуется запущенный браузер с установленным Browser Bridge, предварительно настроенными тремя HTTPS-страницами и разрешённым доступом. При отсутствии расширения команда истечёт; повторный запуск возможен вручную.</p>
     </div>
