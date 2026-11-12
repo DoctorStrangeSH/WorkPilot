@@ -234,7 +234,8 @@ auditButton.addEventListener("click", async () => {
     // This must be initiated directly from a user gesture. Chrome may persist per-origin approval.
     const allowed = await chrome.permissions.request({origins});
     if (!allowed) throw new Error("permission_denied");
-    const result = await chrome.runtime.sendMessage({type:"start_readonly_audit",targets});
+    const exactGetSearch = document.getElementById("exactSearch").checked === true;
+    const result = await chrome.runtime.sendMessage({type:"start_readonly_audit",targets,exactGetSearch});
     if (!result?.ok) throw new Error("start_refused");
     await chrome.storage.local.set({maleniaTargets:targets});
     auditStatus.textContent = "Задача запущена. Можно закрыть окно расширения; состояние появится здесь при повторном открытии.";
