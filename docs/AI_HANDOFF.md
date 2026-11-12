@@ -1,3 +1,13 @@
+## Follow-up UX update — 7c02d82
+
+- Added a dedicated «Источники» page. Google Sheets/ИНВента, DataLens and Asgard are explicitly marked not connected to Malenia; the copy explains ChatGPT connector access does not transfer to the desktop app.
+- Browser Bridge card reflects the count of manually shared tabs and links to the existing Browser page. It accurately states that only title and sanitized URL are shared; no page contents/DOM/cookies/history are read.
+- Removed the dead Search placeholder route from the main navigation/page type.
+- Source connection hub code: commits `61d5725`, `76a37b6`; styles `4c50cf1`; tests `7dc482f`, `7c02d82`.
+- Desktop CI initially caught missing Lucide icon imports in the assistant redesign; fixed in `21786c5`. It also caught a too-strict test selector for the assistant settings class; fixed in `7c02d82`. Recheck the latest Desktop checks run before calling the branch green.
+- PR #2 title is now «feat: Malenia desktop workspace and assistant UX», still draft/open/unmerged.
+- Branch HEAD at time of this note: `7c02d820a378a043a9a8ebaef8e1264df225af6f`.
+
 # Latest handoff — 2026-11-12
 
 ## User-confirmed product state
