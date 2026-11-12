@@ -90,9 +90,13 @@ var MaleniaAutomation = (() => {
           form.querySelectorAll("input[name]").length === 1);
         if (forms.length !== 1) {
           // Report the type of unsupported UI, never labels, form values or URLs.
-          const kind = allForms.length ? "unsupported_search_form" :
-            document.querySelectorAll('[role="searchbox"],input[type="search"]').length ?
-              "dynamic_search_ui" : "unmapped_search_form";
+          const standaloneSearch = [...document.querySelectorAll(
+            'input[type="search"],input[role="searchbox"]'
+          )].some(input => !input.closest("form") &&
+            (input.getAttribute("aria-label") || input.getAttribute("name") || "").trim() ===
+              fieldName);
+          const kind = standaloneSearch ? "dynamic_search_ui" :
+            allForms.length ? "unsupported_search_form" : "unmapped_search_form";
           return {origin: location.origin, kind};
         }
         const form = forms[0];
@@ -147,6 +151,21 @@ var MaleniaAutomation = (() => {
         });
         if (matches.length !== 1) return {origin: location.origin, status: "ambiguous"};
         const input = matches[0];
+        // Observe a matching result table, not unrelated spinners/navigation.
+        const expected = resourceRole === "datalens" ?
+          ["main_partner_code_original", "sc_id", "result", "scanned_at"] :
+          ["cargo_place", "status"];
+        const containers = [...document.querySelectorAll(
+          'table,[role="grid"],[role="table"]'
+        )].filter(node => {
+          const heads = [...node.querySelectorAll(
+            'th,[role="columnheader"]'
+          )].map(cell => cell.innerText.trim());
+          return expected.every(header => heads.includes(header));
+        });
+        if (containers.length !== 1) {
+          return {origin: location.origin, status: "unsupported"};
+        }
         // Use the native setter so common controlled React/Vue inputs see the update.
         const setter = Object.getOwnPropertyDescriptor(
           HTMLInputElement.prototype, "value")?.set;
@@ -162,7 +181,7 @@ var MaleniaAutomation = (() => {
             observer.disconnect();
             resolve({origin: location.origin, status: "updated"});
           });
-          observer.observe(document.body, {subtree: true, childList: true,
+          observer.observe(containers[0], {subtree: true, childList: true,
             characterData: true});
           timeout = setTimeout(() => {
             if (settled) return;
