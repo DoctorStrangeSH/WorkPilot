@@ -122,6 +122,7 @@ class GoogleSheetsConnector:
             old = self._attempt
             if old is not None and old.status == "authorizing":
                 old.cancelled = True
+                old.status = "cancelled"
                 old.event.set()
                 old.server.server_close()
 
@@ -258,6 +259,7 @@ class GoogleSheetsConnector:
             attempt = self._attempt
             if attempt is not None and attempt.status == "authorizing":
                 attempt.cancelled = True
+                attempt.status = "cancelled"
                 attempt.event.set()
                 attempt.server.server_close()
             self._access_token = None
