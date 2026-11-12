@@ -147,6 +147,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
   const [spreadsheetId,setSpreadsheetId]=useState("");
   const [range,setRange]=useState("A1:Z100");
   const [sheetData,setSheetData]=useState<GoogleSheetsData|null>(null);
+  const [verifiedKey,setVerifiedKey]=useState<string|null>(null);
   const [busy,setBusy]=useState(false);
   const [sheetError,setSheetError]=useState("");
   const [sheetNotice,setSheetNotice]=useState("");
@@ -180,24 +181,29 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
     try{
       await invoke("disconnect_google_sheets");
       setSheetData(null);
+      setVerifiedKey(null);
       setSheetsStatus({connected:false,status:"not_connected",error:null});
       setSheetNotice("Локальные данные авторизации удалены. При необходимости отзовите разрешение также в Google Account.");
     }catch(error){setSheetError(String(error));}
     finally{setBusy(false);}
   };
   const readSheet=async()=>{
-    setBusy(true);setSheetError("");setSheetNotice("");setSheetData(null);
+    setBusy(true);setSheetError("");setSheetNotice("");setSheetData(null);setVerifiedKey(null);
     try{
       const result=await invoke<GoogleSheetsData>("read_google_sheet",{
         spreadsheetId:spreadsheetId.trim(),range:range.trim()
       });
       setSheetData(result);
+      setVerifiedKey(spreadsheetId.trim()+"|"+range.trim());
       setSheetNotice("Диапазон прочитан. Никаких изменений в таблицу не внесено.");
     }catch(error){setSheetError(String(error));}
     finally{setBusy(false);}
   };
 
-  const statusLabel=sheetsStatus.status==="connected"?"Подключён · только чтение":
+  const sheetsAuthorized=sheetsStatus.status==="authorized"||sheetsStatus.connected;
+  const sheetVerified=sheetsAuthorized&&verifiedKey===spreadsheetId.trim()+"|"+range.trim();
+  const statusLabel=sheetVerified?"Подключён · диапазон проверен":
+    sheetsAuthorized?"Авторизация сохранена · проверьте таблицу":
     sheetsStatus.status==="authorizing"?"Ожидает подтверждения в браузере":
     sheetsStatus.status==="denied"?"Доступ не предоставлен":
     sheetsStatus.status==="expired"?"Время авторизации истекло":
@@ -212,16 +218,16 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
     {sheetNotice?<p className="alert success" role="status">{sheetNotice}</p>:null}
     <div className="sources-grid">
       <article className="panel source-card google-source-card">
-        <div className="source-card-top"><span className="source-icon sheets"><Database size={19}/></span><span className={"source-state "+(sheetsStatus.connected?"ready":"pending")}>{statusLabel}</span></div>
+        <div className="source-card-top"><span className="source-icon sheets"><Database size={19}/></span><span className={"source-state "+(sheetVerified?"ready":"pending")}>{statusLabel}</span></div>
         <h2>Google Sheets · ИНВента</h2>
         <p>Отдельная авторизация Malenia. Запрашивается только <code>spreadsheets.readonly</code>: приложение может читать таблицы, но не изменять их.</p>
         {!connected?<p className="source-help">Сначала запустите локальный агент на главной странице.</p>:null}
-        {!sheetsStatus.connected?
+        {!sheetsAuthorized?
           <div className="google-connect-form">
             <label>Google OAuth Desktop Client ID
               <input value={clientId} onChange={e=>setClientId(e.target.value)} maxLength={300} autoComplete="off" spellCheck={false} placeholder="…apps.googleusercontent.com" disabled={!connected||busy}/>
             </label>
-            <button className="primary source-action" disabled={!connected||busy||!clientId.trim()} onClick={()=>void connectSheets()}>{busy?"Подключаем…":"Подключить Google"}</button>
+            <button className="primary source-action" disabled={!connected||busy||!clientId.trim()||sheetsStatus.status==="authorizing"} onClick={()=>void connectSheets()}>{busy?"Подключаем…":"Подключить Google"}</button>
             <small>Client ID создаётся в Google Cloud Console для приложения типа Desktop. Client Secret не нужен. После нажатия откроется системный браузер, где ты сам подтвердишь доступ.</small>
           </div>:
           <div className="google-read-form">
