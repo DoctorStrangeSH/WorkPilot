@@ -173,10 +173,10 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                     return
                 try:
                     if parsed.path.endswith("/connect"):
-                        if set(payload) != {"client_id"}:
+                        if set(payload) not in ({"client_id"}, {"client_id", "client_secret"}):
                             self._send(422, {"error": "invalid_google_oauth_client_id"})
                             return
-                        result = sheets.start_connect(payload.get("client_id"))
+                        result = sheets.start_connect(payload.get("client_id"), payload.get("client_secret"))
                     elif parsed.path.endswith("/disconnect"):
                         if payload:
                             self._send(422, {"error": "invalid_disconnect_payload"})
