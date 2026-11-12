@@ -9,6 +9,9 @@ import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
+from .ai import OllamaClient, AIError
+from .permission_inbox import PermissionInbox
+from .permissions import PermissionGate
 from .resources import ResourceManager
 from .store import TaskStore
 
@@ -27,7 +30,11 @@ class MaleniaHTTPServer(ThreadingHTTPServer):
         super().server_bind()
 
 
-def make_handler(store: TaskStore, token: str, resources: ResourceManager):
+def make_handler(store: TaskStore, token: str, resources: ResourceManager,
+                 permissions: PermissionInbox | None = None, ai: OllamaClient | None = None):
+    inbox = permissions if permissions is not None else PermissionInbox(PermissionGate(store))
+    ai_client = ai if ai is not None else OllamaClient()
+
     class Handler(BaseHTTPRequestHandler):
         server_version = "MaleniaAgent/0.2"
         sys_version = ""
@@ -67,13 +74,13 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager):
                 return False
             return True
 
-        def _read_json(self) -> dict | None:
+        def _read_json(self, max_bytes: int = MAX_BODY_BYTES) -> dict | None:
             try:
                 length = int(self.headers.get("Content-Length", "0"))
             except ValueError:
                 self._send(400, {"error": "invalid_content_length"})
                 return None
-            if length <= 0 or length > MAX_BODY_BYTES:
+            if length <= 0 or length > max_bytes:
                 self._send(413, {"error": "body_size_not_allowed"})
                 return None
             try:
@@ -95,7 +102,11 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager):
             if not self._require_access():
                 return
 
-            if parsed.path == "/v1/resources":
+            if parsed.path == "/v1/ai/status":
+                self._send(200, ai_client.status())
+            elif parsed.path == "/v1/permissions":
+                self._send(200, {"permissions": inbox.list_requests(), "execution_enabled": False})
+            elif parsed.path == "/v1/resources":
                 self._send(200, {"resources": resources.snapshot().to_dict()})
             elif parsed.path == "/v1/tasks":
                 query = parse_qs(parsed.query)
@@ -125,6 +136,36 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager):
             if not self._require_access():
                 return
             parsed = urlsplit(self.path)
+
+            if parsed.path == "/v1/ai/chat":
+                payload = self._read_json(32 * 1024)
+                if payload is None:
+                    return
+                try:
+                    self._send(200, ai_client.chat(payload))
+                except AIError as error:
+                    self._send(error.status, {"error": error.code})
+                return
+
+            match = re.fullmatch(r"/v1/permissions/([0-9a-fA-F-]{36})/decision", parsed.path)
+            if match:
+                payload = self._read_json()
+                if payload is None:
+                    return
+                binding = payload.get("binding")
+                decision = payload.get("decision")
+                if (set(payload) != {"binding", "decision"}
+                        or not isinstance(binding, str)
+                        or re.fullmatch(r"[0-9a-f]{64}", binding) is None
+                        or not isinstance(decision, str)
+                        or decision not in {"allow", "deny", "revoke"}):
+                    self._send(422, {"error": "invalid_permission_decision"})
+                    return
+                if not inbox.decide(match.group(1), binding, decision):
+                    self._send(409, {"error": "permission_unavailable_or_changed"})
+                    return
+                self._send(200, {"updated": True, "execution_enabled": False})
+                return
 
             if parsed.path == "/v1/tasks":
                 payload = self._read_json()
@@ -159,7 +200,16 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager):
 def create_server(host: str, port: int, store: TaskStore, token: str) -> MaleniaHTTPServer:
     if host not in {"127.0.0.1", "localhost"}:
         raise ValueError("Malenia API may only bind to loopback")
-    return MaleniaHTTPServer((host, port), make_handler(store, token, ResourceManager()))
+    gate = PermissionGate(store)
+    inbox = PermissionInbox(gate)
+    server = MaleniaHTTPServer((host, port), make_handler(store, token, ResourceManager(), inbox))
+    try:
+        # Only the runtime that successfully owns the socket can invalidate grants.
+        gate.invalidate_open()
+    except Exception:
+        server.server_close()
+        raise
+    return server
 
 
 def run_server(server: MaleniaHTTPServer) -> None:

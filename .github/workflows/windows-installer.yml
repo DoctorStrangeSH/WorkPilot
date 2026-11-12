@@ -46,6 +46,8 @@ jobs:
         shell: powershell
         run: |
           $scripts = @(
+            "packaging/setup_browser_bridge.ps1",
+            "packaging/test_browser_setup.ps1",
             "packaging/register_browser_bridge.ps1",
             "packaging/unregister_browser_bridge.ps1",
             "packaging/test_browser_bridge_registration.ps1"

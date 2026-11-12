@@ -19,11 +19,18 @@ const API_PORT: u16 = 8765;
 struct AgentState {
     child: Mutex<Option<Child>>,
     token: Mutex<Option<String>>,
+    ai_child: Mutex<Option<Child>>,
 }
 
 
 impl Drop for AgentState {
     fn drop(&mut self) {
+        if let Ok(slot) = self.ai_child.get_mut() {
+            if let Some(mut child) = slot.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
         if let Ok(child_slot) = self.child.get_mut() {
             if let Some(mut child) = child_slot.take() {
                 let _ = child.kill();
@@ -40,11 +47,13 @@ struct Dashboard {
     tasks: Vec<Value>,
     events: Vec<Value>,
     browser_tabs: Vec<Value>,
+    permissions: Vec<Value>,
 }
 
 fn api_get(token: &str, path: &str) -> Result<Value, String> {
     reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(3))
+        .no_proxy()
         .build()
         .map_err(|error| format!("Не удалось создать HTTP-клиент: {error}"))?
         .get(format!("http://{API_HOST}:{API_PORT}{path}"))
@@ -195,7 +204,9 @@ fn get_dashboard(state: State<'_, AgentState>) -> Result<Dashboard, String> {
     let events = api_get(&token, "/v1/events?limit=30")?.get("events").and_then(Value::as_array).cloned().unwrap_or_default();
     let browser_tabs = api_get(&token, "/v1/browser/tabs?limit=20")?.get("tabs").and_then(Value::as_array).cloned().unwrap_or_default();
 
-    Ok(Dashboard { running: true, resources, tasks, events, browser_tabs })
+    let permissions = api_get(&token, "/v1/permissions")?.get("permissions").and_then(Value::as_array).cloned().unwrap_or_default();
+
+    Ok(Dashboard { running: true, resources, tasks, events, browser_tabs, permissions })
 }
 
 #[tauri::command]
@@ -237,6 +248,99 @@ fn cancel_task(state: State<'_, AgentState>, task_id: String) -> Result<Value, S
         .json::<Value>().map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+fn decide_permission(
+    state: State<'_, AgentState>, permission_id: String, binding: String, decision: String,
+) -> Result<Value, String> {
+    if permission_id.len() != 36
+        || !permission_id.chars().all(|ch| ch.is_ascii_hexdigit() || ch == '-')
+        || binding.len() != 64
+        || !binding.chars().all(|ch| ch.is_ascii_digit() || ('a'..='f').contains(&ch))
+        || !matches!(decision.as_str(), "allow" | "deny" | "revoke")
+    {
+        return Err("Некорректное решение по разрешению".to_string());
+    }
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Агент не запущен".to_string())?;
+    let response = reqwest::blocking::Client::new()
+        .post(format!("http://{API_HOST}:{API_PORT}/v1/permissions/{permission_id}/decision"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({"binding": binding, "decision": decision}))
+        .timeout(Duration::from_secs(3))
+        .send().map_err(|_| "Доставка решения не подтверждена. Обновите список перед новой попыткой".to_string())?;
+    if response.status() == reqwest::StatusCode::CONFLICT {
+        return Err("Разрешение истекло, изменилось или уже обработано. Обновите список".to_string());
+    }
+    response.error_for_status().map_err(|_| "Решение по разрешению отклонено".to_string())?
+        .json::<Value>().map_err(|_| "Некорректный ответ на решение по разрешению".to_string())
+}
+
+fn ollama_ready() -> bool {
+    reqwest::blocking::Client::builder().no_proxy().timeout(Duration::from_secs(2)).build()
+        .ok().and_then(|client| client.get("http://127.0.0.1:11434/api/version").send().ok())
+        .filter(|response| response.status().is_success())
+        .and_then(|response| response.json::<Value>().ok())
+        .and_then(|value| value.get("version").and_then(Value::as_str).map(|_| ()))
+        .is_some()
+}
+
+#[tauri::command]
+fn start_local_ai(state: State<'_, AgentState>) -> Result<String, String> {
+    let mut slot = state.ai_child.lock().map_err(|_| "Состояние ИИ недоступно".to_string())?;
+    if ollama_ready() { return Ok("Ollama уже работает".to_string()); }
+    if std::net::TcpStream::connect(("127.0.0.1", 11434)).is_ok() {
+        return Err("Порт модели занят другим процессом".to_string());
+    }
+    let root = PathBuf::from(std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA недоступна".to_string())?).join("Malenia");
+    let executable = root.join("ollama/ollama.exe");
+    if !executable.is_file() { return Err("Сначала установите локальный Ollama".to_string()); }
+    if let Some(mut old) = slot.take() { let _ = old.kill(); let _ = old.wait(); }
+    let mut command = Command::new(executable);
+    command.arg("serve")
+        .env("OLLAMA_HOST", "127.0.0.1:11434").env("OLLAMA_MODELS", root.join("models"))
+        .env("OLLAMA_NO_CLOUD", "1").env("OLLAMA_NUM_PARALLEL", "1")
+        .env("OLLAMA_MAX_LOADED_MODELS", "1").env("OLLAMA_CONTEXT_LENGTH", "2048")
+        .env("OLLAMA_KEEP_ALIVE", "30s")
+        .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    #[cfg(windows)]
+    { use std::os::windows::process::CommandExt; command.creation_flags(0x08000000); }
+    let mut child = command.spawn().map_err(|_| "Не удалось запустить Ollama".to_string())?;
+    for _ in 0..20 {
+        thread::sleep(Duration::from_millis(250));
+        if child.try_wait().map_err(|_| "Не удалось проверить Ollama".to_string())?.is_some() { break; }
+        if ollama_ready() { *slot = Some(child); return Ok("Локальная модель готова к подключению".to_string()); }
+    }
+    let _ = child.kill(); let _ = child.wait();
+    Err("Ollama не запустился".to_string())
+}
+
+#[tauri::command]
+fn get_ai_status(state: State<'_, AgentState>) -> Result<Value, String> {
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
+    api_get(&token, "/v1/ai/status")
+}
+
+#[tauri::command]
+async fn chat_ai(state: State<'_, AgentState>, model: String, messages: Value) -> Result<Value, String> {
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let response = reqwest::blocking::Client::new()
+            .post(format!("http://{API_HOST}:{API_PORT}/v1/ai/chat"))
+            .header("Authorization", format!("Bearer {token}"))
+            .json(&serde_json::json!({"model": model, "messages": messages}))
+            .timeout(Duration::from_secs(100))
+            .send().map_err(|_| "Модель не ответила. Запрос не повторён автоматически".to_string())?;
+        let status = response.status();
+        let body = response.json::<Value>().map_err(|_| "Некорректный ответ агента".to_string())?;
+        if !status.is_success() {
+            return Err(format!("Ошибка модели: {}", body.get("error").and_then(Value::as_str).unwrap_or("unavailable")));
+        }
+        Ok(body)
+    }).await.map_err(|_| "Ошибка обработки запроса модели".to_string())?
+}
+
 fn main() {
     tauri::Builder::default()
         // Activate the original window before a second shell can own another agent.
@@ -248,7 +352,7 @@ fn main() {
             }
         }))
         .manage(AgentState::default())
-        .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard, create_task, cancel_task])
+        .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai])
         .run(tauri::generate_context!())
         .expect("error while running Malenia");
 }

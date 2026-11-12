@@ -72,6 +72,21 @@ class TaskStore:
                     shared_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS action_permissions (
+                    id TEXT PRIMARY KEY,
+                    binding TEXT NOT NULL,
+                    capability TEXT NOT NULL,
+                    status TEXT NOT NULL CHECK(status IN
+                        ('pending', 'approved', 'denied', 'revoked', 'consumed', 'expired')),
+                    expires_at REAL NOT NULL,
+                    expires_monotonic REAL NOT NULL,
+                    created_wall REAL NOT NULL,
+                    created_monotonic REAL NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_permissions_status_created
+                    ON action_permissions(status, created_wall DESC);
+
                 CREATE INDEX IF NOT EXISTS idx_browser_tabs_shared
                     ON browser_tabs(shared_at DESC);
 

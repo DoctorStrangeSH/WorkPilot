@@ -26,6 +26,8 @@ jobs:
         run: npm run build
       - name: Test Browser Bridge connection diagnostics
         run: node --test tests/browser_bridge.test.cjs
+      - name: Test permission panel rendering
+        run: node --test tests/permissions_ui.test.cjs
       - name: Check Tauri host
         run: cargo check --manifest-path desktop/src-tauri/Cargo.toml
       - name: Run Python unit tests

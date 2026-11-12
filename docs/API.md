@@ -36,3 +36,18 @@ The server accepts loopback Host values only, does not enable CORS, and limits J
 - POST /v1/tasks/{uuid}/cancel — cancel a pending task.
 
 The current MVP persists and lists tasks but does not execute them. Browser Bridge supports only explicit active-tab sharing in its preview; automatic tab discovery, DOM access, screenshots, desktop control, AI planning and image search are not implemented.
+
+
+## One-shot permission decisions (development preview)
+
+- GET /v1/permissions: session-scoped request snapshots and execution_enabled=false.
+- POST /v1/permissions/{uuid}/decision: JSON {"binding":"<displayed SHA-256>",
+  "decision":"allow|deny|revoke"}. No other fields are accepted. Requires bearer
+  authentication and a loopback Host, like the other private routes.
+- Success: 200, updated=true, execution_enabled=false. Unavailable/changed/replayed
+  requests: 409. Invalid bodies: 422. The server never creates or consumes a
+  permission through HTTP. Decisions do not execute browser actions.
+
+There is currently no live request producer. Only a future trusted internal
+adapter may create requests after obtaining browser-authoritative target identity.
+See BROWSER_PERMISSIONS.md for lifecycle and integration requirements.

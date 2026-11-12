@@ -30,3 +30,9 @@ jobs:
       - name: Exercise isolated registration
         shell: powershell
         run: ./packaging/test_browser_bridge_registration.ps1
+
+      - name: Exercise manual-ID setup and tamper rejection
+        shell: powershell
+        run: |
+          ./packaging/test_browser_bridge_registration.ps1 -UseSetupWizard
+          ./packaging/test_browser_setup.ps1

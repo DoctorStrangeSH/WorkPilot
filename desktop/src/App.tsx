@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AiPage } from "./AiPage";
 import { invoke } from "@tauri-apps/api/core";
+import { PermissionsPage, type PermissionRequest, type PermissionDecision } from "./PermissionsPage";
 import {
   Activity, ArrowUpRight, BrainCircuit, Check, ChevronDown, CircleHelp,
   Clock3, Cpu, Database, FileSearch, Globe2, LayoutDashboard, ListTodo,
@@ -11,10 +13,10 @@ type Task = { id:string; title:string; description:string; status:"pending"|"can
 type EventItem = { id:number; event_type:string; message:string; created_at:string; };
 type BrowserTab = { id:string; url:string; title:string; shared_at:string; };
 type Resources = { total_memory_bytes:number; available_memory_bytes:number; used_memory_percent:number; logical_processors:number; cpu_usage_percent:number; mode:"normal"|"economy"|"emergency"; recommended_parallel_jobs:number; };
-type Dashboard = { running:boolean; resources:Resources; tasks:Task[]; events:EventItem[]; browser_tabs:BrowserTab[]; };
-type Page = "overview"|"tasks"|"browser"|"search"|"ai"|"settings";
+type Dashboard = { running:boolean; resources:Resources; tasks:Task[]; events:EventItem[]; browser_tabs:BrowserTab[]; permissions:PermissionRequest[]; };
+type Page = "overview"|"tasks"|"browser"|"search"|"ai"|"settings"|"permissions";
 
-const labels:Record<Page,string>={overview:"Главная",tasks:"Задания",browser:"Браузер",search:"Поиск",ai:"ИИ-модели",settings:"Настройки"};
+const labels:Record<Page,string>={overview:"Главная",tasks:"Задания",browser:"Браузер",search:"Поиск",ai:"ИИ-модели",settings:"Настройки",permissions:"Разрешения"};
 const bytes=(n:number)=>n ? (n/1024/1024/1024).toFixed(1)+" ГБ" : "—";
 const time=(v:string)=>{try{return new Intl.DateTimeFormat("ru-RU",{hour:"2-digit",minute:"2-digit"}).format(new Date(v));}catch{return v;}};
 
@@ -22,6 +24,7 @@ export default function App(){
   const [page,setPage]=useState<Page>("overview");
   const [data,setData]=useState<Dashboard|null>(null);
   const [busy,setBusy]=useState(false);
+  const permissionDecisionBusy=useRef(false);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [title,setTitle]=useState("");
@@ -40,6 +43,14 @@ export default function App(){
   const stopAgent=async()=>{setBusy(true);try{setNotice(await invoke<string>("stop_agent"));setData(null);}catch(e){setError(String(e));}finally{setBusy(false);}};
   const addTask=async()=>{if(!title.trim())return;setBusy(true);try{await invoke("create_task",{title:title.trim(),description});setTitle("");setDescription("");setComposer(false);setNotice("Задача добавлена в локальную очередь");await refresh();}catch(e){setError(String(e));}finally{setBusy(false);}};
   const cancelTask=async(id:string)=>{try{await invoke("cancel_task",{taskId:id});setNotice("Ожидающая задача отменена");await refresh();}catch(e){setError(String(e));}};
+  const decidePermission=async(request:PermissionRequest,decision:PermissionDecision)=>{
+    if(permissionDecisionBusy.current)return;
+    permissionDecisionBusy.current=true;
+    setBusy(true);setError("");let failure="";
+    try{await invoke("decide_permission",{permissionId:request.id,binding:request.binding,decision});setNotice("Решение сохранено. Браузерные действия пока не подключены.");}
+    catch(e){failure=String(e);}
+    finally{await refresh();if(failure)setError(failure);permissionDecisionBusy.current=false;setBusy(false);}
+  };
   const tasks=useMemo(()=>{const all=data?.tasks??[];return filter?all.filter(t=>t.title.toLowerCase().includes(filter.toLowerCase())):all;},[data,filter]);
   const mode=data?.resources.mode;
   const modeLabel=mode==="normal"?"Обычный":mode==="economy"?"Экономия":mode==="emergency"?"Защита":"—";
@@ -57,7 +68,7 @@ export default function App(){
         <Nav icon={<BrainCircuit/>} label="ИИ-модели" active={page==="ai"} onClick={()=>setPage("ai")}/>
       </nav>
       <div className="nav-label separated">СИСТЕМА</div>
-      <nav><Nav icon={<Settings2/>} label="Настройки" active={page==="settings"} onClick={()=>setPage("settings")}/></nav>
+      <nav><Nav icon={<ShieldCheck/>} label="Разрешения" active={page==="permissions"} count={data?.permissions.filter(p=>p.status==="pending").length} onClick={()=>setPage("permissions")}/><Nav icon={<Settings2/>} label="Настройки" active={page==="settings"} onClick={()=>setPage("settings")}/></nav>
       <div className="side-spacer"/>
       <div className="privacy"><div><ShieldCheck size={17}/></div><b>Данные остаются локально</b><p>Ядро работает на этом компьютере. Секреты браузера не считываются.</p><small><LockKeyhole size={11}/> LOCAL-FIRST</small></div>
       <div className="user-row"><div className="user-avatar">M</div><div><b>Пользователь</b><small>Личный агент</small></div><MoreHorizontal size={18}/></div>
@@ -89,12 +100,13 @@ export default function App(){
 
         {page==="tasks"&&<section className="page"><div className="page-head"><div><div className="eyebrow">УПРАВЛЕНИЕ ПРОЦЕССАМИ</div><h1>Задания</h1><p>Создавайте задачи и управляйте локальной очередью.</p></div><button className="primary" onClick={()=>setComposer(true)} disabled={!connected}><Plus size={15}/>Новая задача</button></div><div className="toolbar"><div className="search"><Search size={15}/><input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Поиск по заданиям..."/></div><small>{tasks.length} записей</small></div><div className="panel"><TaskList tasks={tasks} onCancel={cancelTask}/></div><div className="note"><CircleHelp size={15}/>В версии 0.3 задачи сохраняются в SQLite. Автоматическое выполнение появится на следующем этапе.</div></section>}
 
+        {page==="permissions"&&<PermissionsPage requests={data?.permissions??[]} connected={connected} busy={busy} onDecide={decidePermission}/>}
         {page==="browser"&&<BrowserPage tabs={data?.browser_tabs??[]} connected={connected}/>}
         {page==="search"&&<Coming icon={<FileSearch/>} title="Универсальный поиск" text="Здесь появится поиск по рабочим ресурсам, трекерам и фотографиям. Источники подключаются отдельными адаптерами."/>}
-        {page==="ai"&&<Coming icon={<BrainCircuit/>} title="Локальные ИИ-модели" text="Подключение Ollama появится после проверки нагрузки на компьютере с 16 ГБ оперативной памяти."/>}
-        {page==="settings"&&<section className="page"><div className="page-head"><div><div className="eyebrow">КОНФИГУРАЦИЯ</div><h1>Настройки</h1><p>Состояние локальной среды и параметры запуска.</p></div></div><div className="settings-grid"><Setting icon={<Database/>} title="Локальный агент" text="Python Runtime слушает только localhost." value={connected?"Запущен":"Остановлен"} action={<button className={connected?"danger":"primary"} onClick={connected?stopAgent:runAgent} disabled={busy}>{connected?<Square size={14}/>:<Play size={14}/>} {connected?"Остановить":"Запустить"}</button>}/><Setting icon={<ShieldCheck/>} title="Приватность" text="Секреты браузера не извлекаются. API доступен только локально." value="Local-first"/><Setting icon={<Cpu/>} title="Среда разработки" text="Windows · Python 3.11+ · SQLite · Tauri 2" value="Версия 0.3.0"/><Setting icon={<Globe2/>} title="Будущие подключения" text="Ручная передача вкладок Яндекс Браузера доступна через Browser Bridge. Ollama и поисковые адаптеры ещё не подключены." value="Ожидают реализации"/></div></section>}
+        {page==="ai"&&<AiPage connected={connected}/>}
+        {page==="settings"&&<section className="page"><div className="page-head"><div><div className="eyebrow">КОНФИГУРАЦИЯ</div><h1>Настройки</h1><p>Состояние локальной среды и параметры запуска.</p></div></div><div className="settings-grid"><Setting icon={<Database/>} title="Локальный агент" text="Python Runtime слушает только localhost." value={connected?"Запущен":"Остановлен"} action={<button className={connected?"danger":"primary"} onClick={connected?stopAgent:runAgent} disabled={busy}>{connected?<Square size={14}/>:<Play size={14}/>} {connected?"Остановить":"Запустить"}</button>}/><Setting icon={<ShieldCheck/>} title="Приватность" text="Секреты браузера не извлекаются. API доступен только локально." value="Local-first"/><Setting icon={<Cpu/>} title="Среда разработки" text="Windows · Python 3.11+ · SQLite · Tauri 2" value="Версия 0.4.0"/><Setting icon={<Globe2/>} title="Будущие подключения" text="Ручная передача вкладок Яндекс Браузера доступна через Browser Bridge. Ollama и поисковые адаптеры ещё не подключены." value="Ожидают реализации"/></div></section>}
       </div>
-      <footer className="statusbar"><span><i className={connected?"":"idle"}/>{connected?"Локальный агент активен":"Локальный агент остановлен"}</span><span><LockKeyhole size={12}/>Локальная среда　·　Malenia 0.3.0</span></footer>
+      <footer className="statusbar"><span><i className={connected?"":"idle"}/>{connected?"Локальный агент активен":"Локальный агент остановлен"}</span><span><LockKeyhole size={12}/>Локальная среда　·　Malenia 0.4.0</span></footer>
     </main>
 
     {composer&&<div className="backdrop" onClick={()=>setComposer(false)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><div><div className="eyebrow">НОВОЕ ЗАДАНИЕ</div><h2>Что нужно сделать?</h2></div><button className="icon-btn" onClick={()=>setComposer(false)}><X size={17}/></button></div><label>Название задачи<input autoFocus maxLength={200} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Например: проверить новые заказы"/></label><label>Описание <small>необязательно</small><textarea rows={4} maxLength={2000} value={description} onChange={e=>setDescription(e.target.value)} placeholder="Дополнительные детали..."/></label><div className="modal-foot"><span><LockKeyhole size={12}/>Сохранится локально</span><button className="primary" disabled={!connected||!title.trim()||busy} onClick={addTask}>{busy?<LoaderCircle className="spin" size={15}/>:<Plus size={15}/>}Добавить в очередь</button></div><p className="hint">Пока задача только сохраняется в очереди — автоматическое выполнение ещё не подключено.</p></div></div>}

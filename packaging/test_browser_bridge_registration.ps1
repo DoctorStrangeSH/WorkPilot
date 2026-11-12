@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$NativeHostPath)
+param([string]$NativeHostPath, [switch]$UseSetupWizard)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 if ($PSVersionTable.PSEdition -ne "Desktop" -or $PSVersionTable.PSVersion.Major -ne 5) {
@@ -27,7 +27,8 @@ try {
     }
     $NativeHostPath = (Resolve-Path -LiteralPath $NativeHostPath).Path
     $extensionId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    $registration = Join-Path $PSScriptRoot "register_browser_bridge.ps1"
+    $entryName = if ($UseSetupWizard) { "setup_browser_bridge.ps1" } else { "register_browser_bridge.ps1" }
+    $registration = Join-Path $PSScriptRoot $entryName
     # A rejected host must fail before writing any registration.
     $rejected = $false
     try { & $registration -ExtensionId $extensionId -NativeHostPath (Join-Path $testRoot "missing.exe") }
