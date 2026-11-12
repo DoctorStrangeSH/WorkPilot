@@ -142,8 +142,17 @@ class NativeMessagingProtocolTests(unittest.TestCase):
         self.assertEqual(response["summary"]["found"], 1)
         self.assertEqual(response["type"], "site_tables_reconciled")
         self.assertFalse(response["persisted"])
+        self.assertTrue(response["aggregate_persisted"])
         self.assertFalse(response["write_enabled"])
         self.assertNotIn("TEST-001", json.dumps(response))
+        report = self.store.latest_browser_audit_summary()
+        self.assertEqual(report["summary"]["found"], 1)
+        self.assertEqual(report["total"], 1)
+        self.assertNotIn("TEST-001", json.dumps(report))
+        with self.store._session() as db:
+            raw = db.execute("SELECT * FROM browser_audit_summary").fetchone()
+            self.assertEqual(set(dict(raw)), {"id", "checked_at", "total",
+                                               "found", "in_progress", "manual_review"})
         self.assertEqual(self.store.list_browser_tabs(), before_tabs)
         self.assertEqual(self.store.list_events(), before_events)
         snapshots["inventory"]["columns"] = ["unknown", "inventory_date"]
