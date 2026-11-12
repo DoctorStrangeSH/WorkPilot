@@ -97,3 +97,53 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   })();
   return false;
 });
+
+
+// Desktop-triggered jobs use a separate one-shot request queue. The extension
+// wakes periodically, never accepts arbitrary URLs or page actions from desktop.
+const DESKTOP_AUDIT_ALARM = "malenia-desktop-audit-check";
+async function pollDesktopAudit() {
+  if (running) return;
+  let session;
+  try {
+    const stored = await chrome.storage.local.get(["maleniaTargets", "maleniaExactGetSearch"]);
+    if (!stored?.maleniaTargets) return;
+    const targets = MaleniaAutomation.normalizeTargets(stored.maleniaTargets);
+    if (!await chrome.permissions.contains({origins:MaleniaAutomation.origins(targets)})) return;
+    session = nativeSession();
+    const hello = await session.send({type:"hello"});
+    if (!hello?.ok || hello.host !== HOST ||
+        !hello.capabilities?.includes("claim_browser_audit") ||
+        !hello.capabilities?.includes("finish_browser_audit") ||
+        !hello.capabilities?.includes("reconcile_site_tables")) return;
+    const claimed = await session.send({type:"claim_browser_audit"});
+    const jobId = claimed?.job?.job_id;
+    if (!claimed?.ok || !claimed.job || typeof jobId !== "string") return;
+    running = true;
+    let succeeded = false;
+    try {
+      await progress({phase:"starting",results:[]});
+      const result = await MaleniaAutomation.run(chrome,targets,
+        message=>session.send(message),progress,
+        {exactGetSearch:stored.maleniaExactGetSearch !== false});
+      succeeded = result.phase === "reconciled";
+    } catch {
+      await progress({phase:"needs_attention",results:[],error:"setup_or_connection"});
+    } finally {
+      // Never retry an unacknowledged claim automatically. The store expires it.
+      try { await session.send({type:"finish_browser_audit",job_id:jobId,succeeded}); }
+      catch { /* Extension may have disconnected. */ }
+      running = false;
+    }
+  } catch { /* Host unavailable, no permissions, or extension restarting. */ }
+  finally { session?.close(); }
+}
+function enableDesktopAuditPolling() {
+  chrome.alarms.create(DESKTOP_AUDIT_ALARM,{periodInMinutes:1});
+}
+chrome.runtime.onInstalled.addListener(enableDesktopAuditPolling);
+chrome.runtime.onStartup.addListener(enableDesktopAuditPolling);
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === DESKTOP_AUDIT_ALARM) void pollDesktopAudit();
+});
+enableDesktopAuditPolling();
