@@ -74,6 +74,15 @@ class TaskStore:
                     FOREIGN KEY(task_id) REFERENCES tasks(id)
                 );
 
+                CREATE TABLE IF NOT EXISTS browser_audit_summary (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    checked_at TEXT NOT NULL,
+                    total INTEGER NOT NULL,
+                    found INTEGER NOT NULL,
+                    in_progress INTEGER NOT NULL,
+                    manual_review INTEGER NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS browser_tabs (
                     id TEXT PRIMARY KEY,
                     url TEXT NOT NULL,
@@ -206,3 +215,40 @@ class TaskStore:
                 (safe_limit,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def record_browser_audit_summary(self, total: int, summary: dict[str, int]) -> dict[str, Any]:
+        """Persist only bounded aggregate counts, never cargo IDs or site contents."""
+        keys = {"found", "in_progress", "manual_review"}
+        if (type(total) is not int or not 0 <= total <= 100
+                or type(summary) is not dict or set(summary) != keys
+                or any(type(summary[k]) is not int or not 0 <= summary[k] <= total for k in keys)
+                or sum(summary.values()) != total):
+            raise ValueError("invalid_audit_summary")
+        checked_at = _now()
+        with self._session() as db:
+            db.execute(
+                """INSERT INTO browser_audit_summary
+                   (id, checked_at, total, found, in_progress, manual_review)
+                   VALUES (1, ?, ?, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                   checked_at=excluded.checked_at, total=excluded.total,
+                   found=excluded.found, in_progress=excluded.in_progress,
+                   manual_review=excluded.manual_review""",
+                (checked_at, total, summary["found"], summary["in_progress"],
+                 summary["manual_review"]),
+            )
+        return {"checked_at": checked_at, "total": total,
+                "summary": dict(summary), "read_only": True, "source": "browser_tables"}
+
+    def latest_browser_audit_summary(self) -> dict[str, Any] | None:
+        with self._session() as db:
+            row = db.execute(
+                "SELECT checked_at, total, found, in_progress, manual_review "
+                "FROM browser_audit_summary WHERE id = 1"
+            ).fetchone()
+        if row is None:
+            return None
+        return {"checked_at": row["checked_at"], "total": row["total"],
+                "summary": {"found": row["found"], "in_progress": row["in_progress"],
+                            "manual_review": row["manual_review"]},
+                "read_only": True, "source": "browser_tables"}
