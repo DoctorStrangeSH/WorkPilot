@@ -546,3 +546,13 @@ See LOCAL_AI.md. main must stay unchanged and PR #2 unmerged.
 - Extracted frozen agent was started with temporary app data, random bearer and ephemeral port. Live public query «столица Японии» via web mode returned «Токио», four snippets and three valid cited IDs. Empty local knowledge mode returned deterministic refusal without generation; combining web/knowledge-only rejected with 422. Temporary process/data cleaned up; no working install/registration changed.
 - Prepared `outputs/Malenia-0.6.0-Sherlock-Windows.zip`, 11119309 bytes, 19 files, outer SHA256 `a91bc6aa55be55698211f130522f255fb1775b8df49ea64be5415f4a97a488ec`. Includes verified installer, in-app runtime/search guide, sample notes, generic extension-ID setup and UTF-8 per-file SHA256 manifest; all ZIP CRCs and manifest hashes verified. Contains no engine/model weights or personal extension ID/path.
 - Current-PC existing installation was not upgraded; this is a prepared/tested kit for the separate target PC. Actual target GPU/VRAM and 8B model quality/performance still require testing there. Search uses snippets, not full-page browsing; validated citations do not prove factual truth. main stays at `712d0a8e1885cca402eaa4fdda041bb09b50e397`, PR #2 stays draft/open/unmerged.
+
+
+## 2026-11-12 — Batch paste evidence integrity follow-up
+
+- Work continues on PR #2 (`feat/desktop-shell`), not `main`; PR #2 remains draft and PR #1 is its prerequisite. Do not merge without user approval.
+- Commit `767e6b5` tightened `desktop/src/OrderBatchPage.tsx`: scan timestamp, SC ID, and result must be supplied together; incomplete partial scan metadata is rejected with a row-specific error rather than silently omitted. Asgard box ID/history fields are rejected without an Asgard status and are valid only when status is `В пути`.
+- Commit `6b7a162` added UI regression assertions in `tests/navigation_ui.test.cjs` to keep those guards in place.
+- This is still *manual data, read-only preview only*. No DataLens/Asgard automation, no ИНВента writes, and no implied company-system permissions. Google OAuth setup is postponed by user's request.
+- GitHub Actions were pending at the time of writing: Desktop checks `43270731201`, Python tests `43270730767`, Windows installer `43270730529`. Check the exact latest SHA before reporting a passing build.
+- Next valuable step after CI: improve pasted evidence auditability and source mapping without inventing access to corporate tools; continue toward separately approved read-only integrations.
