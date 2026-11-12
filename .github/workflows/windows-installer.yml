@@ -81,6 +81,10 @@ jobs:
           --distpath desktop/src-tauri/resources
           --workpath "$env:RUNNER_TEMP/malenia-pyinstaller"
           --paths agent
+          --hidden-import malenia.google_sheets
+          --hidden-import malenia.google_oauth
+          --hidden-import malenia.secret_store
+          --hidden-import malenia.order_check
           packaging/malenia_agent_entry.py
 
       - name: Verify bundled agent
