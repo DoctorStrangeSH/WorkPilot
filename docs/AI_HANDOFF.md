@@ -1,3 +1,19 @@
+## Latest continuation — 2026-11-12 — read-only Google Sheets connector
+
+- Current feature branch HEAD before this handoff note: `172cb6232bcc6a7228a56a18f32d12ac4451172e`.
+- PR #2 remains draft/open/unmerged. PR #1 remains open. Do not merge either PR or modify `main`.
+- The user confirmed Malenia 0.6.0 is installed and the app works on their PC. The current feature-branch UX/connector changes have not yet been installed on the user's PC.
+- The exact order-checking rules are in `docs/ORDER_CHECKING.md`. The pure rules engine is `agent/malenia/order_check.py`; it only evaluates supplied snapshots and always returns `write_enabled: false`.
+- Google OAuth protocol helpers: `agent/malenia/google_oauth.py` (Desktop Client ID validation, PKCE S256, random state, loopback redirect, callback parsing, exact-scope/token validation).
+- Google Sheets connector: `agent/malenia/google_sheets.py` (loopback listener bound to 127.0.0.1, token exchange/refresh, Windows Credential Manager, GET-only values API with response bounds). API routes are in `agent/malenia/server.py`; Tauri commands are in `desktop/src-tauri/src/main.rs`; UI is in `desktop/src/App.tsx`.
+- Google Sheets scope is exactly `https://www.googleapis.com/auth/spreadsheets.readonly`. It is read-only but can view all spreadsheets accessible to the Google account. Malenia itself only requests the spreadsheet ID and A1 range explicitly entered by the user. No Google Drive scope, Sheets write scope, or write endpoint exists.
+- The UI distinguishes OAuth authorization from a verified source: status `authorized` does not show «Подключён». It marks the selected range verified only after a successful GET. Local disconnect deletes local credentials; it does not revoke the Google grant.
+- Python CI passed 157 tests on 3.11/3.12/3.13 (run `43235942347`). This includes order rules, OAuth helpers, connector, server routes, and vault tests. Tauri host/Rust check passed on run `43235110793`; frontend build and Node regression tests passed on run `43235941069` through the navigation step. The latest Desktop run was still running its Tauri host check; Windows Credential Manager integration and installer checks must still complete.
+- The first connector CI test failures were fixed: callback test uses Google's Desktop loopback root redirect; refresh test now expects the initial refresh plus one retry after a 401; UI source-notice assertion matches the updated Russian copy.
+- User setup still required: create a Google OAuth Desktop client in Google Cloud, enable Google Sheets API, configure consent screen and test users, then enter the Client ID in Malenia and approve in the system browser. Client Secret is optional and not requested; never ask the user to paste refresh tokens.
+- DataLens and Asgard remain disconnected. No DOM/screenshot access. Their read-only permission review is still required.
+- Next: verify latest Desktop/Windows installer CI, then ask user to set up OAuth Client ID and test a real selected spreadsheet/range. Only after that connect the order rules engine to a dry-run order report. No writes to ИНВента.
+
 ## Secure secret vault follow-up — 2026-11-12
 
 - Current branch HEAD before this note: `1dea9eb0bcaf31bfb441fd1f6099a2b4031faf38`.
