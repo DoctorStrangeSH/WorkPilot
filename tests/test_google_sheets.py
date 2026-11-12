@@ -118,8 +118,39 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         self.assertEqual(status, {"connected": False, "status": "authorized", "error": None})
         self.assertEqual(store.get("google-sheets-refresh-token"), "refresh-token-fixture")
         self.assertEqual(store.get("google-sheets-client-id"), CLIENT_ID)
+        self.assertIsNone(store.get("google-sheets-client-secret"))
         self.assertNotIn("refresh_token", result)
         self.assertNotIn("access_token", result)
+
+    def test_optional_client_secret_is_stored_and_used_for_refresh(self):
+        store = FakeCredentialStore()
+        opener = FakeOpener()
+        connector = GoogleSheetsConnector(store, opener, callback_timeout=30)
+        result = connector.start_connect(CLIENT_ID, "GOCSPX-client-secret-fixture")
+        query = parse_qs(urlsplit(result["authorization_url"]).query)
+        redirect_uri = query["redirect_uri"][0]
+        callback = redirect_uri + "/?code=authorization-code-fixture&state=" + query["state"][0]
+        with urlopen(callback, timeout=3):
+            pass
+        deadline = time.monotonic() + 3
+        while connector.status()["status"] == "authorizing" and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertEqual(connector.status()["status"], "authorized")
+        self.assertEqual(store.get("google-sheets-client-secret"), "GOCSPX-client-secret-fixture")
+
+        code_exchange = next(r for r in opener.requests if r.full_url == GOOGLE_TOKEN_ENDPOINT)
+        self.assertEqual(
+            parse_qs(code_exchange.data.decode("ascii")).get("client_secret"),
+            ["GOCSPX-client-secret-fixture"],
+        )
+        refresh_opener = FakeOpener()
+        reloaded = GoogleSheetsConnector(store, refresh_opener)
+        reloaded.read_values(SPREADSHEET_ID, "Orders!A1:B2")
+        refresh_request = next(r for r in refresh_opener.requests if r.full_url == GOOGLE_TOKEN_ENDPOINT)
+        self.assertEqual(
+            parse_qs(refresh_request.data.decode("ascii")).get("client_secret"),
+            ["GOCSPX-client-secret-fixture"],
+        )
 
     def test_invalid_callback_state_does_not_complete_authorization(self):
         store = FakeCredentialStore()
@@ -213,12 +244,14 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         store = FakeCredentialStore({
             "google-sheets-refresh-token": "refresh-token-fixture",
             "google-sheets-client-id": CLIENT_ID,
+            "google-sheets-client-secret": "client-secret-fixture",
         })
         connector = GoogleSheetsConnector(store, FakeOpener())
         result = connector.disconnect()
         self.assertFalse(result["connected"])
         self.assertIsNone(store.get("google-sheets-refresh-token"))
         self.assertIsNone(store.get("google-sheets-client-id"))
+        self.assertIsNone(store.get("google-sheets-client-secret"))
 
     def test_no_plaintext_fallback_or_unexpected_scope(self):
         connector = GoogleSheetsConnector(credential_store=None, opener=FakeOpener())
