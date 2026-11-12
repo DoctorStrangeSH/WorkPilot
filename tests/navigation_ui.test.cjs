@@ -89,3 +89,16 @@ test('bulk paste rejects incomplete source evidence rather than silently ignorin
   assert.match(bulk, /status!=="В пути"&&\(box\|\|history\|\|issued\)/);
   assert.match(bulk, /ID коробки и расширенная история допустимы только/);
 });
+
+test('browser workspace shows aggregate-only completed audit with no source rows', () => {
+  assert.match(app, /browser_audit:BrowserAudit\|null/);
+  assert.match(app, /audit=\{data\?\.browser_audit\?\?null\}/);
+  assert.match(app, /data-testid="browser-audit-summary"/);
+  assert.match(app, /audit\.summary\.found/);
+  assert.match(app, /audit\.summary\.in_progress/);
+  assert.match(app, /audit\.summary\.manual_review/);
+  assert.match(app, /только предложения, не изменения статусов/);
+  const native = fs.readFileSync(path.resolve(__dirname, '../desktop/src-tauri/src/main.rs'), 'utf8');
+  assert.match(native, /\/v1\/browser\/audit-summary/);
+  assert.match(native, /browser_audit, permissions/);
+});
