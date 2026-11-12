@@ -115,6 +115,7 @@ async function pollDesktopAudit() {
     if (!hello?.ok || hello.host !== HOST ||
         !hello.capabilities?.includes("claim_browser_audit") ||
         !hello.capabilities?.includes("finish_browser_audit") ||
+        !hello.capabilities?.includes("update_browser_audit_progress") ||
         !hello.capabilities?.includes("reconcile_site_tables")) return;
     const claimed = await session.send({type:"claim_browser_audit"});
     const jobId = claimed?.job?.job_id;
@@ -123,8 +124,24 @@ async function pollDesktopAudit() {
     let succeeded = false;
     try {
       await progress({phase:"starting",results:[]});
+      const report = async snapshot => {
+        await progress(snapshot);
+        const results = snapshot.results || [];
+        const failures = results.filter(item => item.status === "needs_attention");
+        const failedRole = failures.length ? failures[failures.length-1].role : null;
+        const currentRole = ["inventory","datalens","asgard"].includes(snapshot.role) ?
+          snapshot.role : null;
+        const response = await session.send({
+          type:"update_browser_audit_progress",job_id:jobId,
+          current_role:currentRole,completed_sources:results.length,
+          attention_sources:failures.length,failed_role:failedRole
+        });
+        if (!response?.ok || response.type !== "browser_audit_progress_updated") {
+          throw new Error("audit_progress_unavailable");
+        }
+      };
       const result = await MaleniaAutomation.run(chrome,targets,
-        message=>session.send(message),progress,
+        message=>session.send(message),report,
         {exactGetSearch:stored.maleniaExactGetSearch !== false});
       succeeded = result.phase === "reconciled";
     } catch {
