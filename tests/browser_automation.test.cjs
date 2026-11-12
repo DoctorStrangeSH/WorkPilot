@@ -482,3 +482,43 @@ test('reactive search refuses result updates on a foreign origin', async () => {
   await assert.rejects(()=>api.reactiveSearch(
     chrome,7,'asgard','ABC-1','https://asgard.example'),/unsupported_dynamic_search/);
 });
+
+test('full audit falls back from GET forms to reactive search per cargo',async()=>{
+  const api=runner(),chrome=fakeBrowser();
+  let reactive=0, native=0;
+  chrome.scripting.executeScript=async ({func,args})=>{
+    const role=args[0],origin='https://'+({
+      inventory:'inventory.example',datalens:'analytics.example',asgard:'asgard.example'
+    }[role]);
+    if(args.length===2 && func.toString().includes('MutationObserver')) {
+      reactive++;
+      return [{result:{origin,status:'updated'}}];
+    }
+    if(args.length===2) return [{result:{origin,kind:'dynamic_search_ui'}}];
+    const table=role==='inventory'?
+      {columns:['cargo_place','inventory_date'],rows:[['ABC-1','2026-09-12']]}:
+      role==='datalens'?
+      {columns:['main_partner_code_original','sc_id','result','scanned_at'],
+       rows:[['ABC-1','101366','OK','2026-09-14T08:30:00']]}:
+      {columns:['cargo_place','status'],rows:[['ABC-1','Принят на ФФ']]};
+    return [{result:{origin,text:'Rendered results',table,next:null}}];
+  };
+  const result=await api.run(chrome,{
+    inventory:'https://inventory.example/orders',
+    datalens:'https://analytics.example/orders',
+    asgard:'https://asgard.example/orders'
+  },async message=>{
+    if(message.type==='reconcile_site_tables') {
+      native++;
+      assert.equal(message.snapshots.inventory.rows[0][0],'ABC-1');
+      return {ok:true,type:'site_tables_reconciled',read_only:true,
+        write_enabled:false,persisted:false,total:1,
+        summary:{found:1,in_progress:0,manual_review:0}};
+    }
+    return {ok:true,type:'page_inspected',persisted:false,characters:message.page.text.length};
+  },async()=>{},{exactGetSearch:true});
+  assert.equal(result.phase,'reconciled');
+  assert.equal(reactive,2);
+  assert.equal(native,1);
+  assert.equal(chrome.stats.removed,3);
+});
