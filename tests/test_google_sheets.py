@@ -179,10 +179,13 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         connector = GoogleSheetsConnector(store, opener)
         result = connector.read_values(SPREADSHEET_ID, "Orders!A1:B2")
         self.assertEqual(result["values"][1][0], "CP-001")
-        self.assertEqual(
-            [request.full_url for request in opener.requests if request.full_url == GOOGLE_TOKEN_ENDPOINT],
-            [GOOGLE_TOKEN_ENDPOINT],
-        )
+        token_requests = [request for request in opener.requests if request.full_url == GOOGLE_TOKEN_ENDPOINT]
+        self.assertEqual(len(token_requests), 2)
+        for request in token_requests:
+            self.assertEqual(
+                parse_qs(request.data.decode("ascii")).get("grant_type"),
+                ["refresh_token"],
+            )
         sheets_requests = [r for r in opener.requests if r.full_url.startswith("https://sheets.googleapis.com/")]
         self.assertEqual(len(sheets_requests), 2)
         self.assertEqual(sheets_requests[1].get_header("Authorization"), "Bearer refreshed-access-token")
