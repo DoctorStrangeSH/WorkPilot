@@ -1,3 +1,18 @@
+## Latest continuation — 2026-11-12 — deterministic order rules
+
+- Current feature branch: `feat/desktop-shell`; HEAD at the time of this note: `b9a277defc91ae4bff4b08c3835db8b566a1450a`.
+- `main` remains unchanged. PR #1 and PR #2 remain open; PR #2 is draft. Do not merge or mark ready without the user's explicit approval.
+- The user previously taught the order-checking rules. They were recovered from prior conversation and formalized in `docs/ORDER_CHECKING.md`.
+- Added `agent/malenia/order_check.py`: pure deterministic `evaluate_order()` over caller-supplied source snapshots. It has no HTTP client, browser access, credentials, or write operations.
+- Added `tests/test_order_check.py` covering the exact DataLens and Asgard rules, source filtering, strict date boundary, missing/unknown evidence, and fail-closed behavior.
+- DataLens rule: match `cargo-place` to `main_partner_code_original`; only СЦ МК Дзержинский КГТ (`SC ID 101366`); only successful `result=OK` scans; use the latest successful scan. A scan date strictly later than inventory date proposes «Найден» (green). Same calendar date is not treated as later because inventory date has no time component.
+- If no qualifying post-inventory scan exists, check Asgard «Обратный поток» → «Штрихкод коробки». «Принят на ФФ» proposes «В работе» + comment «Принят на ФФ» (orange); main status «Выдан» proposes «В работе» + comment «Выдан» (orange); «В пути» requires box ID and extended history containing «Выдан», then proposes «В работе» + comment «2 ШК Выдан» (orange). Unknown/incomplete cases require human review.
+- All results have `write_enabled: false`. The rule engine only proposes outcomes; it cannot change ИНВента, DataLens, or Asgard.
+- Python tests passed on code commit `180cafc` (workflow `43233142074`). Desktop checks for code/docs and Windows installer were still running on the latest check at the time; see workflows `43233289458`, `43233142318`, and `43233142056`. Do not claim all CI green until the latest runs complete.
+- Google Sheets OAuth is not implemented. Before coding it, use a Google OAuth Desktop client with PKCE and only `https://www.googleapis.com/auth/spreadsheets.readonly`; Google classifies that scope as sensitive. Store refresh tokens in Windows Credential Manager, never SQLite, frontend, logs, or Git. Do not use the client secret as a security boundary: installed desktop clients are public clients.
+- DataLens and Asgard are not connected. Browser Bridge still transmits only title and sanitized URL after a manual share; it does not read DOM or page contents.
+- Next: verify current CI; then design the OAuth onboarding/settings UX and secure token vault, with explicit consent. User must create/provide a local OAuth Client ID; do not invent credentials or ask for refresh tokens. Start with read-only access to one explicitly selected spreadsheet/range. Only after source snapshots are user-validated should the order engine be connected to a dry-run report.
+
 ## Follow-up UX update — 7c02d82
 
 - Added a dedicated «Источники» page. Google Sheets/ИНВента, DataLens and Asgard are explicitly marked not connected to Malenia; the copy explains ChatGPT connector access does not transfer to the desktop app.
