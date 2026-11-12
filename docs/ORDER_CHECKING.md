@@ -57,7 +57,7 @@ OAuth credentials (Client ID) пользователь должен создат
 
 ## Подготовленные OAuth building blocks
 
-`agent/malenia/google_oauth.py` содержит чистые функции для Desktop OAuth client ID validation, PKCE S256, random state, строго локального redirect `127.0.0.1`, проверки callback и строгой проверки выданного scope/token response. Сетевого flow, запуска браузера, callback listener и Sheets API client пока нет; это ещё не подключение Google.
+`agent/malenia/google_oauth.py` содержит строгие функции протокола Desktop OAuth: Client ID validation, PKCE S256, random state, loopback redirect, callback и exact-scope/token validation. `agent/malenia/google_sheets.py` добавляет callback listener на `127.0.0.1`, обмен/обновление токена, Credential Manager storage и GET-only чтение одного Spreadsheet ID + A1 range. API endpoints и Tauri commands/UI уже добавлены. Реальная авторизация Google account и target-PC smoke test ещё не выполнены; пока нет Client ID пользователя и его consent.
 
 ## Официальные ссылки Google для OAuth этапа
 
