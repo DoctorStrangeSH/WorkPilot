@@ -11,6 +11,7 @@ from malenia.google_oauth import (
     create_pkce_verifier,
     parse_callback_target,
     validate_client_id,
+    validate_client_secret,
     validate_granted_scope,
     validate_refresh_response,
     validate_token_response,
@@ -33,6 +34,14 @@ class GoogleOAuthProtocolTests(unittest.TestCase):
         self.assertGreaterEqual(len(generated), 43)
         self.assertLessEqual(len(generated), 128)
         self.assertEqual(create_pkce_challenge(generated), create_pkce_challenge(generated))
+
+    def test_optional_client_secret_validation(self):
+        self.assertIsNone(validate_client_secret(None))
+        self.assertIsNone(validate_client_secret(""))
+        self.assertEqual(validate_client_secret("GOCSPX-fixture-secret"), "GOCSPX-fixture-secret")
+        for value in ("contains space", "bad\\nsecret", "x" * 513):
+            with self.subTest(value=value), self.assertRaises(GoogleOAuthError):
+                validate_client_secret(value)
 
     def test_state_is_high_entropy_and_url_safe(self):
         state = create_oauth_state()
