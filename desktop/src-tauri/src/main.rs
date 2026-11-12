@@ -50,6 +50,7 @@ struct Dashboard {
     events: Vec<Value>,
     browser_tabs: Vec<Value>,
     browser_audit: Value,
+    browser_audit_job: Value,
     permissions: Vec<Value>,
 }
 
@@ -253,7 +254,17 @@ fn get_dashboard(state: State<'_, AgentState>) -> Result<Dashboard, String> {
     let browser_audit = api_get(&token, "/v1/browser/audit-summary")?
         .get("audit").cloned().unwrap_or(Value::Null);
 
-    Ok(Dashboard { running: true, resources, tasks, events, browser_tabs, browser_audit, permissions })
+    let browser_audit_job = api_get(&token, "/v1/browser/audit-job")?
+        .get("job").cloned().unwrap_or(Value::Null);
+    Ok(Dashboard { running: true, resources, tasks, events, browser_tabs, browser_audit, browser_audit_job, permissions })
+}
+
+#[tauri::command]
+fn request_browser_audit(state: State<'_, AgentState>) -> Result<Value, String> {
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Сначала запустите локального агента".to_string())?;
+    api_post_json(&token, "/v1/browser/audit-request", serde_json::json!({}),
+        Duration::from_secs(5))
 }
 
 #[tauri::command]
@@ -588,7 +599,8 @@ fn main() {
         }))
         .plugin(tauri_plugin_opener::init())
         .manage(AgentState::default())
-        .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, disconnect_google_sheets, preview_order, preview_order_batch])
+        .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard,
+            request_browser_audit, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, disconnect_google_sheets, preview_order, preview_order_batch])
         .run(tauri::generate_context!())
         .expect("error while running Malenia");
 }
