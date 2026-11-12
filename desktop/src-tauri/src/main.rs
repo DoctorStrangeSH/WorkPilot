@@ -545,6 +545,22 @@ async fn disconnect_google_sheets(state: State<'_, AgentState>) -> Result<Value,
 }
 
 #[tauri::command]
+async fn suggest_skill(state: State<'_, AgentState>, model: String,
+    request: String, response: String) -> Result<Value, String> {
+    if request.trim().is_empty() || response.trim().is_empty()
+        || request.chars().count() > 1500 || response.chars().count() > 1500 {
+        return Err("Нужен короткий запрос и ответ без секретов".to_string());
+    }
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        api_post_json(&token, "/v1/skills/suggest",
+            serde_json::json!({"model":model,"request":request,"response":response}),
+            Duration::from_secs(100))
+    }).await.map_err(|_| "Не удалось сформировать черновик навыка".to_string())?
+}
+
+#[tauri::command]
 fn get_skills(state: State<'_, AgentState>) -> Result<Value, String> {
     let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
         .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
@@ -623,7 +639,7 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .manage(AgentState::default())
         .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard,
-            request_browser_audit, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, get_skills, skill_action, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, disconnect_google_sheets, preview_order, preview_order_batch])
+            request_browser_audit, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, get_skills, skill_action, suggest_skill, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, disconnect_google_sheets, preview_order, preview_order_batch])
         .run(tauri::generate_context!())
         .expect("error while running Malenia");
 }
