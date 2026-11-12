@@ -18,7 +18,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 GOOGLE_AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 GOOGLE_SHEETS_READONLY_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
-GOOGLE_CALLBACK_PATH = "/oauth2/callback"
+GOOGLE_CALLBACK_PATH = "/"
 
 _VERIFIER_RE = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
 _STATE_RE = re.compile(r"^[A-Za-z0-9._~-]{32,256}$")
@@ -72,7 +72,7 @@ def validate_loopback_redirect_uri(redirect_uri: str) -> str:
         or parsed.hostname != "127.0.0.1"
         or port is None
         or not 1 <= port <= 65535
-        or parsed.path != GOOGLE_CALLBACK_PATH
+        or parsed.path not in {"", GOOGLE_CALLBACK_PATH}
         or parsed.username is not None
         or parsed.password is not None
         or parsed.query
