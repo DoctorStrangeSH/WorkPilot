@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from .ai import OllamaClient, AIError
 from .knowledge import KnowledgeBase, KnowledgeError
+from .google_sheets import GoogleSheetsConnector, GoogleSheetsError
 from .permission_inbox import PermissionInbox
 from .permissions import PermissionGate
 from .resources import ResourceManager
@@ -32,11 +33,13 @@ class MaleniaHTTPServer(ThreadingHTTPServer):
 
 
 def make_handler(store: TaskStore, token: str, resources: ResourceManager,
-                 permissions: PermissionInbox | None = None, ai: OllamaClient | None = None):
+                 permissions: PermissionInbox | None = None, ai: OllamaClient | None = None,
+                 google_sheets: GoogleSheetsConnector | None = None):
     inbox = permissions if permissions is not None else PermissionInbox(PermissionGate(store))
     knowledge = KnowledgeBase(store)
     ai_client = ai if ai is not None else OllamaClient()
     ai_client.knowledge = knowledge
+    sheets = google_sheets if google_sheets is not None else GoogleSheetsConnector()
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "MaleniaAgent/0.2"
@@ -127,6 +130,8 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                 self._send(200, ai_client.status())
             elif parsed.path == "/v1/permissions":
                 self._send(200, {"permissions": inbox.list_requests(), "execution_enabled": False})
+            elif parsed.path == "/v1/integrations/google-sheets/status":
+                self._send(200, sheets.status())
             elif parsed.path == "/v1/resources":
                 self._send(200, {"resources": resources.snapshot().to_dict()})
             elif parsed.path == "/v1/tasks":
@@ -157,6 +162,38 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
             if not self._require_access():
                 return
             parsed = urlsplit(self.path)
+
+            if parsed.path in {
+                "/v1/integrations/google-sheets/connect",
+                "/v1/integrations/google-sheets/disconnect",
+                "/v1/integrations/google-sheets/read",
+            }:
+                payload = self._read_json(32 * 1024)
+                if payload is None:
+                    return
+                try:
+                    if parsed.path.endswith("/connect"):
+                        if set(payload) != {"client_id"}:
+                            self._send(422, {"error": "invalid_google_oauth_client_id"})
+                            return
+                        result = sheets.start_connect(payload.get("client_id"))
+                    elif parsed.path.endswith("/disconnect"):
+                        if payload:
+                            self._send(422, {"error": "invalid_disconnect_payload"})
+                            return
+                        result = sheets.disconnect()
+                    else:
+                        if set(payload) != {"spreadsheet_id", "range"}:
+                            self._send(422, {"error": "invalid_google_sheets_read_payload"})
+                            return
+                        result = sheets.read_values(payload.get("spreadsheet_id"), payload.get("range"))
+                    self._send(200, result)
+                except GoogleSheetsError as error:
+                    status = 503 if error.code == "windows_credential_store_unavailable" else (
+                        422 if error.code.startswith("invalid_") else 502
+                    )
+                    self._send(status, {"error": error.code})
+                return
 
             if parsed.path in {"/v1/knowledge", "/v1/knowledge/import", "/v1/knowledge/delete", "/v1/knowledge/search"}:
                 payload = self._read_json(32 * 1024)
