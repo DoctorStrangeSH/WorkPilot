@@ -112,8 +112,26 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
             "type": "hello",
             "host": HOST_NAME,
             "version": "0.1.0",
-            "capabilities": ["share_active_tab", "inspect_active_page", "reconcile_site_tables"],
+            "capabilities": ["share_active_tab", "inspect_active_page", "reconcile_site_tables",
+                             "claim_browser_audit", "finish_browser_audit"],
         }
+
+    if message_type == "claim_browser_audit":
+        try:
+            job = store.claim_browser_audit()
+        except sqlite3.Error:
+            return {**response, "ok": False, "error": "audit_job_unavailable"}
+        return {**response, "ok": True, "type": "browser_audit_claim", "job": job}
+
+    if message_type == "finish_browser_audit":
+        if set(payload) - {"type", "request_id", "job_id", "succeeded"}:
+            return {**response, "ok": False, "error": "invalid_audit_job"}
+        try:
+            updated = store.finish_browser_audit(
+                payload.get("job_id"), payload.get("succeeded"))
+        except sqlite3.Error:
+            return {**response, "ok": False, "error": "audit_job_unavailable"}
+        return {**response, "ok": updated, "type": "browser_audit_finished"}
 
     if message_type == "reconcile_site_tables":
         # The authenticated native channel carries bounded structured table data.
