@@ -6,7 +6,7 @@ const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '../browser-extension/popup.js'), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function popup(url = 'https://example.com/orders?secret=remove#private') {
-  const nodes = Object.fromEntries(['status', 'share', 'retry'].map(id => [id, {
+  const nodes = Object.fromEntries(['status', 'share', 'retry', 'inspect'].map(id => [id, {
     disabled: true, textContent: '', className: '', handlers: {},
     addEventListener(type, callback) { this.handlers[type] = callback; }
   }]));
@@ -14,7 +14,8 @@ function popup(url = 'https://example.com/orders?secret=remove#private') {
   let sequence = 0, queries = 0;
   const chrome = {
     runtime: {lastError: null, sendNativeMessage(host, message, callback) { calls.push({host, message, callback}); }},
-    tabs: {async query() { queries++; return [{title: 'x'.repeat(400), url}]; }}
+    tabs: {async query() { queries++; return [{id: 7, title: 'x'.repeat(400), url}]; }},
+    scripting: {async executeScript() {return [{result:'Тестовая строка заказов'}];}}
   };
   vm.runInNewContext(source, {document: {getElementById: id => nodes[id]}, chrome, URL,
     crypto: {randomUUID: () => 'request-id'},
@@ -111,4 +112,18 @@ test('malformed handshake does not enable sharing', async () => {
   const p = popup(); await p.reply(0, {ok: true, host: 'unexpected'});
   assert.equal(p.nodes.share.disabled, true);
   assert.equal(p.nodes.retry.disabled, false);
+});
+
+test('page inspection requires explicit user click and never reads on handshake', async () => {
+  const p = popup();
+  assert.equal(p.queries, 0);
+  await p.reply(0, hello);
+  assert.equal(p.queries, 0);
+  await p.click('inspect');
+  assert.equal(p.queries, 1);
+  assert.equal(p.calls[1].message.type, 'inspect_active_page');
+  assert.equal(p.calls[1].message.page.url, 'https://example.com/orders');
+  assert.equal(p.calls[1].message.page.text, 'Тестовая строка заказов');
+  await p.reply(1, {ok:true, type:'page_inspected', characters:23, persisted:false});
+  assert.match(p.nodes.status.textContent, /Автоматическая сверка заказов пока не подключена/);
 });
