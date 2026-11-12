@@ -102,3 +102,15 @@ test('browser workspace shows aggregate-only completed audit with no source rows
   assert.match(native, /\/v1\/browser\/audit-summary/);
   assert.match(native, /browser_audit, permissions/);
 });
+
+test('desktop audit launch is a real command with visible queued and running states',()=>{
+  assert.match(app, /invoke\("request_browser_audit"\)/);
+  assert.match(app, /data-testid="browser-audit-runner"/);
+  assert.match(app, /job\?\.status==="pending"/);
+  assert.match(app, /job\?\.status==="running"/);
+  assert.match(app, /onRequested\(\)/);
+  const native=fs.readFileSync(path.resolve(__dirname,'../desktop/src-tauri/src/main.rs'),'utf8');
+  assert.match(native, /fn request_browser_audit\(/);
+  assert.match(native, /\/v1\/browser\/audit-request/);
+  assert.match(native, /\/v1\/browser\/audit-job/);
+});
