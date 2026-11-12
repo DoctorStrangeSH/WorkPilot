@@ -126,3 +126,40 @@ test('strict mode is explicit and disabling knowledge clears it; source metadata
   assert.ok(calls[1].messages.every(m=>Object.keys(m).sort().join(',')==='content,role'));
   assert.equal(h.find('details',p=>p.className==='ai-sources').length,2);
 });
+
+
+test('internet search defaults off, is explicit and cannot combine with knowledge-only',async()=>{
+  const calls=[];
+  const h=harness(async(command,args)=>{
+    if(command==='get_ai_status')return {available:true,models:['qwen3:8b']};
+    if(command==='chat_ai'){calls.push(args);return {message:{role:'assistant',content:'Tokyo'},sources:[{id:'web-1',title:'Japan',source:'https://example.org',url:'https://example.org',excerpt:'Tokyo'}],answer_mode:'web',cited_source_ids:['web-1']};}
+    throw Error(command);
+  });
+  h.render();await tick();
+  assert.equal(h.find('input',p=>p['aria-label']==='Интернет-поиск')[0].props.checked,false);
+  h.find('input',p=>p['aria-label']==='Только по знаниям')[0].props.onChange({target:{checked:true}});
+  h.find('input',p=>p['aria-label']==='Интернет-поиск')[0].props.onChange({target:{checked:true}});
+  const strict=h.find('input',p=>p['aria-label']==='Только по знаниям')[0];
+  assert.equal(strict.props.checked,false);assert.equal(strict.props.disabled,true);
+  h.find('textarea',p=>p.id==='ai-draft')[0].props.onChange({target:{value:'Japan capital'}});
+  h.find('form')[0].props.onSubmit({preventDefault(){}});await tick();
+  assert.equal(calls[0].useWeb,true);assert.equal(calls[0].knowledgeOnly,false);
+  assert.equal(h.find('a')[0].props.href,'https://example.org');
+});
+
+test('model download first installs/starts runtime and stops if preparation fails',async()=>{
+  const calls=[];let fail=true;
+  const h=harness(async(command,args)=>{
+    calls.push(command);
+    if(command==='get_ai_status')return {available:false,models:[]};
+    if(command==='start_local_ai' && fail)throw Error('runtime checksum failed');
+    return 'ready';
+  });
+  h.render();await tick();
+  const click=()=>h.find('button',p=>p.children==='Скачать выбранного Шерлока')[0].props.onClick();
+  click();click();await tick();
+  assert.equal(calls.filter(c=>c==='start_local_ai').length,1);
+  assert.equal(calls.filter(c=>c==='install_sherlock').length,0);
+  fail=false;click();await tick();
+  assert.deepEqual(calls.slice(-3),['start_local_ai','install_sherlock','get_ai_status']);
+});

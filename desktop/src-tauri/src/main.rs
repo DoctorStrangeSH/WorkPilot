@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod runtime_setup;
+
 use rand::{rngs::OsRng, RngCore};
 use serde::Serialize;
 use serde_json::Value;
@@ -173,7 +175,7 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
                 runtime.get("release").and_then(Value::as_str) == Some(env!("CARGO_PKG_VERSION"))
                     && runtime.get("protocol").and_then(Value::as_u64) == Some(1)
                     && runtime.get("capabilities").and_then(Value::as_array)
-                        .map(|items| ["task_idempotency", "explicit_knowledge", "knowledge_only"].iter().all(|cap| items.iter().any(|item| item.as_str() == Some(*cap))))
+                        .map(|items| ["task_idempotency", "explicit_knowledge", "knowledge_only", "public_search"].iter().all(|cap| items.iter().any(|item| item.as_str() == Some(*cap))))
                         .unwrap_or(false)
             }).unwrap_or(false);
             if !compatible {
@@ -298,17 +300,23 @@ fn ollama_ready() -> bool {
 }
 
 #[tauri::command]
-fn start_local_ai(state: State<'_, AgentState>) -> Result<String, String> {
+fn get_setup_status() -> String { runtime_setup::status() }
+
+#[tauri::command]
+async fn start_local_ai(app: tauri::AppHandle) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || start_local_ai_impl(&app.state::<AgentState>()))
+        .await.map_err(|_| "Ошибка подготовки движка".to_string())?
+}
+
+fn start_local_ai_impl(state: &AgentState) -> Result<String, String> {
     let mut slot = state.ai_child.lock().map_err(|_| "Состояние ИИ недоступно".to_string())?;
     if ollama_ready() { return Ok("Ollama уже работает".to_string()); }
     if std::net::TcpStream::connect(("127.0.0.1", 11434)).is_ok() {
         return Err("Порт модели занят другим процессом".to_string());
     }
     let root = PathBuf::from(std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA недоступна".to_string())?).join("Malenia");
-    let portable = root.join("ollama/ollama.exe");
     let standard = PathBuf::from(std::env::var("LOCALAPPDATA").unwrap_or_default()).join("Programs/Ollama/ollama.exe");
-    let executable = if portable.is_file() { portable } else { standard };
-    if !executable.is_file() { return Err("Установите локальный движок с ollama.com/download/windows и повторите запуск".to_string()); }
+    let executable = if standard.is_file() { standard } else { runtime_setup::ensure(&root)? };
     if let Some(mut old) = slot.take() { let _ = old.kill(); let _ = old.wait(); }
     let mut command = Command::new(executable);
     command.arg("serve")
@@ -337,21 +345,24 @@ fn get_ai_status(state: State<'_, AgentState>) -> Result<Value, String> {
 }
 
 #[tauri::command]
-async fn chat_ai(state: State<'_, AgentState>, model: String, messages: Value, use_knowledge: Option<bool>, knowledge_only: Option<bool>) -> Result<Value, String> {
+async fn chat_ai(state: State<'_, AgentState>, model: String, messages: Value, use_knowledge: Option<bool>, knowledge_only: Option<bool>, use_web: Option<bool>) -> Result<Value, String> {
     let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
         .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
         let response = reqwest::blocking::Client::new()
             .post(format!("http://{API_HOST}:{API_PORT}/v1/ai/chat"))
             .header("Authorization", format!("Bearer {token}"))
-            .json(&serde_json::json!({"model": model, "messages": messages, "use_knowledge": use_knowledge.unwrap_or(true), "knowledge_only": knowledge_only.unwrap_or(false)}))
-            .timeout(Duration::from_secs(100))
+            .json(&serde_json::json!({"model": model, "messages": messages, "use_knowledge": use_knowledge.unwrap_or(true), "knowledge_only": knowledge_only.unwrap_or(false), "use_web": use_web.unwrap_or(false)}))
+            .timeout(Duration::from_secs(120))
             .send().map_err(|_| "Модель не ответила. Запрос не повторён автоматически".to_string())?;
         let status = response.status();
         let body = response.json::<Value>().map_err(|_| "Некорректный ответ агента".to_string())?;
         if !status.is_success() {
             if body.get("error").and_then(Value::as_str) == Some("knowledge_answer_unverified") {
-                return Err("Модель не смогла подтвердить ссылки на записи. Ответ не показан. Уточните вопрос или проверьте найденные фрагменты в разделе знаний".to_string());
+                return Err("Модель не смогла подтвердить ссылки на источники. Ответ не показан. Уточните вопрос или проверьте найденные фрагменты".to_string());
+            }
+            if body.get("error").and_then(Value::as_str).map(|e| e.starts_with("web_")).unwrap_or(false) {
+                return Err("Интернет-поиск недоступен или вернул некорректные данные. Проверьте подключение и повторите запрос".into());
             }
             return Err(format!("Ошибка модели: {}", body.get("error").and_then(Value::as_str).unwrap_or("unavailable")));
         }
@@ -424,6 +435,21 @@ async fn knowledge_action(state: State<'_, AgentState>, action: String, payload:
     }).await.map_err(|_| "Ошибка обработки базы знаний".to_string())?
 }
 
+#[tauri::command]
+fn open_search_source(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let parsed = reqwest::Url::parse(&url).map_err(|_| "Некорректная ссылка")?;
+    let host = parsed.host_str().unwrap_or("").trim_end_matches('.');
+    if !matches!(parsed.scheme(), "http" | "https") || !parsed.username().is_empty()
+        || parsed.password().is_some() || !matches!(parsed.port(), None | Some(80) | Some(443))
+        || !host.contains('.') || host.parse::<std::net::IpAddr>().is_ok()
+        || [".local", ".localhost", ".internal", ".test", ".invalid"].iter().any(|s| host.ends_with(s))
+        || url.len() > 2000 || url.chars().any(|c| c.is_control()) {
+        return Err("Разрешены только публичные веб-ссылки".into());
+    }
+    app.opener().open_url(parsed.as_str(), None::<&str>).map_err(|_| "Не удалось открыть браузер".into())
+}
+
 fn main() {
     tauri::Builder::default()
         // Activate the original window before a second shell can own another agent.
@@ -434,8 +460,9 @@ fn main() {
                 let _ = window.set_focus();
             }
         }))
+        .plugin(tauri_plugin_opener::init())
         .manage(AgentState::default())
-        .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_knowledge, knowledge_action, install_sherlock])
+        .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, install_sherlock])
         .run(tauri::generate_context!())
         .expect("error while running Malenia");
 }

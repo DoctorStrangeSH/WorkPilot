@@ -137,7 +137,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(self.api("/v1/runtime", authenticated=False)[0], 401)
         code, runtime = self.api("/v1/runtime")
         self.assertEqual(code, 200)
-        self.assertEqual(runtime["release"], "0.5.1")
+        self.assertEqual(runtime["release"], "0.6.0")
         self.assertEqual(runtime["protocol"], 1)
         self.assertIn("task_idempotency", runtime["capabilities"])
 

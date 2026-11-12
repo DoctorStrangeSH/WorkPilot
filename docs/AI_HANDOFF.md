@@ -391,3 +391,13 @@ See LOCAL_AI.md. main must stay unchanged and PR #2 unmerged.
   steps. Main must stay 712d0a8e1885cca402eaa4fdda041bb09b50e397, PR #2 unmerged.
 - Citation checks only establish that cited IDs were supplied; they do not prove
   answers follow from source text. No autonomous actions or internet lookup added.
+
+
+## 0.6.0 — runtime setup and explicit public search (development)
+
+- User requests in-app Ollama installation and internet access; publication to feat/desktop-shell is authorized. main and draft PR #2 stay unchanged/unmerged.
+- Added pinned official full portable runtime with size/SHA256 checks before extraction, safe ZIP paths, symlink/size bounds, unique staging, free-space preflight, download progress and async shell start. Existing healthy server or standard Ollama reused. No administrator/startup/driver changes. Model download first prepares runtime.
+- Added opt-in fixed-endpoint Bing RSS search: current question only; no saved knowledge/history/tasks sent externally. Only snippets, not page fetches; bounded results, redirect rejection, safe displayed links, grounded structured responses and known citation IDs. No browser profile/cookie/password/history access.
+- Runtime source/schema release 0.6.0; public_search capability required by shell. Installed current-PC version remains 0.4.1 until actual verified installation. Target 32GB/NVIDIA PC is separate; exact GPU still unknown. No heavy model downloaded here.
+- Windows CI includes Rust archive verification tests and a separate real official-runtime download/hash/extract/version/start test on an isolated loopback port without model weights.
+- Local checks and Windows CI delivery evidence will be appended after completion. This section describes code, not an installed update.
