@@ -91,6 +91,26 @@ class OllamaTests(unittest.TestCase):
         with self.assertRaises(AIError):self.client.chat({**self.payload,"use_knowledge":"yes"})
         self.client._request.assert_not_called()
 
+    def test_adaptive_reasoning_uses_think_only_for_complex_qwen_chat(self):
+        self.client._request = Mock(side_effect=[
+            {"models":[{"name":"qwen3:8b"}]},self.reply])
+        self.client.chat({"model":"qwen3:8b","reasoning_mode":"auto",
+            "messages":[{"role":"user","content":"Разработай архитектуру сложной системы"}]})
+        body = self.client._request.call_args.args[1]
+        self.assertTrue(body["think"])
+        self.assertEqual(body["options"]["num_ctx"],8192)
+        self.assertEqual(body["options"]["num_predict"],768)
+        self.client._request = Mock(side_effect=[
+            {"models":[{"name":"qwen3:8b"}]},self.reply])
+        self.client.chat({"model":"qwen3:8b","reasoning_mode":"auto",
+            "messages":[{"role":"user","content":"Привет"}]})
+        self.assertFalse(self.client._request.call_args.args[1]["think"])
+        self.client._request = Mock()
+        with self.assertRaises(AIError):
+            self.client.chat({"model":"qwen3:8b","reasoning_mode":"unsafe",
+                              "messages":[{"role":"user","content":"Привет"}]})
+        self.client._request.assert_not_called()
+
     def strict_fixture(self, structured):
         source={"id":"real-source","title":"Order","source":"order.md","kind":"note","excerpt":"AB-17: Tokyo"}
         self.client.knowledge=Mock()
