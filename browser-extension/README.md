@@ -27,8 +27,8 @@ There are no `tabs`, `history`, `cookies`, `scripting`, or broad host permission
    ```powershell
    & {
        $ErrorActionPreference = "Stop"
-       $sha = "__MALENIA_SETUP_COMMIT__"
-       $expected = "__MALENIA_SETUP_SHA256__"
+       $sha = "87b63a70708115309acdb4fa9ab12d6249f38dcb"
+       $expected = "f80ece220c84267ba9f0bb5ebdbaa47e8e43046cb674a552983187a2275a7392"
        $fresh = Join-Path $env:TEMP ("malenia-register-" + [guid]::NewGuid() + ".ps1")
        $url = "https://raw.githubusercontent.com/DoctorStrangeSH/WorkPilot/$sha/packaging/register_browser_bridge.ps1"
        Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $fresh -ErrorAction Stop
@@ -51,7 +51,7 @@ There are no `tabs`, `history`, `cookies`, `scripting`, or broad host permission
    }
    ```
 
-   The block creates a unique file, stops on download/ASCII/hash/syntax failure, and only then executes that file. Never rerun the previous `$script` temp file. The commit URL avoids the mutable branch cache; the SHA256 above covers the exact __MALENIA_SETUP_BYTES__ downloaded bytes.
+   The block creates a unique file, stops on download/ASCII/hash/syntax failure, and only then executes that file. Never rerun the previous `$script` temp file. The commit URL avoids the mutable branch cache; the SHA256 above covers the exact 7487 downloaded bytes.
 
    If the host is installed in a non-standard location, add `-NativeHostPath "C:\full\path\to\malenia-native-host.exe"`.
 7. Close all Yandex Browser windows (including background processes) and restart the browser.
