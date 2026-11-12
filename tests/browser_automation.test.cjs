@@ -230,7 +230,7 @@ test('virtualized grid with missing rows fails closed without reconciliation', a
 
 test('ARIA grid extractor rejects known rowcount larger than rendered rows', () => {
   assert.match(source, /querySelectorAll\('\[role="grid"\],\[role="table"\]'\)/);
-  assert.match(source, /count > rows\.length/);
+  assert.match(source, /count !== rows\.length/);
   assert.match(source, /virtualized_or_incomplete_grid/);
   assert.match(source, /\[role="columnheader"\]/);
 });
