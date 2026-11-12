@@ -119,14 +119,14 @@ class GoogleSheetsConnector:
         # Google documents state in the redirect fragment. Fragments are not
         # sent in HTTP requests, so this tiny same-origin page forwards only
         # the query+fragment parameters back to the loopback listener.
-        body = b"""<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Malenia OAuth</title></head><body><p id="message">Проверяем ответ Google…</p><script>
+        body = """<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Malenia OAuth</title></head><body><p id="message">Проверяем ответ Google…</p><script>
 const params = new URLSearchParams(window.location.search);
 const fragment = new URLSearchParams(window.location.hash.slice(1));
 for (const [key, value] of fragment) { if (!params.has(key)) params.append(key, value); }
 fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:params.toString()})
   .then(response => { document.getElementById("message").textContent = response.ok ? "Ответ получен. Вернитесь в Malenia." : "Не удалось проверить ответ. Вернитесь в Malenia."; })
   .catch(() => { document.getElementById("message").textContent = "Не удалось связаться с Malenia. Вернитесь в приложение."; });
-</script></body></html>"""
+</script></body></html>""".encode("utf-8")
         handler.send_response(200)
         handler.send_header("Content-Type", "text/html; charset=utf-8")
         handler.send_header("Content-Length", str(len(body)))
