@@ -4,10 +4,14 @@ This is a developer-preview Manifest V3 extension for Yandex Browser builds that
 
 ## Permissions
 
-- `activeTab`: temporary access to the tab after the user opens the extension and clicks Share.
-- `nativeMessaging`: connect to the explicitly registered Malenia native host.
+- `activeTab`: temporary access to the selected page after a deliberate click.
+- `nativeMessaging`: communicate with the registered local Malenia host.
+- `scripting`: read bounded rendered text of the selected, permitted page.
+- `tabs`: create and close three isolated background tabs for the explicitly started read-only audit.
+- `storage`: remember user-supplied resource URL paths and non-sensitive job progress only.
+- Optional host permissions: requested at runtime for **only the three HTTPS origins entered by the user**. The manifest advertises an optional HTTPS pattern but does not automatically grant that entire pattern.
 
-There are no `tabs`, `history`, `cookies`, `scripting`, or broad host permissions. No content script is installed.
+There is no `history` or `cookies` permission, no persistent content script, and no automatic form submission.
 
 ## Install for local testing
 
@@ -75,9 +79,13 @@ To unregister the native host:
 
 ## Data policy
 
-The extension sends only the active tab's title and URL path after an explicit click. Query parameters and fragments are removed both in the extension and in the native host. The host rejects non-HTTP(S) URLs and URLs containing credentials. The app stores at most the latest 100 shared tab records locally.
+**Manual sharing:** sends the active tab title and sanitized URL after the user presses «Поделиться вкладкой».
 
-This preview does not read cookies, passwords, browser history, page DOM, form fields, local storage, or browser profile files. It does not execute scripts, click page controls, or navigate tabs.
+**Manual page inspection:** separately sends up to 16,000 characters of rendered `document.body.innerText` to the local host, which validates the snapshot and does not store the text.
+
+**Three-site automatic read-only traversal:** after the user enters the three exact HTTPS pages and approves the corresponding site permissions, pressing «Прочитать все 3 сайта автоматически» starts a background task. The task opens each configured URL in a new inactive tab, checks that the origin did not change during navigation, reads bounded rendered text and sends it to the native host, then closes its own tab. Results contain only reading status and character counts; page text is not saved in progress metadata. The supplied sanitized resource URL paths are saved locally for future runs. The task does not click page controls, type search terms, read form values, bypass sign-in, or change records. If login redirects to another origin, the relevant step needs attention. **This milestone does not yet correlate live order IDs across sites or update statuses.**
+
+No cookie, password, browser history or browser profile file access is requested. Rendered page text may nonetheless contain sensitive corporate data; permit only authorized pages and abide by the site's usage policy.
 
 Target browser reported by the initial tester: Yandex Browser 26.10.3.771 (64-bit). Yandex's public documentation confirms Chrome/Opera extension catalogue compatibility and documents the `NativeMessagingUserLevelHosts` policy (default: Not Configured, which permits user-level hosts). It does not specify a stable-consumer-build registry lookup contract. The setup script registers both a Yandex-specific per-user key and the Chromium per-user fallback; actual discovery and tab sharing still need to be confirmed on the target machine. See the official Yandex policy and extension docs linked below.
 
@@ -85,7 +93,7 @@ Target browser reported by the initial tester: Yandex Browser 26.10.3.771 (64-bi
 
 This release changes the native host ID to `com.malenia.browser`, the executable to `malenia-native-host.exe`, and the data/config directory to `%LOCALAPPDATA%/Malenia`. It does not import previous product data or delete a previous installation. Install Malenia 0.3.0 or newer before registering this host. Old setup downloads cannot register the new host.
 
-Replace the files in the existing unpacked extension directory and reload that same extension to preserve its ID. Run the verified registration block with that ID after installing the new desktop build. No browser profile access or additional extension permissions are required.
+Replace the files in the existing unpacked extension directory and reload that same extension to preserve its ID. Run the verified registration block with that ID after installing the new desktop build. No browser profile access is required. Version 1.3.0 adds new, explicitly prompted scoped permissions for automated browsing.
 
 ## Connection diagnostics
 
@@ -94,3 +102,9 @@ The popup checks the registered native host with a `hello` message. **Retry conn
 If sharing times out or disconnects, the tab may already have been saved. Check Malenia before sharing again. The extension never automatically retries a share. Query/fragment data is stripped, URLs containing embedded credentials are rejected, and raw browser/native errors are not displayed.
 
 Run `node --test tests/browser_bridge.test.cjs` from the repository root to verify popup behavior against a simulated Chrome API.
+
+## Automatic three-site reading (1.3.0)
+
+After installing the updated native host and reloading the unpacked extension, enter the actual HTTPS pages for ИНВента, DataLens, and Asgard. The browser will show a permission request listing those origins. Approve only if you are authorized to automate those pages. Press the automatic audit button once. You may close the popup; reopening it shows the last progress summary. The service worker may be interrupted by browser shutdown or platform lifecycle limits; an interrupted task must be started again manually. This read-only prototype is not yet an autonomous order reconciliation and does not replace the site-specific adapters.
+
+To validate locally, run `node --test tests/browser_bridge.test.cjs tests/browser_automation.test.cjs`.
