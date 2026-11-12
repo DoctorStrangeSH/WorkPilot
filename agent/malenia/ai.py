@@ -61,6 +61,65 @@ class OllamaClient:
             return {"available": False, "models": [], "error": error.code,
                     "provider": "ollama", "local_only": True}
 
+    def suggest_skill(self, payload):
+        """Use local Qwen to propose a recipe for user review; never save it."""
+        if (not isinstance(payload, dict)
+                or set(payload) != {"model", "request", "response"}
+                or payload["model"] not in ALLOWED_MODELS
+                or any(not isinstance(payload[k], str) or not payload[k].strip()
+                       or len(payload[k]) > 1500 for k in ("request", "response"))):
+            raise AIError("invalid_skill_suggestion", 422)
+        if not self._generation.acquire(blocking=False):
+            raise AIError("model_busy", 429)
+        try:
+            status = self.status()
+            if payload["model"] not in status["models"]:
+                raise AIError("local_model_not_installed", 409)
+            schema = {"type": "object", "additionalProperties": False,
+                "properties": {
+                    "title": {"type": "string"},
+                    "description": {"type": "string"},
+                    "instructions": {"type": "string"},
+                    "terms": {"type": "string"}},
+                "required": ["title", "description", "instructions", "terms"]}
+            body = {"model": payload["model"], "stream": False, "keep_alive": "30s",
+                    "format": schema,
+                    "messages": [{"role": "system", "content":
+                        "Ты проектировщик навыков Malenia. Преврати разговор в "
+                        "краткую повторяемую инструкцию для похожих задач. "
+                        "Не сохраняй номера заказов, адреса, персональные данные, "
+                        "ключи, пароли или секреты. Не утверждай, что действие "
+                        "было выполнено. Навык — только инструкция, не код и "
+                        "не разрешение на работу с сайтами. Верни поля title "
+                        "(до 80 символов), description (до 200), instructions "
+                        "(до 1600), terms (до 240)."},
+                        {"role": "user", "content":
+                            "Задача:\n" + payload["request"][:1200] +
+                            "\nЧерновой ответ:\n" + payload["response"][:1200]}],
+                    "options": {"num_ctx": 4096, "num_predict": 480,
+                                "num_thread": 2, "temperature": 0}}
+            if payload["model"].startswith("qwen3:"):
+                body["think"] = False
+            answer = self._request("/api/chat", body, timeout=90)
+            content = answer.get("message", {}).get("content") if isinstance(answer.get("message"), dict) else None
+            if answer.get("done") is not True or not isinstance(content, str) or len(content) > 4096:
+                raise AIError("invalid_skill_suggestion")
+            try:
+                suggestion = json.loads(content)
+            except (ValueError, TypeError):
+                raise AIError("invalid_skill_suggestion") from None
+            if not isinstance(suggestion, dict) or set(suggestion) != set(schema["properties"]):
+                raise AIError("invalid_skill_suggestion")
+            from .skills import SkillRegistry, SkillError
+            try:
+                SkillRegistry._validate(**suggestion)
+            except (SkillError, TypeError):
+                raise AIError("invalid_skill_suggestion") from None
+            return {"suggestion": suggestion, "saved": False, "approved": False,
+                    "tools_enabled": False, "local_only": True}
+        finally:
+            self._generation.release()
+
     def chat(self, payload):
         if not isinstance(payload, dict) or (not {"model", "messages"} <= set(payload) or set(payload) - {"model", "messages", "use_knowledge", "knowledge_only", "use_web"}):
             raise AIError("invalid_chat_request", 422)
