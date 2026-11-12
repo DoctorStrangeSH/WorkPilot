@@ -86,7 +86,8 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
           !hello.capabilities.includes("inspect_active_page")) {
         throw new Error("unsupported_host");
       }
-      await MaleniaAutomation.run(chrome,targets,message=>session.send(message),progress);
+      await MaleniaAutomation.run(chrome,targets,message=>session.send(message),progress,
+        {exactGetSearch:message.exactGetSearch === true});
     } catch {
       await progress({phase:"needs_attention",results:[],error:"setup_or_connection"});
     } finally {
