@@ -29,3 +29,12 @@ test('extension runs desktop job only through bounded read-only walker',()=>{
   assert.doesNotMatch(source,/chrome\.cookies|chrome\.webRequest|executeScript\(\{code:/);
   assert.doesNotMatch(source,/eval\(/);
 });
+
+test('only coarse audit progress is forwarded to the native desktop job',()=>{
+  assert.match(source,/type:"update_browser_audit_progress",job_id:jobId/);
+  assert.match(source,/completed_sources:results\.length/);
+  assert.match(source,/attention_sources:failures\.length/);
+  assert.match(source,/failed_role:failedRole/);
+  assert.match(source,/MaleniaAutomation\.run\(chrome,targets,[\s\S]*message=>session\.send\(message\),report/);
+  assert.doesNotMatch(source,/progress\(\{[^}]*cargo_place/);
+});
