@@ -67,7 +67,7 @@ class NativeMessagingProtocolTests(unittest.TestCase):
     def test_hello_reports_only_explicit_capability(self):
         response = handle_message({"type": "hello", "request_id": "1"}, self.store)
         self.assertEqual(response["host"], HOST_NAME)
-        self.assertEqual(response["capabilities"], ["share_active_tab"])
+        self.assertEqual(response["capabilities"], ["share_active_tab", "inspect_active_page"])
         self.assertTrue(response["ok"])
 
     def test_user_shared_tab_is_sanitized_and_persisted(self):
@@ -100,6 +100,26 @@ class NativeMessagingProtocolTests(unittest.TestCase):
             )
             self.assertFalse(response["ok"])
         self.assertEqual(self.store.list_browser_tabs(), [])
+
+    def test_inspection_is_ephemeral_and_bounded(self):
+        before_tabs = self.store.list_browser_tabs()
+        before_events = self.store.list_events()
+        result = handle_message({"type": "inspect_active_page",
+                                 "page": {"url": "https://example.com/orders?token=secret",
+                                          "text": "Тестовая таблица заказов"}}, self.store)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["type"], "page_inspected")
+        self.assertFalse(result["persisted"])
+        self.assertEqual(self.store.list_browser_tabs(), before_tabs)
+        self.assertEqual(self.store.list_events(), before_events)
+        for payload in (
+            {"page": {"url": "https://example.com/", "text": ""}},
+            {"page": {"url": "https://example.com/", "text": "a" * 16001}},
+            {"page": {"url": "file:///private", "text": "text"}},
+            {"page": {"url": "https://example.com/", "text": "a", "extra": 1}},
+        ):
+            self.assertFalse(handle_message({"type": "inspect_active_page", **payload},
+                                            self.store)["ok"])
 
     def test_unknown_messages_are_rejected(self):
         response = handle_message({"type": "execute_script"}, self.store)
