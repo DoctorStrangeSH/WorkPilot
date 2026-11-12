@@ -29,9 +29,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       const granted = await chrome.permissions.contains({origins: MaleniaAutomation.origins(targets)});
       if (!granted) throw new Error("permissions_missing");
       await progress({phase: "starting", results: []});
-      await MaleniaAutomation.run(chrome, targets, nativeMessage, snapshot => {
-        void progress(snapshot);
-      });
+      await MaleniaAutomation.run(chrome, targets, nativeMessage, snapshot => progress(snapshot));
     } catch {
       await progress({phase: "needs_attention", results: [], error: "setup_or_connection"});
     } finally {
