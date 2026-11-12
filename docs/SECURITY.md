@@ -87,3 +87,13 @@
 - Web snippets are untrusted data, not action authorization. Web mode excludes local
   knowledge/history and requires structured, validated known source IDs. A citation
   establishes which supplied snippet was referenced, not truth or relevance.
+
+
+## Реализованный локальный vault интеграций
+
+- `agent/malenia/secret_store.py` предоставляет Windows Credential Manager backend для именованных секретов.
+- Используются Generic Credentials текущего пользователя с локальной персистентностью; токены не записываются в SQLite, JSON-конфигурацию, frontend или логи.
+- На не-Windows платформах backend завершается ошибкой; plaintext fallback отсутствует.
+- Имена credentials ограничены безопасным ASCII-форматом, размер секрета — 2048 байт.
+- OAuth flow и выдача/обновление Google токенов пока не реализованы; наличие vault само по себе не означает, что Google Sheets подключён.
+- Тесты используют изолированный fake backend; Windows CI дополнительно проверяет реальную запись/чтение/удаление временного credential.
