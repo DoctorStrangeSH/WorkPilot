@@ -4,6 +4,8 @@ const statusNode = document.getElementById("status");
 const shareButton = document.getElementById("share");
 const retryButton = document.getElementById("retry");
 const inspectButton = document.getElementById("inspect");
+const auditButton = document.getElementById("audit");
+const auditStatus = document.getElementById("auditStatus");
 let busy = false;
 let connected = false;
 
@@ -15,6 +17,7 @@ function setStatus(message, kind = "") {
 function updateButtons() {
   shareButton.disabled = busy || !connected;
   inspectButton.disabled = busy || !connected;
+  auditButton.disabled = busy || !connected;
   retryButton.disabled = busy;
   retryButton.textContent = connected ? "Проверить соединение" : "Повторить подключение";
 }
@@ -171,6 +174,65 @@ inspectButton.addEventListener("click", async () => {
     } else {
       setStatus("Не удалось прочитать страницу. Проверьте разрешения расширения и выберите обычный сайт.", "error");
     }
+  } finally {
+    busy = false;
+    updateButtons();
+  }
+});
+
+const RESOURCE_LABELS = {inventory:"ИНВента",datalens:"DataLens",asgard:"Asgard"};
+function showAudit(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return;
+  const parts = (snapshot.results || []).map(item =>
+    RESOURCE_LABELS[item.role] + ": " + (item.status === "read" ? "прочитано" : "нужна проверка"));
+  const phase = snapshot.phase === "completed" ? "Обход завершён." :
+    snapshot.phase === "needs_attention" ? "Обход завершён с ошибками." :
+    "Автоматический обход выполняется.";
+  auditStatus.textContent = phase + (parts.length ? " " + parts.join("; ") : "");
+  auditStatus.className = "status" + (snapshot.phase === "completed" ? " ok" :
+    snapshot.phase === "needs_attention" ? " error" : "");
+}
+if (chrome.storage?.local) {
+  chrome.storage.local.get("maleniaTargets").then(saved => {
+    const targets = saved?.maleniaTargets || {};
+    for (const role of Object.keys(RESOURCE_LABELS)) {
+      if (typeof targets[role] === "string") document.getElementById(role).value = targets[role];
+    }
+  }).catch(() => {});
+}
+if (chrome.storage?.session) {
+  chrome.storage.session.get("maleniaAudit").then(saved => showAudit(saved?.maleniaAudit)).catch(() => {});
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "session" && changes.maleniaAudit) showAudit(changes.maleniaAudit.newValue);
+  });
+}
+auditButton.addEventListener("click", async () => {
+  if (busy || !connected) return;
+  let targets, origins;
+  try {
+    targets = MaleniaAutomation.normalizeTargets(Object.fromEntries(
+      Object.keys(RESOURCE_LABELS).map(role => [role, document.getElementById(role).value.trim()])));
+    origins = MaleniaAutomation.origins(targets);
+  } catch {
+    auditStatus.textContent = "Укажите три HTTPS-адреса без параметров, фрагментов и паролей.";
+    auditStatus.className = "status error";
+    return;
+  }
+  busy = true;
+  updateButtons();
+  auditStatus.textContent = "Запрашиваем доступ только к выбранным доменам…";
+  try {
+    // This must be initiated directly from a user gesture. Chrome may persist per-origin approval.
+    const allowed = await chrome.permissions.request({origins});
+    if (!allowed) throw new Error("permission_denied");
+    const result = await chrome.runtime.sendMessage({type:"start_readonly_audit",targets});
+    if (!result?.ok) throw new Error("start_refused");
+    await chrome.storage.local.set({maleniaTargets:targets});
+    auditStatus.textContent = "Задача запущена. Можно закрыть окно расширения; состояние появится здесь при повторном открытии.";
+    auditStatus.className = "status";
+  } catch {
+    auditStatus.textContent = "Запуск не удался. Проверьте разрешения браузера и подключение к Malenia.";
+    auditStatus.className = "status error";
   } finally {
     busy = false;
     updateButtons();
