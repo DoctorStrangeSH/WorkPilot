@@ -137,3 +137,16 @@ test('skills are a first-class reviewed workspace not an inventory-only workflow
   assert.match(ai,/Полезен/);
   assert.match(ai,/Не помог/);
 });
+
+test('Sherlock can suggest an editable skill but cannot activate it without review',()=>{
+  const ai=fs.readFileSync(path.resolve(__dirname,'../desktop/src/AiPage.tsx'),'utf8');
+  assert.match(ai,/invoke<\{suggestion:/);
+  assert.match(ai,/"suggest_skill"/);
+  assert.match(ai,/Сделать навык из ответа/);
+  assert.match(ai,/Сохранить на проверку/);
+  assert.match(ai,/Шерлок предлагает новый навык/);
+  assert.match(ai,/action:"draft"/);
+  const native=fs.readFileSync(path.resolve(__dirname,'../desktop/src-tauri/src/main.rs'),'utf8');
+  assert.match(native,/fn suggest_skill\(/);
+  assert.match(native,/\/v1\/skills\/suggest/);
+});
