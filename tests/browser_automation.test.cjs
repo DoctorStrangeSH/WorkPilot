@@ -10,7 +10,7 @@ function runner() {
   vm.runInContext(source, ctx);
   return ctx.MaleniaAutomation;
 }
-function fakeBrowser(finalUrl = 'https://inventory.example/orders') {
+function fakeBrowser(finalUrl = null) {
   let current = null;
   const events = {listener:null,addListener(fn){this.listener=fn;},removeListener(){this.listener=null;}};
   const stats = {created:0,removed:0,executed:0};
