@@ -70,7 +70,7 @@ var MaleniaAutomation = (() => {
             const header = rows[0] ? [...rows[0].querySelectorAll("th")].map(c => c.innerText.trim()) : [];
             if (!required.every(name => header.includes(name)) || header.length > 20) continue;
             const entries = [];
-            for (const row of rows.slice(1, 102)) {
+            if (rows.length > 101) continue; // Never reconcile a truncated table.\n            for (const row of rows.slice(1)) {
               const cells = [...row.querySelectorAll("td")];
               if (cells.length !== header.length) continue;
               entries.push(cells.map(cell => cell.innerText.trim().slice(0, 256)));
