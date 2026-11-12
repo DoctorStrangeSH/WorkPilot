@@ -200,3 +200,24 @@ body{min-width:820px}
 .order-card-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .order-card-heading h2{margin:0!important}
 .order-card-heading .secondary{font-size:9px;padding:7px 10px;white-space:nowrap}
+
+/* Excel-first batch order review, no source writeback */
+.batch-input-card,.batch-results{margin-top:15px;padding:20px!important;min-width:0}
+.batch-input-card .panel-head,.batch-results .panel-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.batch-input-card .panel-head p,.batch-results .panel-head p{font-size:10px;color:#8f9cb0}
+.batch-cols{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0}
+.batch-cols span{font-size:9px;padding:6px 9px;border:1px solid #343e52;border-radius:7px;color:#bdc7d8;background:#192233}
+.batch-input-card textarea{display:block;width:100%;min-height:170px;resize:vertical;box-sizing:border-box;border:1px solid #394457;background:#0e1621;color:#e4eaf4;border-radius:10px;padding:13px;font:10px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre;overflow:auto}
+.batch-input-card textarea:focus{outline:2px solid #9081d8;outline-offset:2px}
+.batch-actions{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:13px;flex-wrap:wrap}
+.batch-actions small{font-size:9px;color:#9ca9bc;max-width:530px;line-height:1.6}
+.batch-summary{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin:15px 0}
+.batch-summary span,.batch-summary b{padding:9px 11px;border-radius:8px;background:#242f42;border:1px solid #354154;color:#c8d3e4;font-size:10px}
+.batch-summary .green{background:#1d392e;border-color:#315541;color:#a0ecc0}
+.batch-summary .orange{background:#3d2d22;border-color:#654a35;color:#f0c494}
+.batch-table-scroll{width:100%;max-height:430px;overflow:auto;border:1px solid #333f50;border-radius:9px}
+.batch-table-scroll table{border-collapse:collapse;width:100%;font-size:10px;white-space:nowrap}
+.batch-table-scroll th{position:sticky;top:0;background:#242d3d;text-align:left;color:#afbad0;padding:12px;border-bottom:1px solid #364357;z-index:1}
+.batch-table-scroll td{padding:12px;border-bottom:1px solid #293447;color:#d5dce8}
+.batch-table-scroll .order-result-state{font-size:9px;padding:5px 9px}
+.batch-footnote{font-size:9px;color:#8998ae;line-height:1.6;margin:14px 0 0}
