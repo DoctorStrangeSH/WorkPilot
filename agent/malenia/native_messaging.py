@@ -113,7 +113,8 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
             "host": HOST_NAME,
             "version": "0.1.0",
             "capabilities": ["share_active_tab", "inspect_active_page", "reconcile_site_tables",
-                             "claim_browser_audit", "finish_browser_audit"],
+                             "claim_browser_audit", "finish_browser_audit",
+                             "update_browser_audit_progress"],
         }
 
     if message_type == "claim_browser_audit":
@@ -122,6 +123,19 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
         except sqlite3.Error:
             return {**response, "ok": False, "error": "audit_job_unavailable"}
         return {**response, "ok": True, "type": "browser_audit_claim", "job": job}
+
+    if message_type == "update_browser_audit_progress":
+        if set(payload) != {"type", "request_id", "job_id", "current_role",
+                            "completed_sources", "attention_sources", "failed_role"}:
+            return {**response, "ok": False, "error": "invalid_audit_progress"}
+        try:
+            updated = store.update_browser_audit_progress(
+                payload["job_id"], payload["current_role"],
+                payload["completed_sources"], payload["attention_sources"],
+                payload["failed_role"])
+        except sqlite3.Error:
+            return {**response, "ok": False, "error": "audit_job_unavailable"}
+        return {**response, "ok": updated, "type": "browser_audit_progress_updated"}
 
     if message_type == "finish_browser_audit":
         if set(payload) - {"type", "request_id", "job_id", "succeeded"}:
