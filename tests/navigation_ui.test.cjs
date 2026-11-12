@@ -43,3 +43,11 @@ test('Google Sheets onboarding is explicitly read-only and calls the native conn
   assert.match(app, /Никаких изменений в таблицу не внесено/);
   assert.doesNotMatch(app, /write_google_sheet|update_google_sheet/);
 });
+
+
+test('expired Google refresh tokens return the user to a safe reauthorization flow', () => {
+  assert.match(app, /reauthorization_required/);
+  assert.match(app, /google_reauthorization_required/);
+  assert.match(app, /result\.client_id/);
+  assert.match(app, /Требуется повторная авторизация/);
+});
