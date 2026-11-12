@@ -106,7 +106,7 @@
 - The app requests exactly `https://www.googleapis.com/auth/spreadsheets.readonly`. Token responses that omit this scope or contain any additional scope are rejected before storage.
 - Refresh token, public client ID, and optional client secret are stored as Windows Credential Manager Generic Credentials. Access token is memory-only. No plaintext fallback exists.
 - Sheets access is GET-only for a user-entered spreadsheet ID and A1 range. The connector has no write method or Google Drive API client. Response size and cell count are bounded.
-- Disconnect deletes local credentials but does not claim to revoke Google's grant; the UI tells the user how to revoke it in Google Account settings.
+- Disconnect deletes local credentials but does not claim to revoke Google's grant; the UI tells the user how to revoke it in Google Account settings. If Google returns `invalid_grant` (revoked/expired refresh token, including the 7-day Testing limit), the connector clears the access token and asks the user to authorize again without exposing any token.
 - The OAuth callback flow, token exchange and real-account authorization must pass CI and target-PC smoke tests before the connection is treated as production-ready.
 
 
