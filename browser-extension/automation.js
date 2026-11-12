@@ -53,6 +53,22 @@ var MaleniaAutomation = (() => {
     return to.href;
   }
 
+  // Public, fixed diagnostic codes: never persist raw site exceptions or URLs.
+  const SAFE_FAILURE_CODES = new Set([
+    "invalid_inventory_search_keys", "unmapped_search_form", "invalid_search",
+    "unsafe_search_target", "unverified_search_result_identity",
+    "unmapped_search_results", "changed_search_schema", "too_many_search_rows",
+    "virtualized_or_incomplete_grid", "navigation_outside_allowed_origin",
+    "search_origin_mismatch", "unexpected_document", "empty_page",
+    "unmapped_paginated_table", "pagination_cycle", "pagination_limit",
+    "changed_table_schema", "too_many_rows", "native_host_rejected",
+    "page_timeout", "tab_closed"
+  ]);
+  function reasonCode(error) {
+    return error instanceof Error && SAFE_FAILURE_CODES.has(error.message) ?
+      error.message : "site_or_browser_error";
+  }
+
   const MAX_SEARCHES = 20;
   async function exactGetSearch(chromeApi, tabId, role, cargo, origin) {
     if (!["datalens", "asgard"].includes(role) ||
@@ -299,9 +315,10 @@ var MaleniaAutomation = (() => {
         }
         if (table) snapshots[role] = table;
         results.push({role, status: "read", characters, pages});
-      } catch {
-        // Never expose or log raw page errors; some browser errors contain URLs.
-        results.push({role, status: "needs_attention"});
+      } catch (error) {
+        // Only constant known codes are allowed in persisted progress. Browser errors
+        // often contain a URL, which may include cargo identifiers or session data.
+        results.push({role, status: "needs_attention", reason: reasonCode(error)});
       }
       await onProgress({phase: "reading", role, results: [...results]});
     }
@@ -323,5 +340,5 @@ var MaleniaAutomation = (() => {
     await onProgress(summary);
     return summary;
   }
-  return {ROLES, MAX_TEXT, MAX_PAGES, MAX_SEARCHES, normalizeTargets, origins, nextPage, exactGetSearch, waitLoaded, run};
+  return {ROLES, MAX_TEXT, MAX_PAGES, MAX_SEARCHES, normalizeTargets, origins, nextPage, exactGetSearch, reasonCode, waitLoaded, run};
 })();
