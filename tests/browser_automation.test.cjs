@@ -118,3 +118,85 @@ test('exact table evidence triggers one ephemeral reconciliation, without exposi
   assert.ok(progress.every(snapshot=>!JSON.stringify(snapshot).includes('TEST-001')));
   assert.equal(result.reconciliation.summary.found,1);
 });
+
+test('next-page URL is restricted to same HTTPS origin', () => {
+  const api=runner();
+  assert.equal(api.nextPage('https://inventory.example/orders',
+      '?page=2'), 'https://inventory.example/orders?page=2');
+  for (const unsafe of ['https://outside.example/orders', 'http://inventory.example/',
+      'https://user:pass@inventory.example/', 'https://inventory.example/orders#secret',
+      'https://inventory.example:9443/orders']) {
+    assert.throws(() => api.nextPage('https://inventory.example/orders', unsafe));
+  }
+});
+
+test('automatically follows rel-next pages and merges exact schema before read-only reconciliation', async () => {
+  const api=runner(), chrome=fakeBrowser();
+  const originalGet=chrome.tabs.get;
+  chrome.tabs.update=async (id, {url})=>{
+    const current=await originalGet(id);
+    current.url=url;
+    current.status='complete';
+    return current;
+  };
+  chrome.scripting.executeScript=async ({args})=>{
+    const current=await chrome.tabs.get(7);
+    const page=new URL(current.url);
+    const role=args[0];
+    const table=role==='inventory' ? {
+      columns:['cargo_place','inventory_date'],
+      rows:[[page.search ? 'TEST-002' : 'TEST-001','2026-09-12']]
+    } : role==='datalens' ? {
+      columns:['main_partner_code_original','sc_id','result','scanned_at'],
+      rows:[['TEST-001','101366','OK','2026-09-15T10:00:00'],
+            ['TEST-002','101366','OK','2026-09-15T10:00:00']]
+    } : {columns:['cargo_place','status'],rows:[]};
+    return [{result:{origin:page.origin,text:'Видимая страница',table,
+      next:role==='inventory'&&!page.search?'https://inventory.example/orders?page=2':null}}];
+  };
+  const calls=[],progress=[];
+  const result=await api.run(chrome,{
+    inventory:'https://inventory.example/orders',
+    datalens:'https://analytics.example/reports',
+    asgard:'https://asgard.example/history'
+  },async message=>{
+    calls.push(message);
+    if(message.type==='reconcile_site_tables') {
+      assert.equal(message.snapshots.inventory.rows.length,2);
+      return {ok:true,type:'site_tables_reconciled',read_only:true,
+        write_enabled:false,persisted:false,total:2,
+        summary:{found:2,in_progress:0,manual_review:0}};
+    }
+    return {ok:true,type:'page_inspected',persisted:false,characters:message.page.text.length};
+  },async snapshot=>progress.push(snapshot));
+  assert.equal(result.phase,'reconciled');
+  assert.equal(result.results[0].pages,2);
+  assert.equal(calls.filter(x=>x.type==='inspect_active_page').length,4);
+  assert.equal(chrome.stats.removed,3);
+  assert.ok(progress.every(x=>!JSON.stringify(x).includes('TEST-001')));
+});
+
+test('pagination cycle never produces a partial reconciliation', async () => {
+  const api=runner(), chrome=fakeBrowser();
+  chrome.scripting.executeScript=async ({args})=>[{
+    result:{origin:'https://' + ({
+      inventory:'inventory.example',datalens:'analytics.example',asgard:'asgard.example'
+    }[args[0]]),text:'Содержимое',
+    table:{columns:args[0]==='inventory'?['cargo_place','inventory_date']:
+      args[0]==='datalens'?['main_partner_code_original','sc_id','result','scanned_at']:
+      ['cargo_place','status'],rows:[]},
+    next:args[0]==='inventory'?'https://inventory.example/orders':null}
+  }];
+  let reconciles=0;
+  const result=await api.run(chrome,{
+    inventory:'https://inventory.example/orders',
+    datalens:'https://analytics.example/reports',
+    asgard:'https://asgard.example/history'
+  },async msg=>{
+    if(msg.type==='reconcile_site_tables')reconciles++;
+    return {ok:true,type:'page_inspected',persisted:false,characters:msg.page.text.length};
+  },async ()=>{});
+  assert.equal(result.phase,'needs_attention');
+  assert.equal(reconciles,0);
+  assert.equal(chrome.stats.removed,3);
+});
