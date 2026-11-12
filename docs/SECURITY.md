@@ -102,7 +102,7 @@
 ## Google Sheets read-only connector
 
 - Desktop OAuth client only. Installed apps are public clients; PKCE S256 and random one-use state are mandatory. Client secret is optional; if a project requires it, the user may enter it locally and it is stored in Windows Credential Manager. Never treat a bundled client secret as confidential.
-- Loopback callback binds to `127.0.0.1` on a random port; no LAN binding. The callback validates Host, state, path and authorization code.
+- Loopback callback binds to `127.0.0.1` on a random port; no LAN binding. The callback validates Host, state, path and authorization code. A static same-origin page forwards query/fragment parameters to the local listener when the browser omits the URL fragment from its HTTP request; it loads no external scripts or resources.
 - The app requests exactly `https://www.googleapis.com/auth/spreadsheets.readonly`. Token responses that omit this scope or contain any additional scope are rejected before storage.
 - Refresh token, public client ID, and optional client secret are stored as Windows Credential Manager Generic Credentials. Access token is memory-only. No plaintext fallback exists.
 - Sheets access is GET-only for a user-entered spreadsheet ID and A1 range. The connector has no write method or Google Drive API client. Response size and cell count are bounded.
