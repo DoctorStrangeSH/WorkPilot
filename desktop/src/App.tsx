@@ -116,7 +116,7 @@ export default function App(){
 
         {page==="permissions"&&<PermissionsPage requests={data?.permissions??[]} connected={connected} busy={busy} onDecide={decidePermission}/>}
         {page==="browser"&&<BrowserPage tabs={data?.browser_tabs??[]} audit={data?.browser_audit??null} job={data?.browser_audit_job??null} connected={connected} onRequested={()=>void refresh()}/>}
-        {page==="sources"&&<SourcesPage tabs={data?.browser_tabs??[]} connected={connected} busy={busy} onStartAgent={runAgent} onOpenBrowser={()=>setPage("browser")}/>}
+        {page==="sources"&&<SourcesPage tabs={data?.browser_tabs??[]} connected={connected} agentBusy={busy} onStartAgent={runAgent} onOpenBrowser={()=>setPage("browser")}/>}
         {page==="orders"&&<OrderCheckPage connected={connected}/>}
         {page==="order_batch"&&<OrderBatchPage connected={connected}/>}
         {page==="knowledge"&&<KnowledgePage connected={connected}/>}
@@ -193,7 +193,7 @@ function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];a
 
 type GoogleSheetsStatus = {connected:boolean;status:string;error:string|null;client_id?:string};
 
-function SourcesPage({tabs,connected,busy,onStartAgent,onOpenBrowser}:{tabs:BrowserTab[];connected:boolean;busy:boolean;onStartAgent:()=>void;onOpenBrowser:()=>void}){
+function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs:BrowserTab[];connected:boolean;agentBusy:boolean;onStartAgent:()=>void;onOpenBrowser:()=>void}){
   const [clientId,setClientId]=useState("");
   const [clientSecret,setClientSecret]=useState("");
   const [sheetsStatus,setSheetsStatus]=useState<GoogleSheetsStatus>({connected:false,status:"not_connected",error:null});
@@ -277,7 +277,7 @@ function SourcesPage({tabs,connected,busy,onStartAgent,onOpenBrowser}:{tabs:Brow
         <div className="source-card-top"><span className="source-icon sheets"><Database size={19}/></span><span className={"source-state "+(sheetsAuthorized?"ready":"pending")}>{statusLabel}</span></div>
         <h2>Google Sheets · ИНВента</h2>
         <p>Отдельная авторизация Malenia. Запрашивается только доступ на чтение Google Sheets. Исходные данные остаются нетронутыми; результат расследования хранится отдельно в Malenia.</p>
-        {!connected?<div className="source-help"><b>Локальный агент остановлен.</b><p>Запусти его здесь, чтобы подключить Google и обработать первый заказ.</p><button className="primary source-action" onClick={onStartAgent} disabled={busy}>{busy?"Запускаем…":"Запустить агента"}</button></div>:null}
+        {!connected?<div className="source-help"><b>Локальный агент остановлен.</b><p>Запусти его здесь, чтобы подключить Google и обработать первый заказ.</p><button className="primary source-action" onClick={onStartAgent} disabled={agentBusy}>{agentBusy?"Запускаем…":"Запустить агента"}</button></div>:null}
         {!sheetsAuthorized?
           <div className="google-connect-form">
             <label>Google OAuth Desktop Client ID
