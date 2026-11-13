@@ -400,7 +400,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(runtime["release"], "0.6.0")
         self.assertEqual(runtime["protocol"], 1)
         self.assertIn("task_idempotency", runtime["capabilities"])
-        self.assertIn("google_sheets_readonly", runtime["capabilities"])
+        self.assertIn("google_sheets_editor_approval", runtime["capabilities"])
         self.assertIn("order_preview", runtime["capabilities"])
         self.assertIn("order_batch_preview", runtime["capabilities"])
 
