@@ -11,6 +11,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
+from . import __version__
 from .ai import OllamaClient, AIError
 from .knowledge import KnowledgeBase, KnowledgeError
 from .skills import SkillRegistry, SkillError
@@ -130,7 +131,7 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                 return
 
             if parsed.path == "/v1/runtime":
-                self._send(200, {"release": "0.6.0", "protocol": 1,
+                self._send(200, {"release": __version__, "protocol": 1,
                     "capabilities": ["local_chat", "task_idempotency", "explicit_knowledge", "knowledge_only", "public_search", "google_sheets_editor_approval", "order_preview", "order_batch_preview", "reviewed_skills"]})
             elif parsed.path == "/v1/knowledge":
                 self._send(200, {"records": knowledge.list()})
