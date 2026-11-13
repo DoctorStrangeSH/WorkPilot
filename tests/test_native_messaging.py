@@ -67,7 +67,7 @@ class NativeMessagingProtocolTests(unittest.TestCase):
     def test_hello_reports_only_explicit_capability(self):
         response = handle_message({"type": "hello", "request_id": "1"}, self.store)
         self.assertEqual(response["host"], HOST_NAME)
-        self.assertEqual(response["capabilities"], ["share_active_tab", "inspect_active_page", "reconcile_site_tables",
+        self.assertEqual(response["capabilities"], ["share_active_tab", "inspect_active_page", "inspect_capabilities", "reconcile_site_tables",
                          "claim_browser_audit", "finish_browser_audit",
                          "update_browser_audit_progress"])
         self.assertTrue(response["ok"])
