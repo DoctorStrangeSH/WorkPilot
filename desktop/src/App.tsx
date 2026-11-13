@@ -240,7 +240,7 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
   const analyzeActiveInventa=async()=>{
     setBusy(true);setSheetError("");setSheetNotice("");setInventaReport(null);
     try{
-      const sheetTabs=tabs.filter(tab=>/^https:\/\/docs\.google\.com\/spreadsheets\/d\/[A-Za-z0-9_-]{10,256}\/edit\/?$/.test(tab.url));
+      const sheetTabs=tabs.filter(tab=>/^https:\/\/docs\.google\.com\/spreadsheets\/d\/[A-Za-z0-9_-]{10,256}\/edit\/?(?:\?gid=\d{1,16})?$/.test(tab.url));
       const namedInventa=sheetTabs.filter(tab=>/inventa|инвент/i.test(tab.title));
       // Prefer the most recently shared named sheet when multiple copies are open.
       const candidates=namedInventa.length?namedInventa:sheetTabs;
@@ -248,7 +248,7 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
         Date.parse(b.shared_at||"")-Date.parse(a.shared_at||"")
       )[0]||null;
       if(!activeTab){
-        throw new Error("Открой таблицу ИНВенты в Яндекс Браузере и нажми «Поделиться вкладкой» в расширении Malenia.");
+        throw new Error("Открой таблицу ИНВенты, затем в расширении Malenia нажми «Проверить структуру активной вкладки». Отдельно делиться вкладкой больше не нужно.");
       }
       const result=await invoke<any>("analyze_active_inventa",{spreadsheetUrl:activeTab.url});
       setInventaReport(result);
@@ -295,7 +295,7 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
               <button className="primary" disabled={busy} onClick={()=>void analyzeActiveInventa()}>{busy?"Анализируем…":"Обработать первый заказ"}</button>
               <button className="secondary" disabled={busy} onClick={()=>void disconnectSheets()}>Отключить Google</button>
             </div>
-            <small>Маления автоматически выберет последнюю переданную таблицу ИНВенты, распознает лист по заголовкам и покажет первый заказ для проверки. Исходная таблица доступна только для чтения и не изменяется.</small>
+            <small>Маления автоматически определяет последнюю обнаруженную таблицу Google Sheets и активный лист, распознаёт заголовки и показывает первый заказ. Для обнаружения достаточно проверить структуру активной вкладки в расширении — ручной ввод ссылок не нужен. Исходная таблица доступна только для чтения и не изменяется.</small>
           </div>
           {inventaReport?<div className="sheet-preview">
             <div className="sheet-preview-head"><b>{inventaReport.source.spreadsheet_title} · {inventaReport.source.sheet_title}</b><small>{inventaReport.analysis.rows_analyzed} строк</small></div>
