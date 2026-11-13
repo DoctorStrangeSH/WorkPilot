@@ -155,7 +155,8 @@ test('page inspection requests only the active HTTPS origin when host access is 
   });
   await p.reply(0, hello);
   await p.click('inspect');
-  assert.deepEqual(p.requestedOrigins, [{origins:['https://orders.example.com/*']}]);
+  assert.equal(p.requestedOrigins.length,1);
+  assert.deepEqual(Array.from(p.requestedOrigins[0].origins), ['https://orders.example.com/*']);
   assert.equal(p.calls[1].message.type, 'inspect_capabilities');
   await p.reply(1, {ok:true,type:'capabilities_inspected',persisted:false,
     page:{tables:[]}});
