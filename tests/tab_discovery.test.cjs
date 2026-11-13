@@ -1,6 +1,6 @@
 const {test} = require("node:test");
 const assert = require("node:assert/strict");
-require("../browser-extension/tab_discovery.js");
+const MaleniaTabDiscovery = require("../browser-extension/tab_discovery.js");
 
 const mappings = {
   inventory: {origin:"https://inventory.corp.example",pathPrefix:"/orders"},
