@@ -208,7 +208,7 @@ inspectButton.addEventListener("click", async () => {
         const visibleRows = Array.from(node.querySelectorAll(rowSelector)).filter(visible).length;
         const declaredRows = node.getAttribute("aria-rowcount");
         tables.push({kind:isGrid?"aria-grid":"html-table",columns,visible_rows:Math.min(visibleRows,1000),
-          declared_rows:declaredRows && /^\\d+$/.test(declaredRows)?Math.min(Number(declaredRows),1000000):null});
+          declared_rows:declaredRows && /^\d+$/.test(declaredRows)?Math.min(Number(declaredRows),1000000):null});
       }
       const labels = Array.from(document.querySelectorAll("input:not([type=hidden]), [role=searchbox]"))
         .filter(visible).map(el=>clean(el.getAttribute("aria-label") || el.getAttribute("placeholder") ||
@@ -229,13 +229,13 @@ inspectButton.addEventListener("click", async () => {
       /datalens|data.?lens/i.test(page.hostname+" "+summary.title) ? "DataLens" :
       /asgard|асгард/i.test(page.hostname+" "+summary.title) ? "Asgard" : "Неизвестный ресурс";
     const tableDetails = Array.isArray(summary.tables) ? summary.tables.map((table,index)=>
-      "\\nТаблица "+(index+1)+" ("+table.kind+", строк видно: "+table.visible_rows+
+      "\nТаблица +(index+1)+" ("+table.kind+", строк видно: "+table.visible_rows+
       (table.declared_rows===null?"":"/"+table.declared_rows)+"): "+table.columns.join(" · ")
     ).join("") : "";
     auditStatus.textContent = role+": "+(summary.login_required?"похоже, требуется вход": "страница доступна")+
       "; таблиц: "+(summary.tables?.length||0)+"; полей поиска: "+summary.search_labels.length+
       (summary.has_aria_grid?"; есть ARIA grid":"")+(summary.virtualized?"; вероятна виртуализация":"")+
-      tableDetails+"\\nПереданы только заголовки и размеры, значения ячеек не читались.";
+      tableDetails+"\nПереданы только заголовки и размеры, значения ячеек не читались.";
     auditStatus.className = "status ok";
     setStatus("Структурная диагностика завершена. Это ещё не проверка заказов.", "ok");
   } catch (error) {
