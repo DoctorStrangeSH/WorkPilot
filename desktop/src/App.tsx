@@ -310,6 +310,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
             <button className="primary source-action" disabled={!connected||busy||!clientId.trim()||sheetsStatus.status==="authorizing"} onClick={()=>void connectSheets()}>{busy?"Подключаем…":"Подключить Google"}</button>
             <small>Создай OAuth client типа Desktop и включи Google Sheets API. Если consent screen в режиме Testing, добавь свой аккаунт в Test users. Desktop-приложения являются public clients: Google указывает, что Client Secret необязателен и не может считаться защищённым секретом. Если конкретный проект требует его при обмене токена, введи его здесь — он сохранится только в Windows Credential Manager. Не отправляй его в чат. Важно: если внешний OAuth-проект оставить в режиме Testing, refresh token для этого scope истечёт через 7 дней. Для постоянной работы не оставляй внешний проект в Testing; для личного использования Google допускает исключение из полной проверки, но может показывать предупреждение о непроверенном приложении.</small>
           </div>:
+          <>
           <div className="google-read-form">
             <div className="google-actions">
               <button className="primary" disabled={busy} onClick={()=>void analyzeActiveInventa()}>{busy?"Анализируем…":"Найти ИНВенту и проанализировать"}</button>
@@ -322,7 +323,8 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
             <div className="sources-notice"><b>Статусы</b> {Object.entries(inventaReport.analysis.status_counts).map(([k,v])=>k+": "+v).join(" · ")}</div>
             <p><b>Дубли ID:</b> {inventaReport.analysis.duplicate_order_ids.length} · <b>Ошибочные даты:</b> {inventaReport.analysis.invalid_date_rows.length} · <b>Ошибочные суммы:</b> {inventaReport.analysis.invalid_cost_rows.length} · <b>Без тикета:</b> {inventaReport.analysis.missing_ticket_rows.length}</p>
             <p><b>Не заполнено:</b> {Object.entries(inventaReport.analysis.missing_required).map(([k,v])=>k+": "+v).join(" · ")||"нет"}</p>
-          </div>:null}}
+          </div>:null}
+          </> }
         {sheetsStatus.status==="authorizing"?<p className="source-help">Завершите подтверждение в системном браузере. Malenia не увидит пароль Google.</p>:null}
         {sheetsStatus.status==="denied"?<p className="source-help">Разрешение не было предоставлено. Можно повторить подключение.</p>:null}
         {sheetsStatus.status==="expired"?<p className="source-help">Окно авторизации не получило ответ вовремя. Начните подключение заново.</p>:null}
