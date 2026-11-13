@@ -163,6 +163,34 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
         return {**response, "ok": True, "type": "site_tables_reconciled",
                 **result, "persisted": False, "aggregate_persisted": True}
 
+    if message_type == "inspect_capabilities":
+        # Accept only bounded structural metadata, never raw page text or credentials.
+        page = payload.get("page")
+        required = {"url", "title", "table_headers", "search_labels",
+                    "has_aria_grid", "virtualized", "login_required"}
+        if not isinstance(page, dict) or set(page) != required:
+            return {**response, "ok": False, "error": "invalid_capability_snapshot"}
+        try:
+            url = _clean_tab_url(page["url"])
+            title = page["title"]
+            headers = page["table_headers"]
+            labels = page["search_labels"]
+            if (not isinstance(title, str) or len(title) > 300
+                    or not isinstance(headers, list) or len(headers) > 40
+                    or not isinstance(labels, list) or len(labels) > 30
+                    or any(not isinstance(v, str) or len(v) > 120 for v in headers + labels)
+                    or any(not isinstance(page[k], bool) for k in
+                           ("has_aria_grid", "virtualized", "login_required"))):
+                raise ValueError("invalid capability fields")
+        except (ValueError, TypeError, KeyError):
+            return {**response, "ok": False, "error": "invalid_capability_snapshot"}
+        return {**response, "ok": True, "type": "capabilities_inspected",
+                "page": {"url": url, "title": title, "table_headers": headers,
+                         "search_labels": labels, "has_aria_grid": page["has_aria_grid"],
+                         "virtualized": page["virtualized"],
+                         "login_required": page["login_required"]},
+                "persisted": False}
+
     if message_type == "inspect_active_page":
         # Validate a user-initiated rendered-text snapshot without retaining it.
         page = payload.get("page")
