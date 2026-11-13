@@ -261,6 +261,7 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
 
   const sheetsAuthorized=sheetsStatus.status==="authorized"||sheetsStatus.connected;
   const authErrorText:Record<string,string>={
+    authorization_denied:"Google не выдал разрешение. Повтори подключение и подтверди доступ только для чтения.",
     google_oauth_invalid_client:"Google не принял Client ID. Проверь, что это OAuth-клиент типа Desktop из того же проекта, где включён Google Sheets API.",
     google_oauth_unauthorized_client:"Этот OAuth-клиент не разрешён для выбранного типа приложения или проекта.",
     google_oauth_invalid_request:"Google отклонил параметры OAuth-запроса. Переподключи Google и проверь настройки клиента.",
@@ -280,7 +281,8 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
   const authErrorMessage=sheetsStatus.error
     ? (authErrorText[sheetsStatus.error]||"Ошибка этапа авторизации: "+sheetsStatus.error)
     : null;
-  const statusLabel=sheetsAuthorized?"Подключён · доступ только для чтения":
+  const statusLabel=sheetsStatus.status==="authorized"?"Google разрешил чтение · источник ещё не проверен":
+    sheetsStatus.connected?"Подключён · доступ только для чтения":
     sheetsStatus.status==="authorizing"?"Ожидает подтверждения в браузере":
     sheetsStatus.status==="reauthorization_required"?"Требуется повторная авторизация":
     sheetsStatus.status==="denied"?"Доступ не предоставлен":
@@ -299,6 +301,17 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
         <div className="source-card-top"><span className="source-icon sheets"><Database size={19}/></span><span className={"source-state "+(sheetsAuthorized?"ready":"pending")}>{statusLabel}</span></div>
         <h2>Google Sheets · ИНВента</h2>
         <p>Отдельная авторизация Malenia. Запрашивается только доступ на чтение Google Sheets. Исходные данные остаются нетронутыми; результат расследования хранится отдельно в Malenia.</p>
+        {authErrorMessage?<p className="alert error" role="alert">{authErrorMessage} <small>Код этапа: {sheetsStatus.error}</small></p>:null}
+        <div className="google-read-form">
+          <div className="google-actions">
+            <button className="primary" disabled={!connected||!sheetsAuthorized||busy||!hasDiscoveredSheet}
+              onClick={()=>void analyzeActiveInventa()}>{busy?"Читаем ИНВенту…":"Прочитать и разобрать первый заказ"}</button>
+          </div>
+          <small>{!connected?"Сначала запусти локального агента.":
+            !sheetsAuthorized?"Кнопка станет доступна после успешной авторизации Google.":
+            !hasDiscoveredSheet?"Открой ИНВенту и нажми в расширении «Проверить структуру активной вкладки».":
+            "Будет прочитан активный лист Google Sheets. Это пока анализ ИНВенты, без подтверждения в DataLens и Asgard."}</small>
+        </div>
         {!connected?<div className="source-help"><b>Локальный агент остановлен.</b><p>Запусти его здесь, чтобы подключить Google и обработать первый заказ.</p><button className="primary source-action" onClick={onStartAgent} disabled={agentBusy}>{agentBusy?"Запускаем…":"Запустить агента"}</button></div>:null}
         {!sheetsAuthorized?
           <>
@@ -312,20 +325,10 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
             <button className="primary source-action" disabled={!connected||busy||!clientId.trim()||sheetsStatus.status==="authorizing"} onClick={()=>void connectSheets()}>{busy?"Подключаем…":"Подключить Google"}</button>
             <small>Создай OAuth client типа Desktop и включи Google Sheets API. Если consent screen в режиме Testing, добавь свой аккаунт в Test users. Для Desktop-приложения Client Secret обычно не нужен. Не отправляй секреты в чат.</small>
           </div>
-          <div className="google-read-form">
-            <div className="google-actions">
-              <button className="primary" disabled>{busy?"Анализируем…":"Обработать первый заказ"}</button>
-            </div>
-            <small>{sheetsStatus.status==="error"||sheetsStatus.status==="denied"||sheetsStatus.status==="expired"
-              ? "Сначала исправим подключение Google. После успешной авторизации эта кнопка запустит чтение найденной ИНВенты."
-              : "Сначала подтверди доступ Google. После этого Malenia автоматически прочитает обнаруженную ИНВенту."}</small>
-            {authErrorMessage?<p className="source-help" role="status">{authErrorMessage}</p>:null}
-          </div>
           </>:
           <>
           <div className="google-read-form">
             <div className="google-actions">
-              <button className="primary" disabled={busy||!hasDiscoveredSheet} onClick={()=>void analyzeActiveInventa()}>{busy?"Анализируем…":"Обработать первый заказ"}</button>
               <button className="secondary" disabled={busy} onClick={()=>void disconnectSheets()}>Отключить Google</button>
             </div>
             <small>{hasDiscoveredSheet
@@ -349,7 +352,6 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
         {sheetsStatus.status==="authorizing"?<p className="source-help">Завершите подтверждение в системном браузере. Malenia не увидит пароль Google.</p>:null}
         {sheetsStatus.status==="denied"?<p className="source-help">Разрешение не было предоставлено. Можно повторить подключение.</p>:null}
         {sheetsStatus.status==="expired"?<p className="source-help">Окно авторизации не получило ответ вовремя. Начните подключение заново.</p>:null}
-        {sheetsStatus.status==="error"?<p className="source-help">Google не подтвердил нужный scope или OAuth завершился ошибкой. Проверьте OAuth consent screen и Client ID.</p>:null}
       </article>
       <article className="panel source-card"><div className="source-card-top"><span className="source-icon browser"><Plug size={19}/></span><span className="source-state pending">Можно добавить</span></div><h2>Другие рабочие системы</h2><p>Malenia не ограничена заранее заданным списком сайтов. Новые ресурсы и навыки будут подключаться постепенно, по мере обучения и выдачи разрешений.</p><small>Пока доступен первый интеграционный сценарий — Google Sheets, только чтение.</small></article>
       <article className="panel source-card"><div className="source-card-top"><span className="source-icon browser"><Plug size={19}/></span><span className={"source-state "+(tabs.length?"ready":"pending")}>{tabs.length ? `Передано вкладок: ${tabs.length}` : "Ожидает передачи"}</span></div><h2>Browser Bridge</h2><p>Ручная передача отправляет только заголовок и очищенный URL. Страницы передаются по твоему выбору. Доступ предоставляется отдельно; cookies, пароли и история браузера не читаются.</p><small>Автоматическое чтение не означает готовую сверку заказов: подключение сценариев ИНВента → DataLens → Asgard ещё требуется.</small><button className="secondary source-action" onClick={onOpenBrowser}>Открыть Browser Bridge <ArrowUpRight size={14}/></button></article>
