@@ -842,3 +842,38 @@ The previous red runs were investigated from job logs and current branch source,
 4. The Windows smoke test also leaked the agent process if readiness/version assertions failed inside `start()`, leaving its frozen DLLs locked and causing TemporaryDirectory cleanup to raise WinError 5. Wrapped startup validation in exception-safe cleanup; process is terminated, waited, and killed only if graceful termination times out. Commit `2ffe07fafe072432bcfb42bffe665d169f2a6c11`.
 
 Latest fix commit at this note: `4f46fdd1d7c9dc77a4b26e3244f6ed8b14af87e4` (later than test changes? Check actual branch head before relying on this list). Actions have not yet been confirmed for the final branch head. Do not claim CI green until Python, Desktop, and Windows installer complete successfully on the same SHA.
+
+
+## 2026-11-13 — Google Sheets active-tab discovery
+- Google Sheets renders its grid outside ordinary HTML tables; Browser Bridge's `tables: 0` is expected and is not a reason to scrape canvas/hidden DOM.
+- The user showed the real ИНВента spreadsheet. The visible schema includes export date, order ID, `main_partner_code_original`, cost, name, comment, ticket, a blank-header status column, grouping, and VLOOKUP result.
+- Browser Bridge structure inspection now sends only the sanitized docs.google.com spreadsheet URL plus the active numeric `gid`. Native host stores only this tab metadata on the explicit structure-check click; all other query/fragment values are stripped.
+- Desktop SourcesPage can then find the discovered tab without the separate Share tab action and call Google Sheets API via existing OAuth PKCE + Windows Credential Manager with the exact readonly scope.
+- INVenta parser now recognizes `Дата выгрузки` and can infer the blank-header status column from repeated known status values. This is based on the user's screenshot; confirm against actual API data before trusting any output.
+- End-to-end DataLens/Asgard comparison is still not confirmed. Do not claim the first order is fully processed until the API read and both external lookups succeed on the user's live systems.
+
+
+## 2026-11-13 — OAuth callback diagnostics and first-order UI
+- User completed Google's consent flow and saw the local callback acknowledgement, but the Connections card still showed `Ошибка авторизации`. Important: the local callback page previously acknowledged only that the authorization code/state arrived; it did **not** mean token exchange and Windows Credential Manager persistence had succeeded.
+- Changed callback wording to explicitly say Malenia is still validating the Google grant and saving access.
+- Token endpoint failures now expose only an allowlisted stable OAuth category (e.g. `google_oauth_invalid_client`, `google_oauth_unauthorized_client`, `google_oauth_redirect_uri_mismatch`, `google_oauth_invalid_scope`) and HTTP status internally. Raw provider error bodies/descriptions, authorization codes, tokens, client secrets and user URLs are never surfaced.
+- Connections UI now maps safe OAuth categories to actionable Russian guidance. The «Обработать первый заказ» action remains visible while Google is not yet authorized, but is deliberately disabled with an explanation; after authorization it is enabled only when an active Google Sheet has been discovered.
+- Added tests for safe OAuth token-exchange error classification and accurate callback wording. Python tests passed on commit `ffe128db`; Desktop and Windows installer workflows were still running when this note was authored. Re-check Actions on the final branch head before sharing an installer.
+- On the user's next attempt, ask them to read the exact human-readable error shown under the Google connection card. Do not ask for or repeat their Client ID/secret. The current failure cannot be diagnosed from the callback acknowledgement alone.
+
+
+## 2026-11-13 — OAuth invalid_request diagnostics
+- User's Connections screenshot showed `google_oauth_invalid_request`. The callback page only confirms that the browser response (authorization code/state) reached the loopback handler; it does not confirm token exchange or credential persistence.
+- The code maps this category specifically from HTTP 400/401 responses at Google's token endpoint, not from the authorization URL stage. The user-facing copy now says "token exchange" rather than generic authorization request.
+- Token error handling now classifies only safe parameter categories when Google's bounded `error_description` mentions `code_verifier`, `redirect_uri`, `client_id`, `client_secret`, or authorization code. Raw provider descriptions and any authorization material are never returned or logged.
+- Added regression tests for those mappings and for ensuring no provider description/client ID leaks. Python tests passed on 3.11, 3.12, and 3.13 for commit `ce0ec0b5`.
+- Still not proven: exact root cause of the user's original provider error. The next built version should display a more specific safe category if Google returns one; if it remains generic, inspect Google Cloud client type/configuration and exact token request metadata without collecting secrets.
+
+
+## 2026-11-13 — INVenta archive parser correction
+- User confirmed Google OAuth works after adding the OAuth Desktop Client Secret. A real read-only Google Sheets read succeeded for `22.08 (Архив)` (185 rows).
+- Screenshot evidence: first row/order ID `PVZ_FBS_RET_7720160`, partner/cargo code same value, Sheets serial date `46256` (2026-08-22), cost `29980`, product `Кеды RALF RINGER`, status `Исключение`, ticket `FA254276C66034580038`.
+- Actual export has a blank header for the product-name column (E) and a blank header for status (H). The parser already inferred status; it now also infers the unlabeled product column without confusing mapped comment/ticket/group columns.
+- Google Sheets serial dates are normalized to ISO calendar dates. Rows without an order ID are treated as report/summary/empty rows and skipped from order-level missing-field counts.
+- The desktop first-order preview now shows the product name and labels the date as export date. Source remains read-only; DataLens and Asgard checks remain explicitly unverified.
+- Regression tests cover the real screenshot shape and serial date. Python matrix passed 3.11/3.12/3.13 at commit `959471ce`; Desktop check at that commit was still running when last checked. A later UI commit adds the product line; re-check CI before packaging.

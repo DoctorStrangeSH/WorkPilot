@@ -28,6 +28,8 @@ jobs:
         run: node --test tests/browser_bridge.test.cjs
       - name: Test autonomous browser traversal
         run: node --test tests/browser_automation.test.cjs
+      - name: Test open-tab candidate discovery
+        run: node --test tests/tab_discovery.test.cjs tests/browser_open_tab_discovery.test.cjs
       - name: Test desktop-triggered browser audit dispatch
         run: node --test tests/browser_desktop_dispatch.test.cjs
       - name: Test permission panel rendering

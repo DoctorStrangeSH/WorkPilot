@@ -6,6 +6,8 @@ const shareAllButton = document.getElementById("shareAll");
 const retryButton = document.getElementById("retry");
 const inspectButton = document.getElementById("inspect");
 const auditStatus = document.getElementById("auditStatus");
+const inspectMappedTabsButton = document.getElementById("inspectMappedTabs");
+let hasConfirmedTabs = false;
 let busy = false;
 let connected = false;
 
@@ -18,6 +20,7 @@ function updateButtons() {
   shareButton.disabled = busy || !connected;
   shareAllButton.disabled = busy || !connected;
   inspectButton.disabled = busy || !connected;
+  inspectMappedTabsButton.disabled = busy || !hasConfirmedTabs;
   retryButton.disabled = busy;
   retryButton.textContent = connected ? "Проверить соединение" : "Повторить подключение";
 }
@@ -38,6 +41,10 @@ function diagnostic(error, sharing = false) {
     case "disconnected": return sharing
       ? "Соединение прервано. Проверьте в Malenia, сохранилась ли вкладка, затем повторите подключение."
       : "Хост завершил соединение. Проверьте установку и повторите подключение.";
+    case "site_permission_denied": return "Браузер не предоставил расширению доступ к этому сайту. Разрешите доступ к текущему сайту в настройках расширения и повторите проверку.";
+    case "page_access": return "Не удалось прочитать активную страницу. Проверьте, что это обычная HTTP(S)-вкладка, и разрешите Malenia доступ к сайту.";
+    case "host_rejected": return "Локальный агент отклонил диагностику структуры страницы. Проверьте, что Malenia обновлена вместе с расширением Browser Bridge.";
+    case "host_protocol": return "Локальный агент ответил в несовместимом формате. Обновите Malenia и повторите проверку.";
     default: return "Не удалось проверить ответ Browser Bridge. Проверьте установку и повторите подключение.";
   }
 }
@@ -85,7 +92,8 @@ async function connect() {
   setStatus("Проверяем соединение…");
   try {
     const response = await sendNativeMessage({ type: "hello" });
-    if (!response.ok || response.host !== HOST_NAME) throw bridgeError("protocol");
+    if (!response.ok || response.host !== HOST_NAME || !Array.isArray(response.capabilities) ||
+        !response.capabilities.includes("inspect_capabilities")) throw bridgeError("protocol");
     connected = true;
     setStatus("Malenia подключена. Можно поделиться текущей вкладкой.", "ok");
   } catch (error) {
@@ -177,44 +185,438 @@ inspectButton.addEventListener("click", async () => {
   busy = true;
   updateButtons();
   setStatus("Проверяем структуру активной вкладки…");
+  let inspectedPageUrl = "";
+  let stage = "tab_lookup";
   try {
     const [tab] = await chrome.tabs.query({active:true,lastFocusedWindow:true});
     if (!tab || !Number.isInteger(tab.id) || typeof tab.url !== "string") throw new Error("tab");
     const page = new URL(tab.url);
+    inspectedPageUrl = page.href;
     if (!["http:","https:"].includes(page.protocol) || page.username || page.password) throw new Error("url");
-    const results = await chrome.scripting.executeScript({target:{tabId:tab.id},func:() => {
+    stage = "page_access";
+    const readStructure = () => chrome.scripting.executeScript({target:{tabId:tab.id},func:() => {
       const visible = el => !!(el && (el.getClientRects().length || el.getBoundingClientRect().width));
-      const clean = value => String(value || "").replace(/\\s+/g," ").trim().slice(0,120);
+      const clean = value => String(value || "").replace(/\s+/g," ").trim().slice(0,120);
       const headers = Array.from(document.querySelectorAll("table thead th, [role=columnheader]"))
         .filter(visible).map(el=>clean(el.innerText || el.getAttribute("aria-label"))).filter(Boolean).slice(0,40);
+      // Capture schema only, never cell values: this lets us map real DataLens/Asgard
+      // layouts without guessing selectors or transferring order data during diagnosis.
+      const tables = [];
+      for (const node of Array.from(document.querySelectorAll("table,[role=grid],[role=table]")).filter(visible).slice(0,12)) {
+        const isGrid = node.getAttribute("role") === "grid" || node.getAttribute("role") === "table";
+        const headNodes = isGrid
+          ? Array.from(node.querySelectorAll('[role=columnheader]'))
+          : Array.from(node.querySelectorAll("thead th")).length
+            ? Array.from(node.querySelectorAll("thead th"))
+            : Array.from(node.querySelector("tr")?.querySelectorAll("th") || []);
+        const columns = headNodes.filter(visible).map(el=>clean(el.innerText || el.getAttribute("aria-label"))).filter(Boolean).slice(0,20);
+        if (!columns.length) continue;
+        const rowSelector = isGrid ? '[role=row]' : 'tbody tr';
+        const visibleRows = Array.from(node.querySelectorAll(rowSelector)).filter(visible).length;
+        const declaredRows = node.getAttribute("aria-rowcount");
+        tables.push({kind:isGrid?"aria-grid":"html-table",columns,visible_rows:Math.min(visibleRows,1000),
+          declared_rows:declaredRows && /^\d+$/.test(declaredRows)?Math.min(Number(declaredRows),1000000):null});
+      }
       const labels = Array.from(document.querySelectorAll("input:not([type=hidden]), [role=searchbox]"))
         .filter(visible).map(el=>clean(el.getAttribute("aria-label") || el.getAttribute("placeholder") ||
           (el.labels && Array.from(el.labels).map(x=>x.innerText).join(" ")))).filter(Boolean).slice(0,30);
       const body = document.body ? document.body.innerText.slice(0,5000).toLowerCase() : "";
-      return {title:document.title.slice(0,300),table_headers:headers,search_labels:labels,
+      return {title:document.title.slice(0,300),table_headers:headers,tables,search_labels:labels,
         has_aria_grid:!!document.querySelector('[role="grid"],[role="table"]'),
         virtualized:!!document.querySelector('[aria-rowcount], [data-virtualized="true"], .ag-virtual-list-viewport'),
         login_required:/sign in|log in|войти|авторизац|вход в аккаунт/.test(body)};
     }});
+    let results;
+    try {
+      results = await readStructure();
+    } catch (error) {
+      const message = typeof error?.message === "string" ? error.message : "";
+      if (!/cannot access contents|cannot be scripted|host permission|permission/i.test(message)) {
+        throw bridgeError("page_access");
+      }
+      stage = "site_permission";
+      let granted = false;
+      try { granted = await chrome.permissions.request({origins:[page.origin + "/*"]}); }
+      catch { granted = false; }
+      if (!granted) throw bridgeError("site_permission_denied");
+      stage = "page_access";
+      try { results = await readStructure(); }
+      catch { throw bridgeError("page_access"); }
+    }
     const summary = results?.[0]?.result;
     if (!summary || typeof summary !== "object") throw new Error("snapshot");
+    stage = "host_response";
+    const queryGid = page.searchParams.get("gid");
+    const fragmentGid = new URLSearchParams(page.hash.replace(/^#/, "")).get("gid");
+    const activeGid = /^\d{1,16}$/.test(queryGid || "") ? queryGid :
+      /^\d{1,16}$/.test(fragmentGid || "") ? fragmentGid : null;
+    const safePageUrl = page.origin + page.pathname +
+      (page.hostname === "docs.google.com" && /\/spreadsheets\/d\/[A-Za-z0-9_-]{10,256}\/edit\/?$/.test(page.pathname) && activeGid
+        ? "?gid=" + encodeURIComponent(activeGid) : "");
     const response = await sendNativeMessage({type:"inspect_capabilities",request_id:crypto.randomUUID(),
-      page:{url:page.origin+page.pathname,...summary}});
-    if (!response?.ok || response.type!=="capabilities_inspected" || response.persisted!==false)
-      throw bridgeError("protocol");
-    const role = /inventa|инвент/i.test(page.hostname+" "+summary.title) ? "ИНВента" :
+      page:{url:safePageUrl,...summary}});
+    if (!response?.ok) {
+      if (response.error === "invalid_capability_snapshot") throw bridgeError("host_rejected");
+      throw bridgeError("host_protocol");
+    }
+    if (response.type!=="capabilities_inspected" || response.persisted!==false ||
+        !response.page || !Array.isArray(response.page.tables)) throw bridgeError("host_protocol");
+    const role = page.hostname === "docs.google.com" &&
+      /\/spreadsheets\/d\/[A-Za-z0-9_-]{10,256}\/edit\/?$/.test(page.pathname) ? "Google Sheets" :
+      /inventa|инвент/i.test(page.hostname+" "+summary.title) ? "ИНВента" :
       /datalens|data.?lens/i.test(page.hostname+" "+summary.title) ? "DataLens" :
       /asgard|асгард/i.test(page.hostname+" "+summary.title) ? "Asgard" : "Неизвестный ресурс";
+    const tableDetails = Array.isArray(summary.tables) ? summary.tables.map((table,index)=>
+      "\nТаблица "+(index+1)+" ("+table.kind+", строк видно: "+table.visible_rows+
+      (table.declared_rows===null?"":"/"+table.declared_rows)+"): "+table.columns.join(" · ")
+    ).join("") : "";
+    const sheetDetected = response.tab_registered === true;
     auditStatus.textContent = role+": "+(summary.login_required?"похоже, требуется вход": "страница доступна")+
-      "; заголовков: "+summary.table_headers.length+"; полей поиска: "+summary.search_labels.length+
-      (summary.has_aria_grid?"; есть ARIA grid":"")+(summary.virtualized?"; вероятна виртуализация":"")+
-      ". Сырые данные не сохранялись.";
+      (sheetDetected
+        ? "; Google Sheets: активный документ и лист обнаружены, переданы в Malenia для чтения через API"
+        : "; HTML/ARIA-таблиц: "+(summary.tables?.length||0)+"; полей поиска: "+summary.search_labels.length+
+          (summary.has_aria_grid?"; есть ARIA grid":"")+(summary.virtualized?"; вероятна виртуализация":"")+
+          tableDetails+"\nПереданы только заголовки и размеры, значения ячеек не читались.");
     auditStatus.className = "status ok";
-    setStatus("Структурная диагностика завершена. Это ещё не проверка заказов.", "ok");
-  } catch {
-    auditStatus.textContent = "Не удалось проверить вкладку. Убедитесь, что активна обычная HTTP(S)-страница и расширению разрешён доступ.";
+    setStatus(sheetDetected
+      ? "Google Таблица обнаружена. Теперь её можно обработать в разделе «Подключения»."
+      : "Структурная диагностика завершена. Это ещё не проверка заказов.", "ok");
+  } catch (error) {
+    const raw = typeof error?.message === "string" ? error.message : "";
+    const reason = error?.bridgeCode ? diagnostic(error) :
+      stage === "tab_lookup" ? "Не удалось определить активную вкладку. Переключись на обычную рабочую HTTP(S)-страницу." :
+      stage === "page_access" ? "Браузер не разрешил чтение страницы. Проверь доступ Malenia к текущему сайту." :
+      stage === "site_permission" ? "Не удалось получить разрешение на чтение этого сайта." :
+      stage === "host_response" ? "Локальный агент не подтвердил структурный ответ. Проверь обновление и соединение Browser Bridge." :
+      /chrome:\/\/|edge:\/\/|about:|chromewebstore|extensions/i.test(inspectedPageUrl || "")
+        ? "Эта служебная страница браузера недоступна для чтения расширением. Открой обычную рабочую страницу."
+        : "Проверка остановлена на этапе "+stage+". Повтори подключение и проверь доступ расширения.";
+    auditStatus.textContent = reason;
     auditStatus.className = "status error";
-    setStatus("Проверка структуры не выполнена.", "error");
+    setStatus("Проверка не завершена ("+stage+"). Причина указана ниже.", "error");
   } finally { busy=false; updateButtons(); }
 });
 
+
+/* Explicit, user-mapped discovery of tabs already open in this browser.
+ * Selection is a session snapshot only; consumers must revalidate tabId + URL
+ * and current host permission immediately before any future page read.
+ */
+const discoveryRoles = [
+  {key:"inventory",label:"ИНВента",input:"mapInventory"},
+  {key:"datalens",label:"DataLens",input:"mapDatalens"},
+  {key:"asgard",label:"Asgard",input:"mapAsgard"}
+];
+const discoveryButton = document.getElementById("discoverTabs");
+const confirmDiscoveryButton = document.getElementById("confirmTabs");
+const discoveryResults = document.getElementById("discoveryResults");
+const discoveryStatus = document.getElementById("discoveryStatus");
+let discoveryMappings = null;
+let discoveryResult = null;
+const discoverySelections = {};
+
+function discoveryMappingFromInput(value) {
+  let url;
+  try { url = new URL(value.trim()); } catch { throw new Error("Укажи полный HTTPS-адрес ресурса."); }
+  if (url.protocol !== "https:" || !url.hostname || url.username || url.password || url.port) {
+    throw new Error("Разрешены только HTTPS-адреса без логина, пароля и нестандартного порта.");
+  }
+  return {origin:url.origin,pathPrefix:url.pathname || "/"};
+}
+
+function discoverySetStatus(message, kind="") {
+  discoveryStatus.textContent = message;
+  discoveryStatus.className = "status" + (kind ? " " + kind : "");
+}
+
+function discoveryRefreshConfirm() {
+  confirmDiscoveryButton.disabled = !discoveryRoles.every(role =>
+    discoverySelections[role.key] && discoveryResult?.roles?.[role.key]?.candidates
+      ?.some(candidate => candidate.tabId === discoverySelections[role.key].tabId)
+  );
+}
+
+function renderDiscoveryResults(result, permissionOrigins) {
+  discoveryResults.replaceChildren();
+  for (const role of discoveryRoles) {
+    const state = result.roles[role.key];
+    const section = document.createElement("div");
+    section.className = "discovery-role";
+    const heading = document.createElement("strong");
+    heading.textContent = role.label + ": " + (
+      state.state === "not_found" ? "не найдена" :
+      state.state === "unique" ? "найдена одна вкладка" : "найдено несколько вкладок"
+    );
+    section.appendChild(heading);
+    if (!permissionOrigins.includes(discoveryMappings[role.key].origin + "/*")) {
+      const note = document.createElement("div");
+      note.textContent = "Нет разрешения сайта. Разреши доступ к этому домену в настройках расширения и повтори поиск.";
+      section.appendChild(note);
+    }
+    for (const candidate of state.candidates) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "discovery-candidate";
+      button.setAttribute("aria-pressed", String(
+        discoverySelections[role.key]?.tabId === candidate.tabId
+      ));
+      button.textContent = (candidate.active ? "● Активная · " : "") +
+        (candidate.title || "Без заголовка") + " · " + candidate.sanitizedUrl;
+      button.addEventListener("click", () => {
+        discoverySelections[role.key] = candidate;
+        renderDiscoveryResults(discoveryResult, permissionOrigins);
+        discoveryRefreshConfirm();
+        discoverySetStatus("Выбор " + role.label + " отмечен. Подтверди все три ресурса.", "");
+      });
+      section.appendChild(button);
+    }
+    discoveryResults.appendChild(section);
+  }
+  discoveryRefreshConfirm();
+}
+
+discoveryButton.addEventListener("click", async () => {
+  if (busy) return;
+  busy = true;
+  updateButtons();
+  discoveryButton.disabled = true;
+  discoverySetStatus("Проверяем текущие вкладки и разрешения…");
+  try {
+    const raw = {};
+    for (const role of discoveryRoles) {
+      raw[role.key] = discoveryMappingFromInput(
+        document.getElementById(role.input).value
+      );
+    }
+    discoveryMappings = MaleniaTabDiscovery.normalizeMapping(raw);
+    const [tabs, permissionState] = await Promise.all([
+      chrome.tabs.query({}),
+      chrome.permissions.getAll()
+    ]);
+    const grantedOrigins = Array.isArray(permissionState?.origins)
+      ? permissionState.origins : [];
+    discoveryResult = MaleniaTabDiscovery.discover(tabs, discoveryMappings, grantedOrigins);
+    for (const role of discoveryRoles) delete discoverySelections[role.key];
+    renderDiscoveryResults(discoveryResult, grantedOrigins);
+    const found = discoveryRoles.filter(role =>
+      discoveryResult.roles[role.key].candidates.length > 0
+    ).length;
+    discoverySetStatus("Найдено ресурсов: " + found + " из 3. Ни одна вкладка не читалась.", 
+      found === 3 ? "ok" : "error");
+  } catch (error) {
+    discoveryResult = null;
+    discoveryMappings = null;
+    discoveryResults.textContent = error.message === "invalid_mappings"
+      ? "Не удалось проверить адреса ресурсов." : error.message;
+    discoverySetStatus("Поиск не выполнен. Проверь HTTPS-адреса и повтори попытку.", "error");
+  } finally {
+    busy = false;
+    discoveryButton.disabled = false;
+    updateButtons();
+  }
+});
+
+async function confirmedTabHeaderSnapshot(role, entry) {
+  if (!entry || !Number.isSafeInteger(entry.tabId) || entry.tabId < 0 ||
+      typeof entry.origin !== "string" || typeof entry.path !== "string") {
+    throw new Error("invalid_selection");
+  }
+  const permission = await chrome.permissions.contains({origins:[entry.origin + "/*"]});
+  if (!permission) throw new Error("permissions_missing");
+  const current = await chrome.tabs.get(entry.tabId);
+  if (!current || typeof current.url !== "string") throw new Error("tab_closed");
+  const currentUrl = new URL(current.url);
+  if (currentUrl.protocol !== "https:" || currentUrl.origin !== entry.origin ||
+      currentUrl.pathname !== entry.path) throw new Error("selected_document_changed");
+  const identity = await chrome.scripting.executeScript({
+    target:{tabId:entry.tabId},
+    func:()=>({href:location.href})
+  });
+  const frame = identity?.[0];
+  let identityUrl;
+  try { identityUrl = new URL(frame?.result?.href || ""); } catch { identityUrl = null; }
+  if (!frame || frame.frameId !== 0 || typeof frame.documentId !== "string" ||
+      !frame.documentId || !identityUrl || identityUrl.origin !== entry.origin ||
+      identityUrl.pathname !== entry.path) throw new Error("selected_document_changed");
+  const inspected = await chrome.scripting.executeScript({
+    target:{tabId:entry.tabId},
+    func:(resourceRole)=>{
+      const normalize = values => values.map(value =>
+        (value || "").trim().replace(/\\s+/g," ").slice(0,120)
+      ).filter(Boolean).slice(0,20);
+      const tables = [];
+      for (const table of [...document.querySelectorAll("table")].slice(0,8)) {
+        const first = table.querySelector("tr");
+        if (!first) continue;
+        const headers = normalize([...first.querySelectorAll("th,[role='columnheader']")]
+          .map(cell=>cell.innerText));
+        if (headers.length) tables.push(headers);
+      }
+      if (!tables.length) {
+        for (const grid of [...document.querySelectorAll('[role="grid"],[role="table"]')].slice(0,8)) {
+          const headers = normalize([...grid.querySelectorAll('[role="columnheader"]')]
+            .map(cell=>cell.innerText));
+          if (headers.length) tables.push(headers);
+        }
+      }
+      return {origin:location.origin,href:location.href,tables};
+    },
+    args:[role]
+  });
+  const readFrame = inspected?.[0];
+  if (!readFrame || readFrame.frameId !== 0 || readFrame.documentId !== frame.documentId) {
+    throw new Error("selected_document_changed");
+  }
+  const after = await chrome.tabs.get(entry.tabId);
+  const afterIdentity = await chrome.scripting.executeScript({
+    target:{tabId:entry.tabId},func:()=>({href:location.href})
+  });
+  const afterFrame = afterIdentity?.[0];
+  let afterUrl;
+  try { afterUrl = new URL(afterFrame?.result?.href || ""); } catch { afterUrl = null; }
+  if (!after || typeof after.url !== "string" ||
+      new URL(after.url).origin !== entry.origin || new URL(after.url).pathname !== entry.path ||
+      !afterFrame || afterFrame.frameId !== 0 || afterFrame.documentId !== frame.documentId ||
+      !afterUrl || afterUrl.origin !== entry.origin || afterUrl.pathname !== entry.path ||
+      !await chrome.permissions.contains({origins:[entry.origin + "/*"]})) {
+    throw new Error("selected_document_changed");
+  }
+  const snapshot = readFrame.result;
+  if (!snapshot || snapshot.origin !== entry.origin || !Array.isArray(snapshot.tables)) {
+    throw new Error("invalid_header_snapshot");
+  }
+  return snapshot.tables;
+}
+
+inspectMappedTabsButton.addEventListener("click", async () => {
+  if (busy || !hasConfirmedTabs) return;
+  busy = true;
+  updateButtons();
+  discoverySetStatus("Читаем только заголовки таблиц выбранных вкладок. Строки заказов не читаются…");
+  try {
+    const stored = await chrome.storage.session.get("maleniaConfirmedOpenTabs");
+    const selection = stored?.maleniaConfirmedOpenTabs;
+    const roles = ["inventory","datalens","asgard"];
+    if (!selection?.browserSessionOnly || !Number.isFinite(selection.confirmedAt) ||
+        Date.now()-selection.confirmedAt>30*60*1000 ||
+        !selection.confirmed || Object.keys(selection.confirmed).sort().join(",")!==[...roles].sort().join(",")) {
+      hasConfirmedTabs=false;
+      throw new Error("selection_expired");
+    }
+    const results = [];
+    for (const role of roles) {
+      const tables = await confirmedTabHeaderSnapshot(role,selection.confirmed[role]);
+      results.push({role,tables});
+    }
+    discoveryResults.replaceChildren();
+    for (const result of results) {
+      const section=document.createElement("div");
+      section.className="discovery-role";
+      const heading=document.createElement("strong");
+      heading.textContent=({inventory:"ИНВента",datalens:"DataLens",asgard:"Asgard"})[result.role];
+      section.appendChild(heading);
+      if (!result.tables.length) {
+        const empty=document.createElement("div");
+        empty.textContent="Заголовки таблиц не найдены.";
+        section.appendChild(empty);
+      }
+      for (const [index,headers] of result.tables.entries()) {
+        const line=document.createElement("div");
+        line.textContent="Таблица "+(index+1)+": "+headers.join(" · ");
+        section.appendChild(line);
+      }
+      discoveryResults.appendChild(section);
+    }
+    discoverySetStatus("Диагностика завершена. Прочитаны только заголовки; строки, значения ячеек и полный текст страниц не читались.", "ok");
+  } catch (error) {
+    const safe = error?.message==="permissions_missing" ? "Разрешение сайта отозвано. Проверь настройки расширения." :
+      error?.message==="tab_closed" ? "Одна из выбранных вкладок закрыта. Найди и подтверди вкладки заново." :
+      error?.message==="selected_document_changed" ? "Одна из страниц изменилась во время проверки. Повтори поиск и подтверждение." :
+      "Выбор вкладок устарел или недоступен. Найди и подтверди три вкладки заново.";
+    discoverySetStatus(safe,"error");
+  } finally {
+    busy=false;
+    updateButtons();
+  }
+});
+
+(async()=>{
+  try {
+    const stored=await chrome.storage.session.get("maleniaConfirmedOpenTabs");
+    const selection=stored?.maleniaConfirmedOpenTabs;
+    hasConfirmedTabs=!!selection?.browserSessionOnly && Number.isFinite(selection.confirmedAt) &&
+      Date.now()-selection.confirmedAt<=30*60*1000 &&
+      selection.confirmed && ["inventory","datalens","asgard"].every(role=>selection.confirmed[role]);
+    updateButtons();
+  } catch { hasConfirmedTabs=false; updateButtons(); }
+})();
+
+confirmDiscoveryButton.addEventListener("click", async () => {
+  if (busy || !discoveryMappings || !discoveryResult) return;
+  busy = true;
+  updateButtons();
+  confirmDiscoveryButton.disabled = true;
+  try {
+    const confirmed = {};
+    const permissionState = await chrome.permissions.getAll();
+    const grantedOrigins = Array.isArray(permissionState?.origins)
+      ? permissionState.origins : [];
+    for (const role of discoveryRoles) {
+      const selected = discoverySelections[role.key];
+      if (!selected || !grantedOrigins.includes(discoveryMappings[role.key].origin + "/*")) {
+        throw new Error("Разрешение отозвано или ресурс не выбран. Выполни поиск заново.");
+      }
+      const current = await chrome.tabs.get(selected.tabId);
+      if (!current || typeof current.url !== "string") {
+        throw new Error("Одна из вкладок закрыта. Выполни поиск заново.");
+      }
+      const fresh = MaleniaTabDiscovery.discover(
+        [current], discoveryMappings, grantedOrigins
+      ).roles[role.key];
+      if (fresh.state !== "unique" || fresh.candidates[0].tabId !== selected.tabId ||
+          fresh.candidates[0].origin !== selected.origin ||
+          fresh.candidates[0].path !== selected.path) {
+        throw new Error("Одна из вкладок изменилась после поиска. Выполни поиск заново.");
+      }
+      confirmed[role.key] = {
+        tabId:selected.tabId,
+        origin:selected.origin,
+        path:selected.path,
+        sanitizedUrl:selected.sanitizedUrl
+      };
+    }
+    await chrome.storage.local.set({maleniaUserResourceMappings:discoveryMappings});
+    await chrome.storage.session.set({
+      maleniaConfirmedOpenTabs:{confirmed,confirmedAt:Date.now(),browserSessionOnly:true}
+    });
+    hasConfirmedTabs=true;
+    updateButtons();
+    discoverySetStatus("Три вкладки подтверждены. Страницы ещё не читались; перед будущим чтением Маления повторно проверит вкладки и разрешения.", "ok");
+  } catch (error) {
+    const safeMessage = typeof error?.message === "string" &&
+      (error.message.includes("закрыта") || error.message.includes("изменилась") ||
+       error.message.includes("Разрешение отозвано"))
+      ? error.message
+      : "Вкладка закрыта или стала недоступна. Выполни поиск заново.";
+    discoverySetStatus(safeMessage, "error");
+    discoveryRefreshConfirm();
+  } finally {
+    busy = false;
+    updateButtons();
+  }
+});
+
+(async () => {
+  try {
+    const stored = await chrome.storage.local.get("maleniaUserResourceMappings");
+    const saved = stored?.maleniaUserResourceMappings;
+    if (!saved) return;
+    const checked = MaleniaTabDiscovery.normalizeMapping(saved);
+    for (const role of discoveryRoles) {
+      const input = document.getElementById(role.input);
+      input.value = checked[role.key].origin + checked[role.key].pathPrefix;
+    }
+  } catch {
+    discoverySetStatus("Сохранённые адреса некорректны. Введи адреса ресурсов заново.", "error");
+  }
+})();

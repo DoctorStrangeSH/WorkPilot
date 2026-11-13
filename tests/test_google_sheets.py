@@ -4,7 +4,7 @@ import time
 import threading
 import unittest
 from urllib.error import HTTPError
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 from malenia.google_oauth import GOOGLE_SHEETS_READONLY_SCOPE, GOOGLE_TOKEN_ENDPOINT
@@ -287,7 +287,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         connector._access_expires_at = time.monotonic() + 3600
         result = connector.read_values(SPREADSHEET_ID, "Orders!A1:B2")
         self.assertEqual(result["values"][1], ["CP-001", "Найден"])
-        self.assertFalse(result["read_only"])
+        self.assertTrue(result["read_only"])
         sheets_request = next(r for r in opener.requests if r.full_url.startswith("https://sheets.googleapis.com/"))
         self.assertEqual(sheets_request.get_method(), "GET")
         self.assertIn("Bearer access-token-fixture", sheets_request.get_header("Authorization"))
@@ -308,7 +308,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         self.assertEqual(result["sheet_title"], "Текущие")
         self.assertTrue(result["gid_selected"])
         self.assertEqual(result["values"][1][0], "CP-001")
-        self.assertFalse(result["read_only"])
+        self.assertTrue(result["read_only"])
 
     def test_read_active_sheet_rejects_non_google_urls(self):
         connector = GoogleSheetsConnector(FakeCredentialStore(), FakeOpener())
@@ -352,6 +352,36 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         sheets_requests = [r for r in opener.requests if r.full_url.startswith("https://sheets.googleapis.com/")]
         self.assertEqual(len(sheets_requests), 2)
         self.assertEqual(sheets_requests[1].get_header("Authorization"), "Bearer refreshed-access-token")
+
+    def test_read_active_sheet_resolves_google_hash_gid(self):
+        store = FakeCredentialStore({
+            "google-sheets-refresh-token": "refresh-token-fixture",
+            "google-sheets-client-id": CLIENT_ID,
+        })
+        opener = FakeOpener()
+        connector = GoogleSheetsConnector(store, opener)
+        connector._access_token = "access-token-fixture"
+        connector._access_expires_at = time.monotonic() + 3600
+        url = "https://docs.google.com/spreadsheets/d/" + SPREADSHEET_ID + "/edit#gid=123"
+        result = connector.read_active_sheet(url)
+        self.assertEqual(result["spreadsheet_id"], SPREADSHEET_ID)
+        self.assertEqual(result["sheet_id"], 123)
+        self.assertTrue(result["gid_selected"])
+        values_request = [r for r in opener.requests if "/values/" in r.full_url][-1]
+        self.assertIn("'Текущие'!A:Z", unquote(values_request.full_url))
+        self.assertEqual(values_request.get_method(), "GET")
+
+    def test_read_active_sheet_rejects_conflicting_query_and_fragment_gids(self):
+        store = FakeCredentialStore({
+            "google-sheets-refresh-token": "refresh-token-fixture",
+            "google-sheets-client-id": CLIENT_ID,
+        })
+        connector = GoogleSheetsConnector(store, FakeOpener())
+        with self.assertRaisesRegex(GoogleSheetsError, "invalid_google_sheets_url"):
+            connector.read_active_sheet(
+                "https://docs.google.com/spreadsheets/d/" + SPREADSHEET_ID +
+                "/edit?gid=123#gid=456"
+            )
 
     def test_invalid_spreadsheet_or_range_fails_before_network(self):
         store = FakeCredentialStore({
@@ -411,6 +441,62 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         if __import__("os").name != "nt":
             with self.assertRaises(GoogleSheetsError):
                 connector.start_connect(CLIENT_ID)
+
+    def test_token_endpoint_error_exposes_only_allowlisted_oauth_category(self):
+        class InvalidClientOpener:
+            def open(self, request, timeout=0):
+                raise HTTPError(
+                    request.full_url, 401, "Unauthorized", {},
+                    io.BytesIO(json.dumps({
+                        "error": "invalid_client",
+                        "error_description": "private provider detail must not escape",
+                    }).encode("utf-8")),
+                )
+
+        connector = GoogleSheetsConnector(FakeCredentialStore(), InvalidClientOpener())
+        with self.assertRaises(GoogleSheetsError) as raised:
+            connector._post_form(GOOGLE_TOKEN_ENDPOINT, {"client_id": CLIENT_ID}, 4096)
+        self.assertEqual(raised.exception.code, "google_oauth_invalid_client")
+        self.assertNotIn("private provider detail", str(raised.exception))
+        self.assertNotIn(CLIENT_ID, str(raised.exception))
+
+    def test_token_invalid_request_is_classified_without_exposing_provider_description(self):
+        cases = (
+            ("Missing required parameter: code_verifier", "google_oauth_pkce_verifier_rejected"),
+            ("Invalid redirect_uri parameter", "google_oauth_token_redirect_uri_rejected"),
+            ("Missing required parameter: client_id", "google_oauth_token_client_id_rejected"),
+            ("Invalid client_secret", "google_oauth_token_client_secret_rejected"),
+            ("Invalid authorization code", "google_oauth_authorization_code_rejected"),
+            ("Missing required parameter: unknown_field", "google_oauth_missing_required_parameter"),
+        )
+        for description, expected in cases:
+            class InvalidRequestOpener:
+                def open(self, request, timeout=0):
+                    raise HTTPError(
+                        request.full_url, 400, "Bad Request", {},
+                        io.BytesIO(json.dumps({
+                            "error": "invalid_request",
+                            "error_description": description,
+                        }).encode("utf-8")),
+                    )
+            connector = GoogleSheetsConnector(FakeCredentialStore(), InvalidRequestOpener())
+            with self.subTest(description=description), self.assertRaises(GoogleSheetsError) as raised:
+                connector._post_form(GOOGLE_TOKEN_ENDPOINT, {"client_id": CLIENT_ID}, 4096)
+            self.assertEqual(raised.exception.code, expected)
+            self.assertNotIn(description, str(raised.exception))
+            self.assertNotIn(CLIENT_ID, str(raised.exception))
+
+    def test_callback_page_does_not_claim_token_storage_is_complete(self):
+        connector = GoogleSheetsConnector(FakeCredentialStore(), FakeOpener(), callback_timeout=30)
+        result = connector.start_connect(CLIENT_ID)
+        query = parse_qs(urlsplit(result["authorization_url"]).query)
+        redirect_uri = query["redirect_uri"][0]
+        callback = redirect_uri + "/?code=authorization-code-fixture&state=" + query["state"][0]
+        with urlopen(callback, timeout=3) as response:
+            page = response.read().decode("utf-8")
+        self.assertIn("Ответ Google принят", page)
+        self.assertIn("проверяет разрешение и сохраняет доступ", page)
+        self.assertNotIn("Malenia получила ответ Google", page)
 
     def test_scope_expansion_is_rejected_before_token_storage(self):
         class ExpandedScopeOpener(FakeOpener):

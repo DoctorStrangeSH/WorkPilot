@@ -518,7 +518,7 @@ async fn connect_google_sheets(
     use tauri_plugin_opener::OpenerExt;
     app.opener().open_url(parsed.as_str(), None::<&str>)
         .map_err(|_| "Не удалось открыть системный браузер для Google OAuth".to_string())?;
-    Ok("Открыл системный браузер. Подтвердите доступ к чтению и редактированию Google Sheets и вернитесь в Malenia.".to_string())
+    Ok("Открыл системный браузер. Подтвердите доступ только к чтению Google Sheets и вернитесь в Malenia.".to_string())
 }
 
 #[tauri::command]

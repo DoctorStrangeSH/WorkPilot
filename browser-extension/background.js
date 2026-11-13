@@ -106,9 +106,40 @@ async function pollDesktopAudit() {
   if (running) return;
   let session;
   try {
-    const stored = await chrome.storage.local.get(["maleniaTargets", "maleniaExactGetSearch"]);
-    if (!stored?.maleniaTargets) return;
-    const targets = MaleniaAutomation.normalizeTargets(stored.maleniaTargets);
+    const [stored, sessionState] = await Promise.all([
+      chrome.storage.local.get(["maleniaExactGetSearch"]),
+      chrome.storage.session.get("maleniaConfirmedOpenTabs")
+    ]);
+    const selected = sessionState?.maleniaConfirmedOpenTabs;
+    const confirmed = selected?.confirmed;
+    const roles = ["inventory", "datalens", "asgard"];
+    if (!selected?.browserSessionOnly || !Number.isFinite(selected.confirmedAt) ||
+        Date.now() - selected.confirmedAt > 30 * 60 * 1000 ||
+        !confirmed || Object.keys(confirmed).sort().join(",") !== [...roles].sort().join(",")) return;
+    const rawTargets = {};
+    const selectedTabs = {};
+    for (const role of roles) {
+      const entry = confirmed[role];
+      if (!entry || !Number.isSafeInteger(entry.tabId) || entry.tabId < 0 ||
+          typeof entry.origin !== "string" || typeof entry.path !== "string" ||
+          !entry.path.startsWith("/") || entry.path.includes("?") || entry.path.includes("#")) return;
+      let origin;
+      try {
+        origin = new URL(entry.origin);
+        if (origin.protocol !== "https:" || origin.origin !== entry.origin ||
+            origin.pathname !== "/" || origin.search || origin.hash || origin.port) return;
+      } catch { return; }
+      const current = await chrome.tabs.get(entry.tabId).catch(() => null);
+      if (!current || typeof current.url !== "string") return;
+      let currentUrl;
+      try { currentUrl = new URL(current.url); } catch { return; }
+      if (currentUrl.protocol !== "https:" || currentUrl.origin !== entry.origin ||
+          currentUrl.pathname !== entry.path || currentUrl.username || currentUrl.password ||
+          currentUrl.port) return;
+      rawTargets[role] = entry.origin + entry.path;
+      selectedTabs[role] = {tabId:entry.tabId,origin:entry.origin,path:entry.path};
+    }
+    const targets = MaleniaAutomation.normalizeTargets(rawTargets);
     if (!await chrome.permissions.contains({origins:MaleniaAutomation.origins(targets)})) return;
     session = nativeSession();
     const hello = await session.send({type:"hello"});
@@ -140,9 +171,21 @@ async function pollDesktopAudit() {
           throw new Error("audit_progress_unavailable");
         }
       };
+      // Revalidate the selected documents immediately before the read runner starts.
+      for (const role of roles) {
+        const entry = selectedTabs[role];
+        const current = await chrome.tabs.get(entry.tabId).catch(() => null);
+        if (!current || typeof current.url !== "string") throw new Error("selected_tab_unavailable");
+        const page = new URL(current.url);
+        if (page.protocol !== "https:" || page.origin !== entry.origin ||
+            page.pathname !== entry.path) throw new Error("selected_tab_changed");
+      }
+      if (!await chrome.permissions.contains({origins:MaleniaAutomation.origins(targets)})) {
+        throw new Error("permissions_missing");
+      }
       const result = await MaleniaAutomation.run(chrome,targets,
         message=>session.send(message),report,
-        {exactGetSearch:stored.maleniaExactGetSearch !== false});
+        {exactGetSearch:true,selectedTabs});
       succeeded = result.phase === "reconciled";
     } catch {
       await progress({phase:"needs_attention",results:[],error:"setup_or_connection"});

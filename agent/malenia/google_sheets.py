@@ -186,7 +186,7 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
                         return
                     attempt.code = code
                     attempt.event.set()
-                    GoogleSheetsConnector._response(self, 200, "Malenia получила ответ Google. Можно закрыть эту вкладку и вернуться в приложение.")
+                    GoogleSheetsConnector._response(self, 200, "Ответ Google принят. Malenia проверяет разрешение и сохраняет доступ. Вернитесь в приложение.")
 
                 def do_GET(self) -> None:
                     attempt = session["attempt"]
@@ -399,14 +399,43 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
             except Exception:
                 pass
             error_code = None
+            error_description = ""
             try:
                 parsed_error = json.loads(raw_error.decode("utf-8"))
                 if isinstance(parsed_error, dict):
-                    error_code = parsed_error.get("error")
+                    candidate = parsed_error.get("error")
+                    if isinstance(candidate, str) and re.fullmatch(r"[a-z_]{1,64}", candidate):
+                        error_code = candidate
+                    description = parsed_error.get("error_description")
+                    if isinstance(description, str):
+                        # Keep only a bounded diagnostic for classification. Never
+                        # return Google's raw description or request data to the UI.
+                        error_description = description[:512].lower()
             except (UnicodeDecodeError, json.JSONDecodeError):
                 pass
             if error_code == "invalid_grant":
                 raise GoogleSheetsError("google_reauthorization_required", status) from error
+            if request.full_url == GOOGLE_TOKEN_ENDPOINT and error_code in {
+                "invalid_client", "unauthorized_client", "invalid_request",
+                "redirect_uri_mismatch", "unsupported_grant_type", "invalid_scope",
+            }:
+                # Google reports invalid_request for several different token
+                # exchange defects. Classify only known parameter names; never
+                # return its raw description, authorization code, or credentials.
+                diagnostic = {
+                    "code_verifier": "google_oauth_pkce_verifier_rejected",
+                    "redirect_uri": "google_oauth_token_redirect_uri_rejected",
+                    "client_id": "google_oauth_token_client_id_rejected",
+                    "client_secret": "google_oauth_token_client_secret_rejected",
+                    "authorization code": "google_oauth_authorization_code_rejected",
+                }
+                if error_code == "invalid_request":
+                    for marker, safe_code in diagnostic.items():
+                        if marker in error_description:
+                            raise GoogleSheetsError(safe_code, status) from error
+                    if "missing required parameter" in error_description:
+                        raise GoogleSheetsError("google_oauth_missing_required_parameter", status) from error
+                raise GoogleSheetsError("google_oauth_" + error_code, status) from error
             raise GoogleSheetsError("google_request_failed", status) from error
         except URLError as error:
             raise GoogleSheetsError("google_network_unavailable") from error
@@ -459,16 +488,25 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
         return self._refresh_access_token()
 
     def read_active_sheet(self, spreadsheet_url: str, gid: str | None = None) -> dict[str, Any]:
-        """Resolve an explicitly shared Google Sheets tab and read its used grid."""
+        """Resolve the active Google Sheets worksheet from its document URL and gid, then read its grid."""
         from urllib.parse import parse_qs, urlsplit
         try:
             parsed = urlsplit(spreadsheet_url)
             match = re.fullmatch(r"/spreadsheets/d/([A-Za-z0-9_-]{10,256})/edit/?", parsed.path)
             query = parse_qs(parsed.query)
+            fragment_query = parse_qs(parsed.fragment)
             spreadsheet_id = match.group(1) if match else ""
-            selected_gid = gid or (query.get("gid", [None])[0])
+            query_gids = query.get("gid", [])
+            fragment_gids = fragment_query.get("gid", [])
+            if len(query_gids) > 1 or len(fragment_gids) > 1:
+                raise ValueError
+            query_gid = query_gids[0] if query_gids else None
+            fragment_gid = fragment_gids[0] if fragment_gids else None
+            if query_gid and fragment_gid and query_gid != fragment_gid:
+                raise ValueError
+            selected_gid = gid or query_gid or fragment_gid
             if (parsed.scheme != "https" or parsed.hostname != "docs.google.com"
-                    or parsed.username or parsed.password or parsed.fragment
+                    or parsed.username or parsed.password
                     or (selected_gid is not None and not re.fullmatch(r"\d{1,16}", selected_gid))):
                 raise ValueError
         except (ValueError, TypeError):
@@ -520,8 +558,8 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
         values = self.read_values(spreadsheet_id, f"'{escaped_title}'!A:Z")
         return {"spreadsheet_id": spreadsheet_id, "spreadsheet_title": metadata.get("properties", {}).get("title", ""),
                 "sheet_title": title, "sheet_id": sheet_id, "range": values["range"],
-                "values": values["values"], "read_only": False,
-                "source": "explicit_browser_tab", "gid_selected": selected_gid is not None}
+                "values": values["values"], "read_only": True,
+                "source": "active_browser_tab", "gid_selected": selected_gid is not None}
 
     def write_values(self, spreadsheet_id: str, range_a1: str, values: list[list[Any]]) -> dict[str, Any]:
         """Write literal values to an exact range; callers must enforce approval."""
@@ -601,4 +639,4 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
             raise GoogleSheetsError("google_sheets_range_too_large")
         return {"range": payload.get("range", range_a1.strip()),
                 "majorDimension": payload.get("majorDimension", "ROWS"),
-                "values": values, "read_only": False}
+                "values": values, "read_only": True}

@@ -62,7 +62,7 @@ var MaleniaAutomation = (() => {
     "search_origin_mismatch", "unexpected_document", "empty_page",
     "unmapped_paginated_table", "pagination_cycle", "pagination_limit",
     "changed_table_schema", "too_many_rows", "native_host_rejected",
-    "page_timeout", "tab_closed", "unsupported_search_form",
+    "page_timeout", "tab_closed", "permissions_missing", "selected_document_changed", "unsupported_search_form",
     "dynamic_search_ui", "unsupported_dynamic_search",
     "dynamic_search_no_result_update", "dynamic_search_unchanged_table"
   ]);
@@ -218,25 +218,39 @@ var MaleniaAutomation = (() => {
     }
   }
 
-  async function visit(chromeApi, role, url, sendNative, searchKey = null) {
+  async function visit(chromeApi, role, url, sendNative, searchKey = null, selectedTab = null) {
     let tabId;
+    const ownsTab = !selectedTab;
     try {
-      const tab = await chromeApi.tabs.create({url, active: false});
-      if (!Number.isInteger(tab.id)) throw new Error("invalid_tab");
-      tabId = tab.id;
+      if (selectedTab) {
+        if (!Number.isSafeInteger(selectedTab.tabId) || selectedTab.tabId < 0 ||
+            selectedTab.origin !== new URL(url).origin ||
+            selectedTab.path !== new URL(url).pathname) throw new Error("unexpected_document");
+        tabId = selectedTab.tabId;
+      } else {
+        const tab = await chromeApi.tabs.create({url, active: false});
+        if (!Number.isInteger(tab.id)) throw new Error("invalid_tab");
+        tabId = tab.id;
+      }
       if (searchKey !== null) {
         await waitLoaded(chromeApi, tabId);
         const current = await chromeApi.tabs.get(tabId);
         if (new URL(current.url || "").origin !== new URL(url).origin) {
           throw new Error("search_origin_mismatch");
         }
-        try {
-          await exactGetSearch(chromeApi, tabId, role, searchKey, new URL(url).origin);
-        } catch (error) {
-          if (!(error instanceof Error) || error.message !== "dynamic_search_ui") {
-            throw error;
-          }
+        if (selectedTab) {
+          // On an explicitly shared tab, never navigate or submit a form.
+          // Only a uniquely labelled, visible search-as-you-type control is allowed.
           await reactiveSearch(chromeApi, tabId, role, searchKey, new URL(url).origin);
+        } else {
+          try {
+            await exactGetSearch(chromeApi, tabId, role, searchKey, new URL(url).origin);
+          } catch (error) {
+            if (!(error instanceof Error) || error.message !== "dynamic_search_ui") {
+              throw error;
+            }
+            await reactiveSearch(chromeApi, tabId, role, searchKey, new URL(url).origin);
+          }
         }
       }
       const visited = new Set();
@@ -246,18 +260,40 @@ var MaleniaAutomation = (() => {
       let pages = 0;
       for (let index = 0; index < MAX_PAGES; index++) {
         await waitLoaded(chromeApi, tabId);
+        if (selectedTab && !await chromeApi.permissions.contains({
+          origins:[selectedTab.origin + "/*"]
+        })) throw new Error("permissions_missing");
         const current = await chromeApi.tabs.get(tabId);
         const finalUrl = new URL(current.url || "");
         if (finalUrl.origin !== new URL(url).origin || finalUrl.protocol !== "https:" ||
-            finalUrl.username || finalUrl.password) throw new Error("navigation_outside_allowed_origin");
+            finalUrl.username || finalUrl.password ||
+            (selectedTab && finalUrl.pathname !== new URL(url).pathname)) {
+          throw new Error("navigation_outside_allowed_origin");
+        }
         const currentKey = finalUrl.href;
         if (visited.has(currentKey)) throw new Error("pagination_cycle");
         visited.add(currentKey);
+        let selectedDocumentId = null;
+        if (selectedTab) {
+          const identity = await chromeApi.scripting.executeScript({
+            target: {tabId},
+            func: () => ({href:location.href})
+          });
+          const frame = identity?.[0];
+          let identityUrl;
+          try { identityUrl = new URL(frame?.result?.href || ""); } catch { identityUrl = null; }
+          if (!frame || frame.frameId !== 0 || typeof frame.documentId !== "string" ||
+              !frame.documentId || !identityUrl || identityUrl.origin !== selectedTab.origin ||
+              identityUrl.pathname !== selectedTab.path) {
+            throw new Error("selected_document_changed");
+          }
+          selectedDocumentId = frame.documentId;
+        }
         const results = await chromeApi.scripting.executeScript({
           target: {tabId},
-          func: (resourceRole) => {
-            // Only visible table text, not input values/cookies.
-            const text = document.body ? document.body.innerText : "";
+          func: (resourceRole, includeText) => {
+            // User-selected mode extracts structured table cells only.
+            const text = includeText !== false && document.body ? document.body.innerText : "";
             const required = {
               inventory: ["cargo_place", "inventory_date"],
               datalens: ["main_partner_code_original", "sc_id", "result", "scanned_at"],
@@ -325,22 +361,50 @@ var MaleniaAutomation = (() => {
               next: nextAnchor ? nextAnchor.href : null
             };
           },
-          args: [role]
+          args: selectedTab ? [role, false] : [role]
         });
+        if (selectedTab) {
+          const readFrame = results?.[0];
+          if (!readFrame || readFrame.frameId !== 0 ||
+              readFrame.documentId !== selectedDocumentId) {
+            throw new Error("selected_document_changed");
+          }
+          const [afterRead, afterIdentity] = await Promise.all([
+            chromeApi.tabs.get(tabId),
+            chromeApi.scripting.executeScript({
+              target: {tabId},
+              func: () => ({href:location.href})
+            })
+          ]);
+          const afterUrl = new URL(afterRead?.url || "");
+          const finalFrame = afterIdentity?.[0];
+          let documentUrl;
+          try { documentUrl = new URL(finalFrame?.result?.href || ""); }
+          catch { documentUrl = null; }
+          if (afterUrl.origin !== selectedTab.origin || afterUrl.pathname !== selectedTab.path ||
+              !finalFrame || finalFrame.frameId !== 0 ||
+              finalFrame.documentId !== selectedDocumentId || !documentUrl ||
+              documentUrl.origin !== selectedTab.origin || documentUrl.pathname !== selectedTab.path ||
+              !await chromeApi.permissions.contains({origins:[selectedTab.origin + "/*"]})) {
+            throw new Error("selected_document_changed");
+          }
+        }
         const snapshot = results?.[0]?.result;
         if (!snapshot || snapshot.origin !== finalUrl.origin ||
-            typeof snapshot.text !== "string" || !snapshot.text.trim()) {
+            typeof snapshot.text !== "string" || (!selectedTab && !snapshot.text.trim())) {
           throw new Error("unexpected_document");
         }
         if (snapshot.incomplete) throw new Error("virtualized_or_incomplete_grid");
-        const text = snapshot.text;
-        const response = await sendNative({
-          type: "inspect_active_page",
-          page: {url: finalUrl.origin + finalUrl.pathname, text},
-        });
-        if (!response || !response.ok || response.type !== "page_inspected" ||
-            response.persisted !== false || response.characters !== text.length) {
-          throw new Error("native_host_rejected");
+        const text = selectedTab ? "" : snapshot.text;
+        if (!selectedTab) {
+          const response = await sendNative({
+            type: "inspect_active_page",
+            page: {url: finalUrl.origin + finalUrl.pathname, text},
+          });
+          if (!response || !response.ok || response.type !== "page_inspected" ||
+              response.persisted !== false || response.characters !== text.length) {
+            throw new Error("native_host_rejected");
+          }
         }
         pages++;
         characters += text.length;
@@ -363,6 +427,8 @@ var MaleniaAutomation = (() => {
         if (!snapshot.next) {
           return {role, status: "read", characters, pages, table: combinedTable};
         }
+        // User-selected tabs are never navigated, paginated, or searched by the audit.
+        if (selectedTab) throw new Error("unmapped_paginated_table");
         // A pagination signal without the expected table must never produce a partial audit.
         if (!combinedTable || !snapshot.table) throw new Error("unmapped_paginated_table");
         const next = nextPage(finalUrl.href, snapshot.next);
@@ -372,7 +438,7 @@ var MaleniaAutomation = (() => {
       }
       throw new Error("pagination_limit");
     } finally {
-      if (tabId !== undefined) {
+      if (ownsTab && tabId !== undefined) {
         try { await chromeApi.tabs.remove(tabId); } catch { /* Tab already closed. */ }
       }
     }
@@ -385,9 +451,10 @@ var MaleniaAutomation = (() => {
     for (const role of ROLES) {
       await onProgress({phase: "reading", role, results: [...results]});
       try {
+        const selectedTab = options.selectedTabs?.[role] || null;
         const searchKeys = role !== "inventory" && options.exactGetSearch ?
-          snapshots.inventory?.rows?.map(row =>
-            row[snapshots.inventory.columns.indexOf("cargo_place")]) : null;
+          [...new Set(snapshots.inventory?.rows?.map(row =>
+            row[snapshots.inventory.columns.indexOf("cargo_place")]) || [])] : null;
         if (role !== "inventory" && options.exactGetSearch &&
             (!Array.isArray(searchKeys) || !searchKeys.length ||
              searchKeys.length > MAX_SEARCHES || new Set(searchKeys).size !== searchKeys.length ||
@@ -398,7 +465,9 @@ var MaleniaAutomation = (() => {
         const keys = searchKeys || [null];
         let table = null, characters = 0, pages = 0;
         for (const key of keys) {
-          const visitResult = await visit(chromeApi, role, targets[role], sendNative, key);
+          const selectedTab = options.selectedTabs?.[role] || null;
+          const visitResult = await visit(chromeApi, role, targets[role], sendNative,
+            key, selectedTab);
           if (options.exactGetSearch && !visitResult.table) {
             throw new Error("unmapped_search_results");
           }

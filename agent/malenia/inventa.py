@@ -12,14 +12,14 @@ from typing import Any
 
 ALIASES = {
     "order_id": {"id заказа", "номер заказа", "заказ", "order id", "order_id"},
-    "date": {"дата", "дата заказа", "inventory date", "date"},
+    "date": {"дата", "дата заказа", "дата выгрузки", "inventory date", "date"},
     "partner": {"main_partner_code_original", "main_partner", "партнер", "партнёр"},
     "cost": {"стоимость", "сумма", "цена", "cost", "amount"},
     "name": {"наименование", "товар", "название", "name", "product"},
     "comment": {"комментарий", "comment", "примечание"},
     "ticket": {"тикет", "ticket", "ссылка на тикет"},
     "status": {"статус", "status"},
-    "group": {"группировка заказов", "группировка", "group", "grouping"},
+    "group": {"группировка заказов", "группировка заказа", "группировка", "group", "grouping"},
 }
 REQUIRED = ("order_id", "date", "cost", "status")
 ANOMALY_WORDS = ("аномал", "потер", "ошиб", "не найден", "проблем")
@@ -33,6 +33,78 @@ def _norm(value: Any) -> str:
     return re.sub(r"\s+", " ", ("" if value is None else str(value)).strip().casefold().replace("ё", "е"))
 
 
+_STATUS_MARKERS = (
+    "в скк", "исключение", "найден", "в работе", "аномал", "потер",
+    "отгрузили после", "подана на иск", "ретеншн", "ожидает", "не найден",
+)
+
+
+def _infer_status_column(rows: list[list[Any]], header_index: int, mapping: dict[str, int]) -> int | None:
+    """Infer an unlabeled status column from repeated, recognizable status values."""
+    if "status" in mapping:
+        return mapping["status"]
+    width = max((len(row) for row in rows[header_index + 1:header_index + 51]), default=0)
+    candidates: list[tuple[float, int]] = []
+    for column in range(width):
+        if column in mapping.values():
+            continue
+        values = [
+            _norm(row[column]) for row in rows[header_index + 1:header_index + 51]
+            if column < len(row) and not _blank(row[column])
+        ]
+        if len(values) < 2:
+            continue
+        matches = sum(any(marker in value for marker in _STATUS_MARKERS) for value in values)
+        ratio = matches / len(values)
+        if matches >= 2 and ratio >= 0.5:
+            candidates.append((ratio + min(matches, 10) / 100, column))
+    return max(candidates)[1] if candidates else None
+
+
+def _infer_name_column(rows: list[list[Any]], header_index: int, mapping: dict[str, int]) -> int | None:
+    """Infer an unlabeled product-name column when the export omits its header."""
+    if "name" in mapping:
+        return mapping["name"]
+    header = rows[header_index]
+    used = set(mapping.values())
+    width = max((len(row) for row in rows[header_index + 1:header_index + 51]), default=0)
+    candidates: list[tuple[float, float, int]] = []
+    for column in range(width):
+        if column in used or (column < len(header) and not _blank(header[column])):
+            continue
+        values = [row[column] for row in rows[header_index + 1:header_index + 51]
+                  if column < len(row) and not _blank(row[column])]
+        if len(values) < 2:
+            continue
+        text_values = [str(value).strip() for value in values]
+        text_ratio = sum(not isinstance(value, (int, float, bool)) for value in values) / len(values)
+        status_ratio = sum(any(marker in _norm(value) for marker in _STATUS_MARKERS)
+                           for value in text_values) / len(text_values)
+        url_ratio = sum(str(value).strip().lower().startswith(("http://", "https://"))
+                        for value in values) / len(values)
+        # Product descriptions are predominantly text, but unlike status,
+        # ticket and comment fields they are not URLs or recognized status labels.
+        if text_ratio >= 0.8 and status_ratio < 0.35 and url_ratio < 0.5:
+            candidates.append((len(values) / max(1, min(50, len(rows) - header_index - 1)),
+                               text_ratio - status_ratio - url_ratio, column))
+    return max(candidates)[2] if candidates else None
+
+
+def _normalize_date(value: Any) -> str:
+    """Convert Google Sheets serial dates and common textual dates to ISO dates."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if 1 <= value <= 100000:
+            return (date(1899, 12, 30) + timedelta(days=float(value))).isoformat()
+        return str(value)
+    raw = str(value or "").strip()
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(raw[:10], fmt).date().isoformat()
+        except ValueError:
+            pass
+    return raw
+
+
 def detect_header(rows: list[list[Any]], scan_rows: int = 12) -> tuple[int, dict[str, int]]:
     if not isinstance(rows, list) or not rows:
         raise ValueError("empty_sheet")
@@ -44,8 +116,14 @@ def detect_header(rows: list[list[Any]], scan_rows: int = 12) -> tuple[int, dict
             for field, aliases in ALIASES.items():
                 if label in {_norm(alias) for alias in aliases} and field not in mapping:
                     mapping[field] = col_index
+        status_column = _infer_status_column(rows, row_index, mapping)
+        if status_column is not None:
+            mapping["status"] = status_column
+        name_column = _infer_name_column(rows, row_index, mapping)
+        if name_column is not None:
+            mapping["name"] = name_column
         score = len(mapping)
-        if score >= 4 and (best is None or score > len(best[1])):
+        if set(REQUIRED).issubset(mapping) and (best is None or score > len(best[1])):
             best = (row_index, mapping)
     if best is None:
         raise ValueError("inventa_headers_not_recognized")
@@ -104,12 +182,13 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
         if all(_blank(value) for value in row):
             continue
         order_id = ("" if _blank(cell(row, "order_id")) else str(cell(row, "order_id"))).strip()
+        # Rows without an order ID are report notes/totals/empty export lines,
+        # not orders. Do not inflate missing-field counts with them.
+        if not order_id:
+            continue
         status = ("" if _blank(cell(row, "status")) else str(cell(row, "status"))).strip()
         group = ("" if _blank(cell(row, "group")) else str(cell(row, "group"))).strip()
-        if order_id:
-            ids[order_id].append(offset)
-        else:
-            missing["order_id"] += 1
+        ids[order_id].append(offset)
         if not status:
             missing["status"] += 1
         else:
@@ -128,7 +207,17 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
             no_ticket.append(offset)
         if group:
             groups[group] += 1
-        records.append({"row": offset, "order_id": order_id, "status": status})
+        records.append({
+            "row": offset,
+            "order_id": order_id,
+            "partner_code": "" if _blank(cell(row, "partner")) else str(cell(row, "partner")).strip(),
+            "date": "" if _blank(cell(row, "date")) else _normalize_date(cell(row, "date")),
+            "cost": "" if _blank(cell(row, "cost")) else str(cell(row, "cost")).strip(),
+            "name": "" if _blank(cell(row, "name")) else str(cell(row, "name")).strip(),
+            "ticket": "" if _blank(cell(row, "ticket")) else str(cell(row, "ticket")).strip(),
+            "status": status,
+            "group": group,
+        })
 
     duplicates = [{"order_id": key, "rows": positions}
                   for key, positions in ids.items() if len(positions) > 1]
@@ -137,6 +226,15 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
         "header_row": header_index + 1,
         "columns": {key: index + 1 for key, index in columns.items()},
         "rows_analyzed": len(records),
+        "non_order_rows_skipped": max(0, len(data) - len(records)),
+        # Bounded read-only preview; not a verified cross-system decision.
+        "first_order_preview": records[0] if records else None,
+        "first_order_cross_check": {
+            "state": "needs_external_sources",
+            "verified": False,
+            "missing_sources": ["DataLens", "Asgard"],
+            "write_enabled": False,
+        } if records else None,
         "status_counts": dict(statuses),
         "top_groups": [{"name": name, "count": count} for name, count in groups.most_common(10)],
         "missing_required": dict(missing),

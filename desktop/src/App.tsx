@@ -22,7 +22,7 @@ type Resources = { total_memory_bytes:number; available_memory_bytes:number; use
 type Dashboard = { running:boolean; resources:Resources; tasks:Task[]; events:EventItem[]; browser_tabs:BrowserTab[]; browser_audit:BrowserAudit|null; browser_audit_job:BrowserAuditJob|null; permissions:PermissionRequest[]; };
 type Page = "overview"|"tasks"|"browser"|"sources"|"orders"|"order_batch"|"ai"|"settings"|"permissions"|"knowledge"|"skills";
 
-const labels:Record<Page,string>={overview:"Главная",tasks:"Задания",browser:"Браузер",sources:"Источники",orders:"Проверка заказа",order_batch:"Список заказов",ai:"Ассистент",settings:"Настройки",permissions:"Разрешения",knowledge:"Память и знания",skills:"Навыки"};
+const labels:Record<Page,string>={overview:"Главная",tasks:"Задания",browser:"Браузер",sources:"Подключения",orders:"Проверка заказа",order_batch:"Список заказов",ai:"Ассистент",settings:"Настройки",permissions:"Разрешения",knowledge:"Память и знания",skills:"Навыки"};
 const bytes=(n:number)=>n ? (n/1024/1024/1024).toFixed(1)+" ГБ" : "—";
 const time=(v:string)=>{try{return new Intl.DateTimeFormat("ru-RU",{hour:"2-digit",minute:"2-digit"}).format(new Date(v));}catch{return v;}};
 
@@ -69,6 +69,7 @@ export default function App(){
       <nav>
         <Nav icon={<Sparkles/>} label="Ассистент" active={page==="ai"} onClick={()=>setPage("ai")}/>
         <Nav icon={<Globe2/>} label="Моя рабочая среда" active={page==="browser"} onClick={()=>setPage("browser")}/>
+        <Nav icon={<Plug/>} label="Подключения" active={page==="sources"} onClick={()=>setPage("sources")}/>
         <Nav icon={<ListTodo/>} label="Задания" active={page==="tasks"} count={data?.tasks.length} onClick={()=>setPage("tasks")}/>
       </nav>
       <div className="nav-label separated">ЗНАНИЯ И БЕЗОПАСНОСТЬ</div>
@@ -115,7 +116,7 @@ export default function App(){
 
         {page==="permissions"&&<PermissionsPage requests={data?.permissions??[]} connected={connected} busy={busy} onDecide={decidePermission}/>}
         {page==="browser"&&<BrowserPage tabs={data?.browser_tabs??[]} audit={data?.browser_audit??null} job={data?.browser_audit_job??null} connected={connected} onRequested={()=>void refresh()}/>}
-        {page==="sources"&&<SourcesPage tabs={data?.browser_tabs??[]} connected={connected} onOpenBrowser={()=>setPage("browser")}/>}
+        {page==="sources"&&<SourcesPage tabs={data?.browser_tabs??[]} connected={connected} agentBusy={busy} onStartAgent={runAgent} onOpenBrowser={()=>setPage("browser")}/>}
         {page==="orders"&&<OrderCheckPage connected={connected}/>}
         {page==="order_batch"&&<OrderBatchPage connected={connected}/>}
         {page==="knowledge"&&<KnowledgePage connected={connected}/>}
@@ -155,10 +156,10 @@ function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];a
     job?.status==="failed"?"Проверка завершилась с ошибкой":
     job?.status==="expired"?"Расширение не ответило вовремя":"Задачи пока нет";
   return <section className="page">
-    <div className="page-head"><div><div className="eyebrow">BROWSER BRIDGE · PREVIEW</div><h1>Браузер</h1><p>Browser Bridge: ручная передача вкладки и автоматическое чтение трёх разрешённых HTTPS-страниц.</p></div><span className="browser-state"><i className={connected?"":"idle"}/>{connected?"Агент подключён":"Сначала запустите агента"}</span></div>
-    <div className="browser-safety"><div><ShieldCheck size={19}/></div><section><b>Приватность по умолчанию</b><p>Расширение не читает cookies, пароли и историю браузера. Для разрешённого поиска оно может вводить грузоместо только в строго распознанное поле. Отдельная команда может считать ограниченный видимый текст страницы, а автоматический обход — последовательно прочитать три явно разрешённых домена. Тексты не сохраняются. Экспериментальный поиск и сверка выполняются по разрешённым страницам, но на реальных корпоративных сайтах ещё не проверены. Изменение статусов не подключено.</p></section></div>
+    <div className="page-head"><div><div className="eyebrow">BROWSER BRIDGE · PREVIEW</div><h1>Браузер</h1><p>Browser Bridge: подключение к рабочим страницам и системам, которые ты постепенно обучаешь Malenia использовать.</p></div><span className="browser-state"><i className={connected?"":"idle"}/>{connected?"Агент подключён":"Сначала запустите агента"}</span></div>
+    <div className="browser-safety"><div><ShieldCheck size={19}/></div><section><b>Приватность по умолчанию</b><p>Расширение не читает cookies, пароли и историю браузера. Malenia должна работать с множеством сайтов: сначала обнаруживает открытые страницы, затем получает отдельное разрешение на нужный сайт и использует подходящий навык. Инвентаризация — первый проверочный сценарий, а не ограничение продукта. Пока доступен только прототип чтения; полноценное выполнение задач и адаптеры конкретных систем ещё развиваются.</p></section></div>
     <div className="panel browser-panel" data-testid="browser-audit-runner">
-      <div className="panel-head"><div><h3>Проверить заказы автоматически</h3><p>Только чтение. Расширение использует ранее настроенные сайты и разрешения.</p></div>
+      <div className="panel-head"><div><h3>Проверить заказы автоматически</h3><p>Только чтение. Используются ресурсы, которые ты явно разрешил Malenia.</p></div>
         <button className="primary" disabled={!connected||sending||job?.status==="pending"||job?.status==="running"} onClick={()=>void requestAudit()}>
           <Play size={15}/>{sending?"Отправляем…":"Запустить проверку"}</button>
       </div>
@@ -171,7 +172,7 @@ function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];a
           {job.failed_role?<span>Ошибка при чтении: <b>{{inventory:"ИНВента",datalens:"DataLens",asgard:"Asgard"}[job.failed_role]}</b></span>:null}
         </div>:null}
       {requestError?<p className="alert error" role="alert">{requestError}</p>:null}
-      <p className="note">Для выполнения требуется запущенный браузер с установленным Browser Bridge, предварительно настроенными тремя HTTPS-страницами и разрешённым доступом. При отсутствии расширения команда истечёт; повторный запуск возможен вручную.</p>
+      <p className="note">Открой нужные рабочие страницы в Яндекс Браузере и передай их через Browser Bridge. Разрешение выдаётся отдельно для каждого сайта. Если страница изменилась или формат пока не поддерживается, Malenia объяснит, что нужно сделать.</p>
     </div>
     <div className="panel browser-panel" data-testid="browser-audit-summary">
       <div className="panel-head"><div><h3>Последняя автоматическая сверка</h3><p>Только итоговые числа · без грузомест и содержимого сайтов</p></div></div>
@@ -186,13 +187,13 @@ function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];a
     <div className="panel browser-panel"><div className="panel-head"><div><h3>Вкладки, которыми вы поделились</h3><p>Последние 20 локальных записей</p></div><span className="live">{tabs.length} SHARED</span></div>
       {tabs.length?<div className="browser-tab-list">{tabs.map(tab=><article className="browser-tab" key={tab.id}><span className="browser-tab-icon"><Globe2 size={16}/></span><div className="browser-tab-copy"><b>{tab.title}</b><a href={tab.url} target="_blank" rel="noreferrer">{tab.url}</a><small>Передано вручную · {time(tab.shared_at)}</small></div></article>)}</div>:<Empty title="Пока нет переданных вкладок" text="Установите Malenia Browser Bridge, затем откройте нужную страницу и нажмите кнопку расширения «Поделиться вкладкой»."/>}
     </div>
-    <div className="note"><CircleHelp size={15}/>Native Messaging работает только после регистрации расширения и хоста. Поддержка проверяется на установленной версии Яндекс Браузера; автоматический доступ к вкладкам не включён.</div>
+    <div className="note"><CircleHelp size={15}/>Native Messaging работает только после регистрации расширения и хоста. Совместимость извлечения таблиц с реальными страницами ИНВенты, DataLens и Asgard ещё нужно проверить на твоих авторизованных вкладках.</div>
   </section>;
 }
 
 type GoogleSheetsStatus = {connected:boolean;status:string;error:string|null;client_id?:string};
 
-function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected:boolean;onOpenBrowser:()=>void}){
+function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs:BrowserTab[];connected:boolean;agentBusy:boolean;onStartAgent:()=>void;onOpenBrowser:()=>void}){
   const [clientId,setClientId]=useState("");
   const [clientSecret,setClientSecret]=useState("");
   const [sheetsStatus,setSheetsStatus]=useState<GoogleSheetsStatus>({connected:false,status:"not_connected",error:null});
@@ -236,12 +237,22 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
     }catch(error){setSheetError(String(error));}
     finally{setBusy(false);}
   };
+  const sheetTabs=tabs.filter(tab=>/^https:\/\/docs\.google\.com\/spreadsheets\/d\/[A-Za-z0-9_-]{10,256}\/edit\/?(?:\?gid=\d{1,16})?$/.test(tab.url));
+  const hasDiscoveredSheet=sheetTabs.length>0;
+
   const analyzeActiveInventa=async()=>{
     setBusy(true);setSheetError("");setSheetNotice("");setInventaReport(null);
-    const activeTab=tabs.find(tab=>/https:\/\/docs\.google\.com\/spreadsheets\/d\//.test(tab.url));
-    const spreadsheetUrl=activeTab?.url||"https://docs.google.com/spreadsheets/d/1zPgIA_Au6J8_NEAPsTZo1TLkfFJYUTYKxtIwUWRHS30/edit";
     try{
-      const result=await invoke<any>("analyze_active_inventa",{spreadsheetUrl});
+      const namedInventa=sheetTabs.filter(tab=>/inventa|инвент/i.test(tab.title));
+      // Prefer the most recently discovered named sheet when multiple copies are open.
+      const candidates=namedInventa.length?namedInventa:sheetTabs;
+      const activeTab=[...candidates].sort((a,b)=>
+        Date.parse(b.shared_at||"")-Date.parse(a.shared_at||"")
+      )[0]||null;
+      if(!activeTab){
+        throw new Error("Открой таблицу ИНВенты, затем в расширении Malenia нажми «Проверить структуру активной вкладки». Отдельно делиться вкладкой больше не нужно.");
+      }
+      const result=await invoke<any>("analyze_active_inventa",{spreadsheetUrl:activeTab.url});
       setInventaReport(result);
       setSheetNotice("ИНВента прочитана. Анализ выполнен без изменения исходной таблицы.");
     }catch(error){setSheetError(String(error));}
@@ -249,7 +260,35 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
   };
 
   const sheetsAuthorized=sheetsStatus.status==="authorized"||sheetsStatus.connected;
-  const statusLabel=sheetsAuthorized?"Подключён · доступ только для чтения":
+  const authErrorText:Record<string,string>={
+    authorization_denied:"Google не выдал разрешение. Повтори подключение и подтверди доступ только для чтения.",
+    google_oauth_invalid_client:"Google не принял Client ID. Проверь, что это OAuth-клиент типа Desktop из того же проекта, где включён Google Sheets API.",
+    google_oauth_unauthorized_client:"Этот OAuth-клиент не разрешён для выбранного типа приложения или проекта.",
+    google_oauth_invalid_request:"Google принял возврат из браузера, но отклонил обмен кода авторизации на токены. Это отдельный этап; проверь Desktop OAuth Client ID.",
+    google_oauth_pkce_verifier_rejected:"Google отклонил PKCE code_verifier при обмене кода. Нужно проверить, что запрос авторизации и обмен используют одну пару PKCE.",
+    google_oauth_token_redirect_uri_rejected:"Google отклонил redirect_uri на этапе обмена кода. Адрес возврата должен совпадать с тем, что был отправлен при запуске авторизации.",
+    google_oauth_token_client_id_rejected:"Google отклонил Client ID на этапе обмена кода. Проверь, что используется тот же Desktop OAuth-клиент.",
+    google_oauth_token_client_secret_rejected:"Google отклонил Client Secret. Для Desktop-клиента оставь поле пустым либо используй секрет именно этого клиента.",
+    google_oauth_authorization_code_rejected:"Google отклонил одноразовый код авторизации. Он мог истечь или быть использован повторно; начни новый OAuth-сеанс.",
+    google_oauth_missing_required_parameter:"Google сообщил об отсутствующем обязательном параметре token-запроса. Malenia сохранит только безопасную категорию ошибки.",
+    google_oauth_redirect_uri_mismatch:"Google отклонил адрес возврата. Проверь тип OAuth-клиента: нужен Desktop app.",
+    google_oauth_unsupported_grant_type:"Google отклонил тип OAuth-обмена. Проверь настройки Desktop OAuth-клиента.",
+    google_oauth_invalid_scope:"Google не выдал запрошенный доступ только для чтения Google Sheets.",
+    google_reauthorization_required:"Google отклонил обмен кода или ранее выданный доступ. Повтори подключение; токен не был подтверждён.",
+    google_refresh_response_invalid:"Google вернул некорректный ответ обновления доступа. Требуется повторная авторизация.",
+    google_network_unavailable:"Не удалось связаться с Google для завершения авторизации. Проверь интернет и повтори подключение.",
+    google_request_timeout:"Google не ответил вовремя. Повтори подключение.",
+    google_response_invalid:"Google вернул некорректный ответ. Доступ не подтверждён.",
+    oauth_response_invalid:"Google вернул неполный или неожиданный ответ. Токен не сохранён.",
+    oauth_connection_failed:"Ответ Google получен, но обмен кода на токен или безопасное сохранение не завершились. Повтори подключение.",
+    google_request_failed:"Google отклонил запрос обмена. Проверь Client ID и настройки OAuth consent screen.",
+    windows_credential_store_unavailable:"Windows Credential Manager недоступен. Токены не были сохранены.",
+  };
+  const authErrorMessage=sheetsStatus.error
+    ? (authErrorText[sheetsStatus.error]||"Ошибка этапа авторизации: "+sheetsStatus.error)
+    : null;
+  const statusLabel=sheetsStatus.status==="authorized"?"Google разрешил чтение · источник ещё не проверен":
+    sheetsStatus.connected?"Подключён · доступ только для чтения":
     sheetsStatus.status==="authorizing"?"Ожидает подтверждения в браузере":
     sheetsStatus.status==="reauthorization_required"?"Требуется повторная авторизация":
     sheetsStatus.status==="denied"?"Доступ не предоставлен":
@@ -259,7 +298,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
     sheetsStatus.status==="agent_stopped"?"Запустите локальный агент":"Не подключён";
 
   return <section className="page sources-page">
-    <div className="page-head"><div><div className="eyebrow">РАБОЧИЕ ПОДКЛЮЧЕНИЯ</div><h1>Источники</h1><p>Каждый источник подключается отдельно, с минимальными разрешениями и понятным статусом.</p></div></div>
+    <div className="page-head"><div><div className="eyebrow">РАБОЧИЕ ПОДКЛЮЧЕНИЯ</div><h1>Подключения</h1><p>Подключай рабочие системы по мере необходимости. Первый тест — чтение одного заказа из таблицы инвентаризации.</p></div></div>
     <div className="sources-notice"><ShieldCheck size={17}/><span>Google Sheets подключается отдельно только для чтения. Malenia использует данные ИНВенты для расследования заказов и не меняет исходную таблицу. ChatGPT не передаёт свои подключения Malenia.</span></div>
     {sheetError?<p className="alert error" role="alert">{sheetError}</p>:null}
     {sheetNotice?<p className="alert success" role="status">{sheetNotice}</p>:null}
@@ -268,8 +307,20 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
         <div className="source-card-top"><span className="source-icon sheets"><Database size={19}/></span><span className={"source-state "+(sheetsAuthorized?"ready":"pending")}>{statusLabel}</span></div>
         <h2>Google Sheets · ИНВента</h2>
         <p>Отдельная авторизация Malenia. Запрашивается только доступ на чтение Google Sheets. Исходные данные остаются нетронутыми; результат расследования хранится отдельно в Malenia.</p>
-        {!connected?<p className="source-help">Сначала запустите локальный агент на главной странице.</p>:null}
+        {authErrorMessage?<p className="alert error" role="alert">{authErrorMessage} <small>Код этапа: {sheetsStatus.error}</small></p>:null}
+        <div className="google-read-form">
+          <div className="google-actions">
+            <button className="primary" disabled={!connected||!sheetsAuthorized||busy||!hasDiscoveredSheet}
+              onClick={()=>void analyzeActiveInventa()}>{busy?"Читаем ИНВенту…":"Прочитать и разобрать первый заказ"}</button>
+          </div>
+          <small>{!connected?"Сначала запусти локального агента.":
+            !sheetsAuthorized?"Кнопка станет доступна после успешной авторизации Google.":
+            !hasDiscoveredSheet?"Открой ИНВенту и нажми в расширении «Проверить структуру активной вкладки».":
+            "Будет прочитан активный лист Google Sheets. Это пока анализ ИНВенты, без подтверждения в DataLens и Asgard."}</small>
+        </div>
+        {!connected?<div className="source-help"><b>Локальный агент остановлен.</b><p>Запусти его здесь, чтобы подключить Google и обработать первый заказ.</p><button className="primary source-action" onClick={onStartAgent} disabled={agentBusy}>{agentBusy?"Запускаем…":"Запустить агента"}</button></div>:null}
         {!sheetsAuthorized?
+          <>
           <div className="google-connect-form">
             <label>Google OAuth Desktop Client ID
               <input value={clientId} onChange={e=>setClientId(e.target.value)} maxLength={300} autoComplete="off" spellCheck={false} placeholder="…apps.googleusercontent.com" disabled={!connected||busy}/>
@@ -278,18 +329,28 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
               <input type="password" value={clientSecret} onChange={e=>setClientSecret(e.target.value)} maxLength={512} autoComplete="off" spellCheck={false} placeholder="Оставь пустым, если Google не требует" disabled={!connected||busy}/>
             </label>
             <button className="primary source-action" disabled={!connected||busy||!clientId.trim()||sheetsStatus.status==="authorizing"} onClick={()=>void connectSheets()}>{busy?"Подключаем…":"Подключить Google"}</button>
-            <small>Создай OAuth client типа Desktop и включи Google Sheets API. Если consent screen в режиме Testing, добавь свой аккаунт в Test users. Desktop-приложения являются public clients: Google указывает, что Client Secret необязателен и не может считаться защищённым секретом. Если конкретный проект требует его при обмене токена, введи его здесь — он сохранится только в Windows Credential Manager. Не отправляй его в чат. Важно: если внешний OAuth-проект оставить в режиме Testing, refresh token для этого scope истечёт через 7 дней. Для постоянной работы не оставляй внешний проект в Testing; для личного использования Google допускает исключение из полной проверки, но может показывать предупреждение о непроверенном приложении.</small>
-          </div>:
+            <small>Создай OAuth client типа Desktop и включи Google Sheets API. Если consent screen в режиме Testing, добавь свой аккаунт в Test users. Для Desktop-приложения Client Secret обычно не нужен. Не отправляй секреты в чат.</small>
+          </div>
+          </>:
           <>
           <div className="google-read-form">
             <div className="google-actions">
-              <button className="primary" disabled={busy} onClick={()=>void analyzeActiveInventa()}>{busy?"Анализируем…":"Подключить ИНВенту для расследования"}</button>
               <button className="secondary" disabled={busy} onClick={()=>void disconnectSheets()}>Отключить Google</button>
             </div>
-            <small>Маления ищет Google Sheets во вкладках, которыми ты поделился через Browser Bridge. Если gid отсутствует, она определяет лист по заголовкам ИНВенты. Исходная таблица доступна только для чтения и не изменяется.</small>
+            <small>{hasDiscoveredSheet
+              ? "Обнаружена Google Таблица. Malenia автоматически выберет последнюю найденную ИНВенту и прочитает её через Google Sheets API. Источник доступен только для чтения."
+              : "Сначала открой ИНВенту в Яндекс Браузере и нажми в расширении «Проверить структуру активной вкладки». Ссылка вручную не нужна."}</small>
           </div>
           {inventaReport?<div className="sheet-preview">
             <div className="sheet-preview-head"><b>{inventaReport.source.spreadsheet_title} · {inventaReport.source.sheet_title}</b><small>{inventaReport.analysis.rows_analyzed} строк</small></div>
+            {inventaReport.analysis.first_order_preview?<div className="order-first-preview" data-testid="inventa-first-order">
+              <b>Первый заказ · строка {inventaReport.analysis.first_order_preview.row}</b>
+              <p><b>ID заказа:</b> {inventaReport.analysis.first_order_preview.order_id||"не указан"} · <b>Грузоместо:</b> {inventaReport.analysis.first_order_preview.partner_code||"не указано"}</p>
+              <p><b>Товар:</b> {inventaReport.analysis.first_order_preview.name||"не распознан"} </p>
+              <p><b>Дата выгрузки:</b> {inventaReport.analysis.first_order_preview.date||"не указана"} · <b>Стоимость:</b> {inventaReport.analysis.first_order_preview.cost||"не указана"}</p>
+              <p><b>Статус в ИНВенте:</b> {inventaReport.analysis.first_order_preview.status||"не указан"} · <b>Тикет:</b> {inventaReport.analysis.first_order_preview.ticket||"не указан"}</p>
+              <p><b>Проверка:</b> {inventaReport.analysis.first_order_cross_check?.verified?"подтверждён":"нужны внешние источники — DataLens и Asgard"}. Это предварительный разбор строки, не подтверждение статуса.</p>
+            </div>:<p>Не удалось выделить запись заказа для первого теста.</p>}
             <div className="sources-notice"><b>Статусы</b> {Object.entries(inventaReport.analysis.status_counts).map(([k,v])=>k+": "+v).join(" · ")}</div>
             <p><b>Дубли ID:</b> {inventaReport.analysis.duplicate_order_ids.length} · <b>Ошибочные даты:</b> {inventaReport.analysis.invalid_date_rows.length} · <b>Ошибочные суммы:</b> {inventaReport.analysis.invalid_cost_rows.length} · <b>Без тикета:</b> {inventaReport.analysis.missing_ticket_rows.length}</p>
             <p><b>Не заполнено:</b> {Object.entries(inventaReport.analysis.missing_required).map(([k,v])=>k+": "+v).join(" · ")||"нет"}</p>
@@ -298,11 +359,9 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
         {sheetsStatus.status==="authorizing"?<p className="source-help">Завершите подтверждение в системном браузере. Malenia не увидит пароль Google.</p>:null}
         {sheetsStatus.status==="denied"?<p className="source-help">Разрешение не было предоставлено. Можно повторить подключение.</p>:null}
         {sheetsStatus.status==="expired"?<p className="source-help">Окно авторизации не получило ответ вовремя. Начните подключение заново.</p>:null}
-        {sheetsStatus.status==="error"?<p className="source-help">Google не подтвердил нужный scope или OAuth завершился ошибкой. Проверьте OAuth consent screen и Client ID.</p>:null}
       </article>
-      <article className="panel source-card"><div className="source-card-top"><span className="source-icon datalens"><Activity size={19}/></span><span className="source-state pending">Не подключён</span></div><h2>Yandex DataLens</h2><p>Дашборд пока не читается приложением. Сначала будет реализовано чтение выбранной авторизованной вкладки или официального API.</p><small>Следующий шаг: read-only доступ и отдельная проверка разрешений.</small></article>
-      <article className="panel source-card"><div className="source-card-top"><span className="source-icon asgard"><Globe2 size={19}/></span><span className="source-state pending">Не подключён</span></div><h2>Asgard</h2><p>Рабочая сессия остаётся в Яндекс Браузере. Malenia пока не читает статусы или историю коробок на этой странице.</p><small>Следующий шаг: разрешённое чтение выбранной страницы.</small></article>
-      <article className="panel source-card"><div className="source-card-top"><span className="source-icon browser"><Plug size={19}/></span><span className={"source-state "+(tabs.length?"ready":"pending")}>{tabs.length ? `Передано вкладок: ${tabs.length}` : "Ожидает передачи"}</span></div><h2>Browser Bridge</h2><p>Ручная передача отправляет только заголовок и очищенный URL. Отдельный автоматический обход читает видимый текст до 16 000 символов с каждого из трёх явно разрешённых сайтов без сохранения текста; cookies, пароли и история не читаются.</p><small>Автоматическое чтение не означает готовую сверку заказов: подключение сценариев ИНВента → DataLens → Asgard ещё требуется.</small><button className="secondary source-action" onClick={onOpenBrowser}>Открыть Browser Bridge <ArrowUpRight size={14}/></button></article>
+      <article className="panel source-card"><div className="source-card-top"><span className="source-icon browser"><Plug size={19}/></span><span className="source-state pending">Можно добавить</span></div><h2>Другие рабочие системы</h2><p>Malenia не ограничена заранее заданным списком сайтов. Новые ресурсы и навыки будут подключаться постепенно, по мере обучения и выдачи разрешений.</p><small>Пока доступен первый интеграционный сценарий — Google Sheets, только чтение.</small></article>
+      <article className="panel source-card"><div className="source-card-top"><span className="source-icon browser"><Plug size={19}/></span><span className={"source-state "+(tabs.length?"ready":"pending")}>{tabs.length ? `Передано вкладок: ${tabs.length}` : "Ожидает передачи"}</span></div><h2>Browser Bridge</h2><p>Ручная передача отправляет только заголовок и очищенный URL. Страницы передаются по твоему выбору. Доступ предоставляется отдельно; cookies, пароли и история браузера не читаются.</p><small>Автоматическое чтение не означает готовую сверку заказов: подключение сценариев ИНВента → DataLens → Asgard ещё требуется.</small><button className="secondary source-action" onClick={onOpenBrowser}>Открыть Browser Bridge <ArrowUpRight size={14}/></button></article>
     </div>
   </section>;
 }

@@ -2,7 +2,7 @@ name: Windows installer
 
 on:
   push:
-    branches: ["feat/desktop-shell"]
+    branches: ["feat/desktop-shell", "feat/open-tab-discovery"]
     paths:
       - "agent/**"
       - "browser-extension/**"
@@ -151,6 +151,54 @@ jobs:
 
       - name: Verify installed resources and locked-agent upgrade
         run: python packaging/smoke_test_installer_upgrade.py
+
+      - name: Assemble complete Malenia Windows package
+        shell: pwsh
+        run: |
+          $package = Join-Path $env:RUNNER_TEMP "malenia-windows-package"
+          New-Item -ItemType Directory -Force -Path $package | Out-Null
+          $installer = Get-ChildItem "desktop/src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1
+          if (!$installer) { throw "NSIS installer was not produced." }
+          Copy-Item $installer.FullName (Join-Path $package $installer.Name)
+          Copy-Item (Join-Path $env:RUNNER_TEMP "malenia-browser-extension.zip") (Join-Path $package "malenia-browser-extension.zip")
+          New-Item -ItemType Directory -Force -Path (Join-Path $package "browser-setup") | Out-Null
+          Copy-Item "packaging/setup_browser_bridge.ps1" (Join-Path $package "browser-setup/")
+          Copy-Item "packaging/register_browser_bridge.ps1" (Join-Path $package "browser-setup/")
+          Copy-Item "packaging/unregister_browser_bridge.ps1" (Join-Path $package "browser-setup/")
+          @'
+          MALENIA - WINDOWS TEST PACKAGE
+
+          1. Run the Malenia installer EXE and install for the current Windows user.
+          2. Extract malenia-browser-extension.zip to a permanent folder, for example:
+             %LOCALAPPDATA%\Malenia\browser-extension
+          3. In Yandex Browser open browser://extensions and enable Developer mode.
+          4. Choose Load unpacked and select the extracted browser-extension folder.
+          5. Copy the extension ID shown by Yandex Browser.
+          6. Run browser-setup\setup_browser_bridge.ps1 and enter that extension ID.
+             If using the command line instead:
+             powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\browser-setup\register_browser_bridge.ps1 -ExtensionId YOUR_32_CHARACTER_EXTENSION_ID
+          7. Restart Yandex Browser and open Malenia.
+
+          IMPORTANT:
+          - This is a CI test build, not a signed public release.
+          - The extension is loaded unpacked because browser extension installation
+            requires explicit user action; this package does not silently alter
+            browser policy or install extensions.
+          - Only approve the three corporate HTTPS origins you are authorized to read.
+          - The audit is read-only. It does not edit orders or submit forms.
+          '@ | Set-Content -Encoding ASCII (Join-Path $package "QUICK-START.txt")
+          $archive = Join-Path $env:RUNNER_TEMP "malenia-windows-package.zip"
+          Compress-Archive -Path (Join-Path $package "*") -DestinationPath $archive -Force
+          if (!(Test-Path $archive)) { throw "Complete Windows package was not created." }
+          Write-Host "Complete package: $archive"
+
+      - name: Upload complete Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: malenia-windows-package
+          path: ${{ runner.temp }}/malenia-windows-package.zip
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4

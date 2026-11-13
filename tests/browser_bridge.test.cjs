@@ -3,25 +3,30 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
+const MaleniaTabDiscovery = require('../browser-extension/tab_discovery.js');
 const source = fs.readFileSync(path.join(__dirname, '../browser-extension/popup.js'), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
-function popup(url = 'https://example.com/orders?secret=remove#private') {
-  const nodes = Object.fromEntries(['status', 'share', 'shareAll', 'retry', 'inspect', 'auditStatus'].map(id => [id, {
+function popup(url = 'https://example.com/orders?secret=remove#private', options = {}) {
+  const nodes = Object.fromEntries(['status', 'share', 'shareAll', 'retry', 'inspect', 'auditStatus', 'discoverTabs', 'confirmTabs', 'inspectMappedTabs', 'discoveryResults', 'discoveryStatus', 'mapInventory', 'mapDatalens', 'mapAsgard'].map(id => [id, {
     disabled: true, textContent: '', className: '', handlers: {},
     addEventListener(type, callback) { this.handlers[type] = callback; }
   }]));
   const calls = [], timers = new Map();
   let sequence = 0, queries = 0;
+  const requestedOrigins = [];
+  let pageErrorPending = options.pageError;
   const chrome = {
     runtime: {lastError: null, sendNativeMessage(host, message, callback) { calls.push({host, message, callback}); }},
     tabs: {async query() { queries++; return [{id: 7, title: 'x'.repeat(400), url}]; }},
-    scripting: {async executeScript() {return [{result:{title:'Orders',table_headers:['Order ID','Status'],search_labels:['Search'],has_aria_grid:true,virtualized:false,login_required:false}}];}}
+    permissions: {async getAll() {return {origins: []};}, async request(value) {requestedOrigins.push(value); return options.permissionGranted !== false;}},
+    storage: {local: {async get() {return {};}, async set() {}}, session: {async set() {}, async get() {return {};}}},
+    scripting: {async executeScript() {if (pageErrorPending) {const error=pageErrorPending; pageErrorPending=null; throw new Error(error);} return [{result:{title:'Orders',table_headers:['Order ID','Status'],tables:[{kind:'html-table',columns:['Order ID','Status'],visible_rows:3,declared_rows:3}],search_labels:['Search'],has_aria_grid:true,virtualized:false,login_required:false}}];}}
   };
-  vm.runInNewContext(source, {document: {getElementById: id => nodes[id]}, chrome, URL,
+  vm.runInNewContext(source, {document: {getElementById: id => nodes[id], createElement: () => ({addEventListener(){},setAttribute(){},appendChild(){}})}, chrome, URL, URLSearchParams, MaleniaTabDiscovery,
     crypto: {randomUUID: () => 'request-id'},
     setTimeout: callback => {timers.set(++sequence, callback); return sequence;},
     clearTimeout: id => timers.delete(id)});
-  return {nodes, calls, timers, get queries() {return queries;},
+  return {nodes, calls, timers, requestedOrigins, get queries() {return queries;},
     async reply(index, response, error) {
       chrome.runtime.lastError = error ? {message: error} : null;
       calls[index].callback(response);
@@ -31,7 +36,7 @@ function popup(url = 'https://example.com/orders?secret=remove#private') {
     async timeout() {for (const [id, callback] of [...timers]) {timers.delete(id); callback();} await flush();}
   };
 }
-const hello = {ok: true, host: 'com.malenia.browser'};
+const hello = {ok: true, host: 'com.malenia.browser', capabilities:['share_active_tab','inspect_capabilities']};
 
 test('hello and manual reconnect never read or share a tab', async () => {
   const p = popup();
@@ -138,7 +143,69 @@ test('page inspection requires explicit user click and never reads on handshake'
   assert.equal(p.calls[1].message.type, 'inspect_capabilities');
   assert.equal(p.calls[1].message.page.url, 'https://example.com/orders');
   assert.deepEqual(Array.from(p.calls[1].message.page.table_headers), ['Order ID','Status']);
+  assert.equal(p.calls[1].message.page.tables[0].visible_rows, 3);
   assert.equal('text' in p.calls[1].message.page, false);
-  await p.reply(1, {ok:true, type:'capabilities_inspected', persisted:false});
+  await p.reply(1, {ok:true, type:'capabilities_inspected', persisted:false, page:{tables:[]}});
   assert.match(p.nodes.status.textContent, /Структурная диагностика завершена/);
+  assert.match(p.nodes.auditStatus.textContent, /Order ID · Status/);
+});
+
+test('page inspection requests only the active HTTPS origin when host access is missing', async () => {
+  const p = popup('https://orders.example.com/list?session=private', {
+    pageError:'Cannot access contents of the page. Extension manifest must request permission.'
+  });
+  await p.reply(0, hello);
+  await p.click('inspect');
+  assert.equal(p.requestedOrigins.length,1);
+  assert.deepEqual(Array.from(p.requestedOrigins[0].origins), ['https://orders.example.com/*']);
+  assert.equal(p.calls[1].message.type, 'inspect_capabilities');
+  await p.reply(1, {ok:true,type:'capabilities_inspected',persisted:false,
+    page:{tables:[]}});
+  assert.match(p.nodes.status.textContent, /Структурная диагностика завершена/);
+  assert.doesNotMatch(p.nodes.auditStatus.textContent, /session|private/);
+});
+
+test('active Google Sheets inspection forwards only spreadsheet path and active gid', async () => {
+  const id = 'a'.repeat(24);
+  const p = popup('https://docs.google.com/spreadsheets/d/' + id +
+    '/edit?authuser=private#gid=123&token=secret');
+  await p.reply(0, hello);
+  await p.click('inspect');
+  assert.equal(p.calls[1].message.type, 'inspect_capabilities');
+  assert.equal(p.calls[1].message.page.url,
+    'https://docs.google.com/spreadsheets/d/' + id + '/edit?gid=123');
+  assert.doesNotMatch(JSON.stringify(p.calls[1].message), /private|secret|token/);
+  await p.reply(1, {ok:true,type:'capabilities_inspected',persisted:false,
+    tab_registered:true,page:{tables:[]}});
+  assert.match(p.nodes.status.textContent, /Google Таблица обнаружена/);
+  assert.match(p.nodes.auditStatus.textContent, /активный документ и лист обнаружены/);
+});
+
+test('page inspection explains denied exact-origin permission without exposing browser error', async () => {
+  const p = popup('https://orders.example.com/list?session=private', {
+    pageError:'Cannot access contents of the page. Extension manifest must request permission.',
+    permissionGranted:false
+  });
+  await p.reply(0, hello);
+  await p.click('inspect');
+  assert.match(p.nodes.auditStatus.textContent, /не предоставил.*доступ/);
+  assert.match(p.nodes.status.textContent, /site_permission/);
+  assert.doesNotMatch(p.nodes.auditStatus.textContent, /session|private|orders/);
+  assert.equal(p.calls.length,1);
+});
+
+test('page inspection distinguishes local host schema rejection', async () => {
+  const p = popup();
+  await p.reply(0, hello);
+  await p.click('inspect');
+  await p.reply(1, {ok:false,error:'invalid_capability_snapshot'});
+  assert.match(p.nodes.auditStatus.textContent, /Локальный агент отклонил диагностику/);
+  assert.match(p.nodes.status.textContent, /host_response/);
+});
+
+test('handshake requires structural-inspection capability before enabling actions', async () => {
+  const p = popup();
+  await p.reply(0, {ok:true,host:'com.malenia.browser',capabilities:['share_active_tab']});
+  assert.equal(p.nodes.share.disabled,true);
+  assert.match(p.nodes.status.textContent,/не удалось проверить ответ/i);
 });

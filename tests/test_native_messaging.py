@@ -133,6 +133,7 @@ class NativeMessagingProtocolTests(unittest.TestCase):
         before_events = self.store.list_events()
         page = {"url": "https://example.com/orders?session=secret",
                 "title": "Orders", "table_headers": ["Cargo place", "Status"],
+                "tables": [{"kind": "html-table", "columns": ["Cargo place", "Status"], "visible_rows": 2, "declared_rows": 2}],
                 "search_labels": ["Search cargo place"], "has_aria_grid": True,
                 "virtualized": False, "login_required": False}
         result = handle_message({"type": "inspect_capabilities", "page": page}, self.store)
@@ -145,6 +146,7 @@ class NativeMessagingProtocolTests(unittest.TestCase):
         invalid = [
             {**page, "raw_text": "private"},
             {**page, "table_headers": ["x"] * 41},
+            {**page, "tables": [{"kind":"html-table","columns":["x"]*21,"visible_rows":0,"declared_rows":None}]},
             {**page, "search_labels": ["x"] * 31},
             {**page, "has_aria_grid": "yes"},
             {**page, "url": "file:///private"},
@@ -154,6 +156,37 @@ class NativeMessagingProtocolTests(unittest.TestCase):
                                        "page": candidate}, self.store)
             self.assertFalse(rejected["ok"])
             self.assertEqual(rejected["error"], "invalid_capability_snapshot")
+
+    def test_inspecting_google_sheet_auto_registers_only_safe_document_metadata(self):
+        page = {
+            "url": "https://docs.google.com/spreadsheets/d/" + "a" * 24 +
+                   "/edit?gid=123&authuser=private&token=secret",
+            "title": "ИНВента - Google Таблицы",
+            "table_headers": [], "tables": [], "search_labels": ["Поиск"],
+            "has_aria_grid": False, "virtualized": True, "login_required": False,
+        }
+        response = handle_message({"type": "inspect_capabilities", "page": page}, self.store)
+        self.assertTrue(response["ok"])
+        self.assertTrue(response["tab_registered"])
+        self.assertFalse(response["persisted"])
+        saved = self.store.list_browser_tabs()
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0]["url"], "https://docs.google.com/spreadsheets/d/" +
+                         "a" * 24 + "/edit?gid=123")
+        self.assertNotIn("private", json.dumps(saved))
+        self.assertNotIn("secret", json.dumps(saved))
+        self.assertEqual(saved[0]["title"], "ИНВента - Google Таблицы")
+
+    def test_google_sheet_metadata_registration_does_not_register_other_hosts(self):
+        page = {
+            "url": "https://example.com/spreadsheets/d/" + "a" * 24 + "/edit?gid=123",
+            "title": "Example", "table_headers": [], "tables": [], "search_labels": [],
+            "has_aria_grid": False, "virtualized": False, "login_required": False,
+        }
+        response = handle_message({"type": "inspect_capabilities", "page": page}, self.store)
+        self.assertTrue(response["ok"])
+        self.assertFalse(response["tab_registered"])
+        self.assertEqual(self.store.list_browser_tabs(), [])
 
     def test_reconcile_site_tables_remains_ephemeral(self):
         snapshots = {

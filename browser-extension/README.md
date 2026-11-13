@@ -203,3 +203,101 @@ The **desktop launches a read-only audit**, not an authorized corporate write. I
 While a desktop-initiated audit is running, the extension now reports **only** fixed source roles (`inventory`, `datalens`, `asgard`), number of completed sources (0–3), number requiring attention (0–3), and the last source with a failed read. Progress is sent through the registered Native Messaging host, accepted only for the **matching active claimed job**, and displayed in Malenia's Browser page. New jobs reset counters, older/stale jobs cannot update newer work, and counters may never move backwards. No raw page text, URL, cargo place, source rows, or exception messages are transferred for this progress report.
 
 The popup still shows its own more detailed but nonidentifying diagnostic reason codes. The desktop shows the most recent active source and counts, not live per-record statuses. The existing summary of the latest successfully reconciled run remains separate; a failed run does not replace that summary. This does not enable corporate writes or prove the private sites have been tested.
+
+
+## Open-tab discovery (experimental, user-confirmed selection only)
+
+The extension popup now contains a separate **Найти уже открытые рабочие вкладки**
+flow. The user enters the HTTPS page URLs they recognize as ИНВента, DataLens
+and Asgard. Malenia stores only each URL's origin and path prefix, discarding
+query strings and fragments, then queries the current open tabs and the host
+permissions already granted to the extension. It does not request new access
+silently. A missing permission is reported with instructions to grant access
+through the browser's extension settings.
+
+Candidates are matched only against those explicit mappings and exact-origin
+permission patterns. A duplicate match is marked ambiguous and every candidate
+must be selected manually. All three roles must be selected before confirmation.
+Immediately before confirmation, Malenia fetches each selected tab again and
+revalidates its current URL, origin, path and host permission. A closed or
+navigated tab, or revoked permission, invalidates the selection.
+
+Confirmed tab IDs and sanitized locations are held in `chrome.storage.session`
+only; the mapping origin/path prefixes are stored in local extension storage.
+Session references disappear when the browser session ends. The desktop-triggered
+audit now requires all three confirmed references, rechecks their current tab ID,
+HTTPS origin, exact path and granted host permission before the run, and repeats
+the tab/path/permission checks immediately around each DOM read. It reads only
+the structured visible table cells in these selected tabs; it does not extract
+or forward full page text, navigate, paginate, submit forms, or close the user's
+tabs. If a selected table exposes a next-page link, the selected-tab audit stops
+with an attention result rather than navigating the user's tab. Search-driven
+GET/reactive queries remain available only in the legacy isolated-background-tab
+runner and are deliberately disabled for selected tabs.
+
+The audit engine sends the bounded table snapshots to the existing read-only
+reconciliation endpoint. No order edits, status changes or form submissions are
+implemented. If a tab is closed, navigated, loses permission, has an unsupported
+table schema or requires pagination, the source fails closed. Session-only
+selection expires after 30 minutes and is discarded on browser-session end.
+
+This integration is code- and test-verified, but compatibility with the user's
+actual private ИНВента, DataLens and Asgard pages is still unverified. The user
+must map the correct HTTPS origins/paths, grant host access through browser
+settings and keep the three source tabs open and logged in. No production-ready
+claim is made until tested against those authorized live sites.
+
+Run `node --test tests/tab_discovery.test.cjs tests/browser_open_tab_discovery.test.cjs tests/browser_automation.test.cjs`
+to validate matching, duplicate selection, revocation, stale tabs, in-place
+read-only extraction and fail-closed navigation handling.
+
+
+## Stable document identity for confirmed tabs (current audit path)
+
+The confirmed-tab reader now binds each table extraction to the browser's main-frame `documentId`, not just a tab ID and URL path. Before reading it performs a minimal main-frame identity probe; the table read must return the same `documentId`; after reading it probes again and rechecks the current tab URL and host permission. A document replacement, redirect, missing identity metadata, tab change or permission loss fails closed before reconciliation. The reader never logs or sends the document ID to the desktop host; it is used only inside the extension for the duration of that source read.
+
+This relies on Chromium's `InjectionResult.documentId` metadata (available in modern Chromium-based browsers). If the installed Yandex Browser build does not provide it, the new confirmed-tab audit intentionally stops instead of falling back to a weaker tab-ID-only check.
+
+The desktop Browser page now describes the confirmed-tab workflow rather than the superseded configured-URL/background-tab flow. Open the three logged-in resource tabs, map their HTTPS URLs in the extension popup, select and confirm the three candidates, then start the audit from the desktop. Only currently rendered, supported tables are included. The exact site headers and date formats remain an adapter contract until verified against the user's live sites.
+
+Run `node --test tests/browser_automation.test.cjs tests/browser_desktop_dispatch.test.cjs tests/navigation_ui.test.cjs` for selected-document replacement, dispatch and UI copy regression checks.
+
+
+## Header-only site schema diagnostic
+
+After confirming the three open tabs in the popup, **Проверить заголовки таблиц** can inspect up to eight visible HTML tables (or ARIA grids) per source and display only their column-header labels. It uses the same exact tab/path, granted-permission and main-frame `documentId` checks before and after each inspection. It does not read table body cells, order identifiers, search-field values, or full page text; the header labels remain in the popup and are not sent to the desktop/native host or persisted. This diagnostic is intended to establish the actual column names before a site adapter is approved. If no headers are visible, the adapter must not guess.
+
+
+## First-order INVenta pilot (November 2026)
+
+The first acceptance test is deliberately limited to one read-only order preview from the user's most recently shared Google Sheets tab. It does not require entering three resource URLs or selecting DataLens/Asgard first.
+
+1. Open the actual ИНВента spreadsheet in Yandex Browser.
+2. Open Malenia Browser Bridge and press **Поделиться вкладкой** for that active sheet.
+3. In Malenia, connect Google Sheets once using its separate read-only OAuth flow (the ChatGPT Google Drive connection is not inherited by the desktop app).
+4. Open **Источники** and press **Обработать первый заказ**.
+5. Malenia selects the most recently shared tab titled ИНВента, detects a worksheet from its header row, and displays the first non-empty order row with its source row number and missing fields.
+
+This is a first-stage order intake/validation, not yet a verified cross-system reconciliation. The DataLens/Asgard checks remain explicitly unverified until their live, authorized adapters are connected. No spreadsheet cells are changed, no order status is written, and no ticket is created. A row with missing evidence must remain marked for review rather than being reported as completed.
+
+
+## DataLens / Asgard schema discovery (read-only)
+
+Before relying on the order adapters, inspect the actual authenticated pages in Yandex Browser. On each page (DataLens first, then Asgard), open the Malenia Browser Bridge popup and press **Проверить структуру активной вкладки**. The diagnostic now reports up to 12 visible HTML tables/ARIA grids, their visible column headers, visible row counts, and declared ARIA row counts. It does not read cell values, search inputs, order identifiers, cookies, or credentials, and the structural snapshot is not persisted. Use these real headers to validate or add an explicit adapter mapping; do not infer field meanings from position or translate unknown labels automatically.
+
+The current order audit adapter still expects these exact normalized source columns:
+- Inventory browser table: `cargo_place`, `inventory_date`
+- DataLens: `main_partner_code_original`, `sc_id`, `result`, `scanned_at`
+- Asgard: `cargo_place`, `status` (for transit-history outcomes, the dedicated box/history evidence is still not supplied by the generic table reader)
+
+A page can be structurally diagnosed without being a supported order adapter. If its headers differ, the audit must report the source as unsupported/manual review until a reviewed mapping and tests are added. For already-shared DataLens and Asgard tabs, the desktop audit now derives unique cargo-place keys from the inventory snapshot and can populate only a uniquely labelled, visible, standalone search-as-you-type field (`main_partner_code_original` in DataLens; `cargo_place` in Asgard). It does not click, press Enter, submit a form, or navigate the user-selected tab; it waits for the matching structured table to update and verifies the returned cargo-place values. If that safe search control or the expected result table is not present, the source fails closed. The Google Sheets API reader for ИНВента is separate from the Browser Bridge's HTML-table reader; the complete Google Sheets → DataLens → Asgard pipeline is not yet wired into a single investigation job.
+
+
+### Troubleshooting active-page structure inspection
+
+The popup first attempts to inspect the active tab using the temporary `activeTab` grant. If Yandex Browser reports that the extension lacks page access, the popup asks for an optional host permission scoped to exactly the active HTTPS origin (for example, `https://orders.example.com/*`); it never requests all-site access. Approve that prompt and retry. The popup reports a safe stage code (`tab_lookup`, `page_access`, `site_permission`, or `host_response`) and a stage-specific explanation. Raw browser exceptions, full URLs, query strings and session values are never shown. If the stage is `host_response`, update/reinstall the desktop app and re-register the native host with the currently installed extension ID.
+
+
+### Автоматическое обнаружение активной Google Таблицы
+
+Откройте нужную Google Таблицу в Яндекс Браузере и нажмите в расширении «Проверить структуру активной вкладки». При успешной проверке Browser Bridge автоматически регистрирует в локальном Malenia только заголовок, URL документа без параметров сессии и числовой `gid` активного листа. Значения ячеек, cookies, токены и остальные query/fragment-параметры не передаются. Нажимать «Поделиться вкладкой» отдельно не требуется. В приложении откройте «Подключения» → «Обработать первый заказ»: Malenia использует OAuth Google Sheets с единственным scope `spreadsheets.readonly` и читает активный лист через API. Если `gid` отсутствует, анализатор ищет лист с распознаваемой структурой ИНВенты; источник не изменяется.

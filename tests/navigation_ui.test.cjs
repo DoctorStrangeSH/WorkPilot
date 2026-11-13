@@ -27,16 +27,23 @@ test('the navigation groups work, knowledge, safety and system areas', () => {
 });
 
 
-test('sources page shows truthful connection state and no fake connect actions', () => {
-  assert.doesNotMatch(app, /<Nav[^\n]*label="Источники"/);
-  assert.match(app, /Google Sheets · ИНВента/);
-  assert.match(app, /ChatGPT не передаёт свои подключения Malenia/);
-  assert.match(app, /Malenia пока не читает статусы или историю коробок/);
-  assert.match(app, /ручная передача вкладки и автоматическое чтение трёх разрешённых HTTPS-страниц/);
-  assert.match(app, /автоматический обход — последовательно прочитать три явно разрешённых домена/);
-  assert.match(app, /Открыть Browser Bridge/);
+test('connections are visible and reachable from the primary navigation', () => {
+  assert.match(app, /<Nav icon=\{<Plug\/>\} label="Подключения" active=\{page==="sources"\}/);
+  assert.match(app, /<SourcesPage tabs=\{data\?\.browser_tabs\?\?\[\]\} connected=\{connected\} agentBusy=\{busy\} onStartAgent=\{runAgent\}/);
+  assert.match(app, /Запустить агента/);
+  assert.match(app, /Google OAuth Desktop Client ID/);
 });
 
+test('sources page shows truthful connection state and generic resource onboarding', () => {
+  assert.doesNotMatch(app, /<Nav[^\\n]*label="Источники"/);
+  assert.match(app, /Google Sheets · ИНВента/);
+  assert.match(app, /ChatGPT не передаёт свои подключения Malenia/);
+  assert.match(app, /Другие рабочие системы/);
+  assert.match(app, /подключение к рабочим страницам и системам/);
+  assert.match(app, /Инвентаризация — первый проверочный сценарий/);
+  assert.match(app, /Открыть Browser Bridge/);
+  assert.doesNotMatch(app, /с каждого из трёх явно разрешённых сайтов/);
+});
 
 test('Google Sheets onboarding is explicitly read-only and calls the native connector', () => {
   assert.match(app, /Google OAuth Desktop Client ID/);
