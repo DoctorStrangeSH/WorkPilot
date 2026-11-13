@@ -5,7 +5,6 @@ const shareButton = document.getElementById("share");
 const shareAllButton = document.getElementById("shareAll");
 const retryButton = document.getElementById("retry");
 const inspectButton = document.getElementById("inspect");
-const auditButton = document.getElementById("audit");
 const auditStatus = document.getElementById("auditStatus");
 let busy = false;
 let connected = false;
@@ -19,7 +18,6 @@ function updateButtons() {
   shareButton.disabled = busy || !connected;
   shareAllButton.disabled = busy || !connected;
   inspectButton.disabled = busy || !connected;
-  auditButton.disabled = busy || !connected;
   retryButton.disabled = busy;
   retryButton.textContent = connected ? "Проверить соединение" : "Повторить подключение";
 }
@@ -178,140 +176,45 @@ inspectButton.addEventListener("click", async () => {
   if (busy || !connected) return;
   busy = true;
   updateButtons();
-  setStatus("Читаем открытую страницу по вашему запросу…");
-  let sending = false;
+  setStatus("Проверяем структуру активной вкладки…");
   try {
-    const [tab] = await chrome.tabs.query({active: true, lastFocusedWindow: true});
-    if (!tab || !Number.isInteger(tab.id) || typeof tab.url !== "string") throw new Error("No tab");
+    const [tab] = await chrome.tabs.query({active:true,lastFocusedWindow:true});
+    if (!tab || !Number.isInteger(tab.id) || typeof tab.url !== "string") throw new Error("tab");
     const page = new URL(tab.url);
-    if (!["http:", "https:"].includes(page.protocol) || page.username || page.password) throw new Error("Invalid URL");
-    const results = await chrome.scripting.executeScript({
-      target: {tabId: tab.id},
-      func: () => {
-        const value = document.body ? document.body.innerText : "";
-        return typeof value === "string" ? value.slice(0, 16000) : "";
-      }
-    });
-    const visibleText = results?.[0]?.result;
-    if (typeof visibleText !== "string" || !visibleText.trim()) throw new Error("Empty page");
-    sending = true;
-    const response = await sendNativeMessage({
-      type: "inspect_active_page",
-      request_id: crypto.randomUUID(),
-      page: {url: page.origin + page.pathname, text: visibleText}
-    });
-    if (!response.ok || response.type !== "page_inspected" || response.persisted !== false) throw bridgeError("protocol");
-    setStatus("Локальный хост прочитал " + response.characters + " символов. Автоматическая сверка заказов пока не подключена.", "ok");
-  } catch (error) {
-    if (sending) {
-      connected = false;
-      setStatus(diagnostic(error, true), "error");
-    } else {
-      setStatus("Не удалось прочитать страницу. Проверьте разрешения расширения и выберите обычный сайт.", "error");
-    }
-  } finally {
-    busy = false;
-    updateButtons();
-  }
+    if (!["http:","https:"].includes(page.protocol) || page.username || page.password) throw new Error("url");
+    const results = await chrome.scripting.executeScript({target:{tabId:tab.id},func:() => {
+      const visible = el => !!(el && (el.getClientRects().length || el.getBoundingClientRect().width));
+      const clean = value => String(value || "").replace(/\\s+/g," ").trim().slice(0,120);
+      const headers = Array.from(document.querySelectorAll("table thead th, [role=columnheader]"))
+        .filter(visible).map(el=>clean(el.innerText || el.getAttribute("aria-label"))).filter(Boolean).slice(0,40);
+      const labels = Array.from(document.querySelectorAll("input:not([type=hidden]), [role=searchbox]"))
+        .filter(visible).map(el=>clean(el.getAttribute("aria-label") || el.getAttribute("placeholder") ||
+          (el.labels && Array.from(el.labels).map(x=>x.innerText).join(" ")))).filter(Boolean).slice(0,30);
+      const body = document.body ? document.body.innerText.slice(0,5000).toLowerCase() : "";
+      return {title:document.title.slice(0,300),table_headers:headers,search_labels:labels,
+        has_aria_grid:!!document.querySelector('[role="grid"],[role="table"]'),
+        virtualized:!!document.querySelector('[aria-rowcount], [data-virtualized="true"], .ag-virtual-list-viewport'),
+        login_required:/sign in|log in|войти|авторизац|вход в аккаунт/.test(body)};
+    }});
+    const summary = results?.[0]?.result;
+    if (!summary || typeof summary !== "object") throw new Error("snapshot");
+    const response = await sendNativeMessage({type:"inspect_capabilities",request_id:crypto.randomUUID(),
+      page:{url:page.origin+page.pathname,...summary}});
+    if (!response?.ok || response.type!=="capabilities_inspected" || response.persisted!==false)
+      throw bridgeError("protocol");
+    const role = /inventa|инвент/i.test(page.hostname+" "+summary.title) ? "ИНВента" :
+      /datalens|data.?lens/i.test(page.hostname+" "+summary.title) ? "DataLens" :
+      /asgard|асгард/i.test(page.hostname+" "+summary.title) ? "Asgard" : "Неизвестный ресурс";
+    auditStatus.textContent = role+": "+(summary.login_required?"похоже, требуется вход": "страница доступна")+
+      "; заголовков: "+summary.table_headers.length+"; полей поиска: "+summary.search_labels.length+
+      (summary.has_aria_grid?"; есть ARIA grid":"")+(summary.virtualized?"; вероятна виртуализация":"")+
+      ". Сырые данные не сохранялись.";
+    auditStatus.className = "status ok";
+    setStatus("Структурная диагностика завершена. Это ещё не проверка заказов.", "ok");
+  } catch {
+    auditStatus.textContent = "Не удалось проверить вкладку. Убедитесь, что активна обычная HTTP(S)-страница и расширению разрешён доступ.";
+    auditStatus.className = "status error";
+    setStatus("Проверка структуры не выполнена.", "error");
+  } finally { busy=false; updateButtons(); }
 });
 
-const RESOURCE_LABELS = {inventory:"ИНВента",datalens:"DataLens",asgard:"Asgard"};
-const FAILURE_LABELS = {
-  unmapped_search_form: "форма поиска не распознана",
-  unsupported_search_form: "сайт использует неподдерживаемую HTML-форму поиска",
-  dynamic_search_ui: "сайт использует динамическое поле поиска; нужен адаптер",
-  unsupported_dynamic_search: "динамическое поле или таблица не распознаны однозначно",
-  dynamic_search_no_result_update: "после поиска таблица не обновилась",
-  dynamic_search_unchanged_table: "таблица подала сигнал обновления, но данные не изменились",
-  invalid_inventory_search_keys: "список грузомест не подходит для точного поиска",
-  invalid_search: "неподдерживаемый идентификатор",
-  unsafe_search_target: "поиск ведёт за пределы разрешённой страницы",
-  unverified_search_result_identity: "результат поиска относится к другому грузоместу",
-  unmapped_search_results: "не найдена таблица результатов",
-  changed_search_schema: "структура таблицы меняется",
-  too_many_search_rows: "слишком много результатов",
-  virtualized_or_incomplete_grid: "динамическая таблица загружена не полностью",
-  navigation_outside_allowed_origin: "сайт перенаправил на другой домен (возможно, нужен вход)",
-  search_origin_mismatch: "страница поиска не соответствует разрешённому сайту",
-  unexpected_document: "страница изменилась во время чтения",
-  empty_page: "страница не содержит читаемого текста",
-  unmapped_paginated_table: "не распознана таблица с несколькими страницами",
-  pagination_cycle: "зациклилась навигация по страницам",
-  pagination_limit: "превышен лимит страниц",
-  changed_table_schema: "колонки таблицы изменились",
-  too_many_rows: "превышен лимит строк",
-  native_host_rejected: "локальный компонент отказался принять данные",
-  page_timeout: "страница слишком долго загружается",
-  tab_closed: "вкладка закрылась",
-  site_or_browser_error: "не удалось прочитать сайт"
-};
-
-function showAudit(snapshot) {
-  if (!snapshot || typeof snapshot !== "object") return;
-  const parts = (snapshot.results || []).map(item =>
-    RESOURCE_LABELS[item.role] + ": " + (item.status === "read" ?
-      "прочитано" + (Number.isInteger(item.pages) ? " (" + item.pages + " стр.)" : "") :
-      "нужна проверка" + (FAILURE_LABELS[item.reason] ?
-        " (" + FAILURE_LABELS[item.reason] + ")" : "")));
-  const phase = snapshot.phase === "reconciled" ? "Сверка таблиц завершена (только предложения)." :
-    snapshot.phase === "read_only" ? "Страницы прочитаны, но таблицы не сопоставлены. Требуется настройка структуры сайтов." :
-    snapshot.phase === "needs_attention" ? "Обход завершён с ошибками." :
-    "Автоматический обход выполняется.";
-  const counts = snapshot.reconciliation?.summary;
-  const total = snapshot.reconciliation?.total;
-  const outcome = counts && Number.isInteger(total) &&
-    ["found","in_progress","manual_review"].every(key => Number.isInteger(counts[key])) ?
-    " Всего: " + total + "; найдено: " + counts.found +
-    "; в работе: " + counts.in_progress + "; ручная проверка: " + counts.manual_review + "." : "";
-  auditStatus.textContent = phase + (parts.length ? " " + parts.join("; ") : "") + outcome;
-  auditStatus.className = "status" + (snapshot.phase === "reconciled" ? " ok" :
-    snapshot.phase === "needs_attention" || snapshot.phase === "read_only" ? " error" : "");
-}
-if (chrome.storage?.local) {
-  chrome.storage.local.get(["maleniaTargets","maleniaExactGetSearch"]).then(saved => {
-    const targets = saved?.maleniaTargets || {};
-    document.getElementById("exactSearch").checked = saved?.maleniaExactGetSearch !== false;
-    for (const role of Object.keys(RESOURCE_LABELS)) {
-      if (typeof targets[role] === "string") document.getElementById(role).value = targets[role];
-    }
-  }).catch(() => {});
-}
-if (chrome.storage?.session) {
-  chrome.storage.session.get("maleniaAudit").then(saved => showAudit(saved?.maleniaAudit)).catch(() => {});
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "session" && changes.maleniaAudit) showAudit(changes.maleniaAudit.newValue);
-  });
-}
-auditButton.addEventListener("click", async () => {
-  if (busy || !connected) return;
-  let targets, origins;
-  try {
-    targets = MaleniaAutomation.normalizeTargets(Object.fromEntries(
-      Object.keys(RESOURCE_LABELS).map(role => [role, document.getElementById(role).value.trim()])));
-    origins = MaleniaAutomation.origins(targets);
-  } catch {
-    auditStatus.textContent = "Укажите три HTTPS-адреса без параметров, фрагментов и паролей.";
-    auditStatus.className = "status error";
-    return;
-  }
-  busy = true;
-  updateButtons();
-  auditStatus.textContent = "Запрашиваем доступ только к выбранным доменам…";
-  try {
-    // This must be initiated directly from a user gesture. Chrome may persist per-origin approval.
-    const allowed = await chrome.permissions.request({origins});
-    if (!allowed) throw new Error("permission_denied");
-    const exactGetSearch = document.getElementById("exactSearch").checked === true;
-    const result = await chrome.runtime.sendMessage({type:"start_readonly_audit",targets,exactGetSearch});
-    if (!result?.ok) throw new Error("start_refused");
-    await chrome.storage.local.set({maleniaTargets:targets,maleniaExactGetSearch:exactGetSearch});
-    auditStatus.textContent = "Задача запущена. Можно закрыть окно расширения; состояние появится здесь при повторном открытии.";
-    auditStatus.className = "status";
-  } catch {
-    auditStatus.textContent = "Запуск не удался. Проверьте разрешения браузера и подключение к Malenia.";
-    auditStatus.className = "status error";
-  } finally {
-    busy = false;
-    updateButtons();
-  }
-});
