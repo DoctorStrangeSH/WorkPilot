@@ -258,6 +258,21 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
   };
 
   const sheetsAuthorized=sheetsStatus.status==="authorized"||sheetsStatus.connected;
+  const authErrorText:Record<string,string>={
+    google_oauth_invalid_client:"Google не принял Client ID. Проверь, что это OAuth-клиент типа Desktop из того же проекта, где включён Google Sheets API.",
+    google_oauth_unauthorized_client:"Этот OAuth-клиент не разрешён для выбранного типа приложения или проекта.",
+    google_oauth_invalid_request:"Google отклонил параметры OAuth-запроса. Переподключи Google и проверь настройки клиента.",
+    google_oauth_redirect_uri_mismatch:"Google отклонил адрес возврата. Проверь тип OAuth-клиента: нужен Desktop app.",
+    google_oauth_unsupported_grant_type:"Google отклонил тип OAuth-обмена. Проверь настройки Desktop OAuth-клиента.",
+    google_oauth_invalid_scope:"Google не выдал запрошенный доступ только для чтения Google Sheets.",
+    oauth_response_invalid:"Google вернул неполный или неожиданный ответ. Токен не сохранён.",
+    oauth_connection_failed:"Ответ Google получен, но обмен кода на токен или безопасное сохранение не завершились. Повтори подключение.",
+    google_request_failed:"Google отклонил запрос обмена. Проверь Client ID и настройки OAuth consent screen.",
+    windows_credential_store_unavailable:"Windows Credential Manager недоступен. Токены не были сохранены.",
+  };
+  const authErrorMessage=sheetsStatus.error
+    ? (authErrorText[sheetsStatus.error]||"Ошибка этапа авторизации: "+sheetsStatus.error)
+    : null;
   const statusLabel=sheetsAuthorized?"Подключён · доступ только для чтения":
     sheetsStatus.status==="authorizing"?"Ожидает подтверждения в браузере":
     sheetsStatus.status==="reauthorization_required"?"Требуется повторная авторизация":
@@ -279,6 +294,7 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
         <p>Отдельная авторизация Malenia. Запрашивается только доступ на чтение Google Sheets. Исходные данные остаются нетронутыми; результат расследования хранится отдельно в Malenia.</p>
         {!connected?<div className="source-help"><b>Локальный агент остановлен.</b><p>Запусти его здесь, чтобы подключить Google и обработать первый заказ.</p><button className="primary source-action" onClick={onStartAgent} disabled={agentBusy}>{agentBusy?"Запускаем…":"Запустить агента"}</button></div>:null}
         {!sheetsAuthorized?
+          <>
           <div className="google-connect-form">
             <label>Google OAuth Desktop Client ID
               <input value={clientId} onChange={e=>setClientId(e.target.value)} maxLength={300} autoComplete="off" spellCheck={false} placeholder="…apps.googleusercontent.com" disabled={!connected||busy}/>
@@ -287,8 +303,18 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
               <input type="password" value={clientSecret} onChange={e=>setClientSecret(e.target.value)} maxLength={512} autoComplete="off" spellCheck={false} placeholder="Оставь пустым, если Google не требует" disabled={!connected||busy}/>
             </label>
             <button className="primary source-action" disabled={!connected||busy||!clientId.trim()||sheetsStatus.status==="authorizing"} onClick={()=>void connectSheets()}>{busy?"Подключаем…":"Подключить Google"}</button>
-            <small>Создай OAuth client типа Desktop и включи Google Sheets API. Если consent screen в режиме Testing, добавь свой аккаунт в Test users. Desktop-приложения являются public clients: Google указывает, что Client Secret необязателен и не может считаться защищённым секретом. Если конкретный проект требует его при обмене токена, введи его здесь — он сохранится только в Windows Credential Manager. Не отправляй его в чат. Важно: если внешний OAuth-проект оставить в режиме Testing, refresh token для этого scope истечёт через 7 дней. Для постоянной работы не оставляй внешний проект в Testing; для личного использования Google допускает исключение из полной проверки, но может показывать предупреждение о непроверенном приложении.</small>
-          </div>:
+            <small>Создай OAuth client типа Desktop и включи Google Sheets API. Если consent screen в режиме Testing, добавь свой аккаунт в Test users. Для Desktop-приложения Client Secret обычно не нужен. Не отправляй секреты в чат.</small>
+          </div>
+          <div className="google-read-form">
+            <div className="google-actions">
+              <button className="primary" disabled>{busy?"Анализируем…":"Обработать первый заказ"}</button>
+            </div>
+            <small>{sheetsStatus.status==="error"||sheetsStatus.status==="denied"||sheetsStatus.status==="expired"
+              ? "Сначала исправим подключение Google. После успешной авторизации эта кнопка запустит чтение найденной ИНВенты."
+              : "Сначала подтверди доступ Google. После этого Malenia автоматически прочитает обнаруженную ИНВенту."}</small>
+            {authErrorMessage?<p className="source-help" role="status">{authErrorMessage}</p>:null}
+          </div>
+          </>:
           <>
           <div className="google-read-form">
             <div className="google-actions">
