@@ -101,3 +101,11 @@ Malenia не извлекает cookies, пароли или токены из �
 Повторный запуск окна активирует уже открытое окно Malenia. Агент не занимает чужой порт, не завершает посторонние процессы и при занятом порте выдаёт понятную ошибку до объявления готовности.
 
 Расширение нужно обновить в прежней папке и заново зарегистрировать новый Native Messaging host. Подробности — в `browser-extension/README.md`. Адрес GitHub пока остаётся прежним; имя внешнего репозитория нельзя изменить заменой строк в коде.
+
+
+## 2026-11-13 — OAuth invalid_request diagnostics
+- User's Connections screenshot showed `google_oauth_invalid_request`. The callback page only confirms that the browser response (authorization code/state) reached the loopback handler; it does not confirm token exchange or credential persistence.
+- The code maps this category specifically from HTTP 400/401 responses at Google's token endpoint, not from the authorization URL stage. The user-facing copy now says "token exchange" rather than generic authorization request.
+- Token error handling now classifies only safe parameter categories when Google's bounded `error_description` mentions `code_verifier`, `redirect_uri`, `client_id`, `client_secret`, or authorization code. Raw provider descriptions and any authorization material are never returned or logged.
+- Added regression tests for those mappings and for ensuring no provider description/client ID leaks. Python tests passed on 3.11, 3.12, and 3.13 for commit `ce0ec0b5`.
+- Still not proven: exact root cause of the user's original provider error. The next built version should display a more specific safe category if Google returns one; if it remains generic, inspect Google Cloud client type/configuration and exact token request metadata without collecting secrets.
