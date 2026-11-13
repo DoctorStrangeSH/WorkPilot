@@ -45,7 +45,7 @@ def detect_header(rows: list[list[Any]], scan_rows: int = 12) -> tuple[int, dict
                 if label in {_norm(alias) for alias in aliases} and field not in mapping:
                     mapping[field] = col_index
         score = len(mapping)
-        if score >= 4 and (best is None or score > len(best[1])):
+        if set(REQUIRED).issubset(mapping) and (best is None or score > len(best[1])):
             best = (row_index, mapping)
     if best is None:
         raise ValueError("inventa_headers_not_recognized")
