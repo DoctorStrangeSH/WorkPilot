@@ -18,8 +18,8 @@
     <div id="status" class="status" role="status" aria-live="polite">Проверяем соединение…</div>
     <button id="share" type="button" disabled>Поделиться вкладкой</button>
     <button id="shareAll" class="secondary" type="button" disabled>Передать открытые вкладки</button>
-    <button id="inspect" class="secondary" type="button" disabled>Прочитать страницу</button>
-    <div class="automation"><strong>Автоматический обход ресурсов</strong><p>Укажите адреса страниц, открывающихся после входа на сайты. Доступ к доменам браузер запросит один раз.</p><input id="inventory" type="url" placeholder="HTTPS-страница ИНВенты" autocomplete="off"><input id="datalens" type="url" placeholder="HTTPS-страница DataLens" autocomplete="off"><input id="asgard" type="url" placeholder="HTTPS-страница Asgard" autocomplete="off"><label class="search-option"><input id="exactSearch" type="checkbox" checked> Искать каждое грузоместо автоматически (только точные GET-формы)</label><button id="audit" type="button" disabled>Прочитать все 3 сайта автоматически</button><div id="auditStatus" class="status" role="status" aria-live="polite">Задача не запускалась.</div></div>
+    <button id="inspect" class="secondary" type="button" disabled>Проверить структуру активной вкладки</button>
+    <div class="automation"><strong>Диагностика рабочей вкладки</strong><p>Открой ИНВенту, DataLens или Asgard в Яндекс Браузере и проверь структуру активной страницы. Передаются только видимые заголовки таблиц и подписи полей поиска; содержимое заказов не сохраняется.</p><div id="auditStatus" class="status" role="status" aria-live="polite">Ожидает проверки активной вкладки.</div></div>
     <button id="retry" class="secondary" type="button" disabled>Повторить подключение</button>
     <p class="privacy">«Передать открытые вкладки» по вашему нажатию передаёт заголовки и адреса без параметров HTTP(S)-вкладок во всех окнах браузера (не содержимое страниц). «Прочитать страницу» отдельно передаёт до 16 000 символов видимого текста локальному хосту без сохранения. Поля форм, cookies и пароли не запрашиваются.</p>
   </main>
