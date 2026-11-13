@@ -43,7 +43,7 @@ test('Google Sheets onboarding is explicitly read-only and calls the native conn
   assert.match(app, /Google Sheets подключается отдельно только для чтения/);
   assert.match(app, /connect_google_sheets/);
   assert.match(app, /get_google_sheets_status/);
-  assert.match(app, /read_google_sheet/);
+  assert.doesNotMatch(app, /invoke[^\n]*read_google_sheet/);
   assert.match(app, /disconnect_google_sheets/);
   assert.match(app, /Исходные данные остаются нетронутыми/);
   assert.doesNotMatch(app, /write_google_sheet|update_google_sheet/);
