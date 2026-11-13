@@ -460,6 +460,32 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         self.assertNotIn("private provider detail", str(raised.exception))
         self.assertNotIn(CLIENT_ID, str(raised.exception))
 
+    def test_token_invalid_request_is_classified_without_exposing_provider_description(self):
+        cases = (
+            ("Missing required parameter: code_verifier", "google_oauth_pkce_verifier_rejected"),
+            ("Invalid redirect_uri parameter", "google_oauth_token_redirect_uri_rejected"),
+            ("Missing required parameter: client_id", "google_oauth_token_client_id_rejected"),
+            ("Invalid client_secret", "google_oauth_token_client_secret_rejected"),
+            ("Invalid authorization code", "google_oauth_authorization_code_rejected"),
+            ("Missing required parameter: unknown_field", "google_oauth_missing_required_parameter"),
+        )
+        for description, expected in cases:
+            class InvalidRequestOpener:
+                def open(self, request, timeout=0):
+                    raise HTTPError(
+                        request.full_url, 400, "Bad Request", {},
+                        io.BytesIO(json.dumps({
+                            "error": "invalid_request",
+                            "error_description": description,
+                        }).encode("utf-8")),
+                    )
+            connector = GoogleSheetsConnector(FakeCredentialStore(), InvalidRequestOpener())
+            with self.subTest(description=description), self.assertRaises(GoogleSheetsError) as raised:
+                connector._post_form(GOOGLE_TOKEN_ENDPOINT, {"client_id": CLIENT_ID}, 4096)
+            self.assertEqual(raised.exception.code, expected)
+            self.assertNotIn(description, str(raised.exception))
+            self.assertNotIn(CLIENT_ID, str(raised.exception))
+
     def test_callback_page_does_not_claim_token_storage_is_complete(self):
         connector = GoogleSheetsConnector(FakeCredentialStore(), FakeOpener(), callback_timeout=30)
         result = connector.start_connect(CLIENT_ID)
