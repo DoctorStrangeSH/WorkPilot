@@ -6,7 +6,7 @@ const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '../browser-extension/popup.js'), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function popup(url = 'https://example.com/orders?secret=remove#private') {
-  const nodes = Object.fromEntries(['status', 'share', 'retry', 'inspect', 'audit', 'auditStatus', 'inventory', 'datalens', 'asgard'].map(id => [id, {
+  const nodes = Object.fromEntries(['status', 'share', 'shareAll', 'retry', 'inspect', 'audit', 'auditStatus', 'inventory', 'datalens', 'asgard'].map(id => [id, {
     disabled: true, textContent: '', className: '', handlers: {},
     addEventListener(type, callback) { this.handlers[type] = callback; }
   }]));
@@ -87,6 +87,20 @@ test('explicit share strips URL secrets, bounds title and sends once', async () 
   assert.equal(p.calls[1].message.tab.title.length, 300);
   await p.reply(1, {ok: true});
   assert.equal(p.nodes.share.disabled, false);
+});
+
+test('sharing open tabs requires a click and sends sanitized metadata only', async () => {
+  const p = popup();
+  assert.equal(p.queries, 0);
+  await p.reply(0, hello);
+  assert.equal(p.nodes.shareAll.disabled, false);
+  await p.click('shareAll');
+  assert.equal(p.queries, 1);
+  assert.equal(p.calls[1].message.type, 'share_active_tab');
+  assert.equal(p.calls[1].message.tab.url, 'https://example.com/orders');
+  assert.equal(p.calls[1].message.tab.title.length, 300);
+  await p.reply(1, {ok:true});
+  assert.match(p.nodes.status.textContent, /Передано вкладок: 1/);
 });
 
 test('uncertain share is never resent by reconnect', async () => {
