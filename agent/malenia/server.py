@@ -238,7 +238,6 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                 self._send(200, {"proposal": proposal, "read_only": True, "source": "manual_input"})
                 return
 
-            if parsed.path in {
             if parsed.path == "/v1/integrations/google-sheets/analyze-active":
                 payload = self._read_json(4096)
                 if payload is None:
