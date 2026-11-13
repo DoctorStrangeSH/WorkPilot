@@ -178,7 +178,7 @@ test('active Google Sheets inspection forwards only spreadsheet path and active 
   await p.reply(1, {ok:true,type:'capabilities_inspected',persisted:false,
     tab_registered:true,page:{tables:[]}});
   assert.match(p.nodes.status.textContent, /Google Таблица обнаружена/);
-  assert.match(p.nodes.auditStatus.textContent, /автоматически обнаружена/);
+  assert.match(p.nodes.auditStatus.textContent, /активный документ и лист обнаружены/);
 });
 
 test('page inspection explains denied exact-origin permission without exposing browser error', async () => {
