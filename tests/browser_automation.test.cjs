@@ -618,9 +618,9 @@ test("confirmed open tabs are read in place without creating, navigating, closin
 test("selected-tab audit rejects a document replacement between identity check and table read", async () => {
   const api=runner();
   const records={
-    inventory:{id:31,url:"https://inventory.example/orders"},
-    datalens:{id:32,url:"https://analytics.example/reports"},
-    asgard:{id:33,url:"https://asgard.example/history"}
+    inventory:{id:31,url:"https://inventory.example/orders",status:"complete"},
+    datalens:{id:32,url:"https://analytics.example/reports",status:"complete"},
+    asgard:{id:33,url:"https://asgard.example/history",status:"complete"}
   };
   const chrome={
     tabs:{
@@ -665,9 +665,9 @@ test("selected-tab audit rejects a document replacement between identity check a
 test("selected-tab audit rejects host permission revocation before reconciliation", async () => {
   const api=runner();
   const records={
-    inventory:{id:41,url:"https://inventory.example/orders"},
-    datalens:{id:42,url:"https://analytics.example/reports"},
-    asgard:{id:43,url:"https://asgard.example/history"}
+    inventory:{id:41,url:"https://inventory.example/orders",status:"complete"},
+    datalens:{id:42,url:"https://analytics.example/reports",status:"complete"},
+    asgard:{id:43,url:"https://asgard.example/history",status:"complete"}
   };
   let permissionChecks=0;
   const chrome={
