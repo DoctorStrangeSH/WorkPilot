@@ -518,7 +518,20 @@ async fn connect_google_sheets(
     use tauri_plugin_opener::OpenerExt;
     app.opener().open_url(parsed.as_str(), None::<&str>)
         .map_err(|_| "Не удалось открыть системный браузер для Google OAuth".to_string())?;
-    Ok("Открыл системный браузер. Подтвердите доступ только для чтения и вернитесь в Malenia.".to_string())
+    Ok("Открыл системный браузер. Подтвердите доступ к чтению и редактированию Google Sheets и вернитесь в Malenia.".to_string())
+}
+
+#[tauri::command]
+async fn analyze_active_inventa(state: State<'_, AgentState>, spreadsheet_url: String) -> Result<Value, String> {
+    if spreadsheet_url.len() > 2048 || !spreadsheet_url.starts_with("https://docs.google.com/spreadsheets/d/") {
+        return Err("Отклонена ссылка: выберите таблицу Google Sheets.".to_string());
+    }
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        api_post_json(&token, "/v1/integrations/google-sheets/analyze-active",
+            serde_json::json!({"spreadsheet_url": spreadsheet_url}), Duration::from_secs(60))
+    }).await.map_err(|_| "Не удалось проанализировать ИНВенту".to_string())?
 }
 
 #[tauri::command]
@@ -639,7 +652,7 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .manage(AgentState::default())
         .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard,
-            request_browser_audit, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, get_skills, skill_action, suggest_skill, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, disconnect_google_sheets, preview_order, preview_order_batch])
+            request_browser_audit, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, get_skills, skill_action, suggest_skill, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, analyze_active_inventa, disconnect_google_sheets, preview_order, preview_order_batch])
         .run(tauri::generate_context!())
         .expect("error while running Malenia");
 }
