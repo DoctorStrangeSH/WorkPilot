@@ -229,7 +229,7 @@ inspectButton.addEventListener("click", async () => {
       /datalens|data.?lens/i.test(page.hostname+" "+summary.title) ? "DataLens" :
       /asgard|асгард/i.test(page.hostname+" "+summary.title) ? "Asgard" : "Неизвестный ресурс";
     const tableDetails = Array.isArray(summary.tables) ? summary.tables.map((table,index)=>
-      "\nТаблица +(index+1)+" ("+table.kind+", строк видно: "+table.visible_rows+
+      "\\nТаблица "+(index+1)+" ("+table.kind+", строк видно: "+table.visible_rows+
       (table.declared_rows===null?"":"/"+table.declared_rows)+"): "+table.columns.join(" · ")
     ).join("") : "";
     auditStatus.textContent = role+": "+(summary.login_required?"похоже, требуется вход": "страница доступна")+
