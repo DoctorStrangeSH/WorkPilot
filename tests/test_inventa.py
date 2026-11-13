@@ -42,6 +42,34 @@ class InventaAnalysisTests(unittest.TestCase):
         self.assertFalse(result["first_order_cross_check"]["verified"])
         self.assertFalse(result["first_order_cross_check"]["write_enabled"])
 
+    def test_recognizes_actual_inventa_export_with_unlabelled_status_column(self):
+        rows = [
+            ["Дата выгрузки", "Id заказа", "main_partner_code_original", "Стоимость",
+             "Наименование", "Комментарий", "Тикет", "", "Группировка заказов", "ВПР"],
+            ["2026-08-22", "PZV_FBS_RET_7720160", "PZV_FBS_RET_7720160", 29980,
+             "Кеды RALF RINGER", "", "https://ticket.example/1", "В СКК",
+             "170 ЧП вне ячейки ВП", "#N/A"],
+            ["2026-08-22", "5891405835", "5891405835", 24319,
+             "Кроссовки", "Найден, исключить", "", "Найден",
+             "170 ЧП вне ячейки ВП", "#N/A"],
+            ["2026-08-22", "6001908482", "6001908482", 5283,
+             "Комплект", "", "", "Аномалия", "170 ЧП вне ячейки ВП", "#N/A"],
+        ]
+        header, columns = detect_header(rows)
+        self.assertEqual(header, 0)
+        self.assertEqual(columns["date"], 0)
+        self.assertEqual(columns["order_id"], 1)
+        self.assertEqual(columns["partner"], 2)
+        self.assertEqual(columns["status"], 7)
+        self.assertEqual(columns["group"], 8)
+        report = analyze_inventa(rows, "ИНВента")
+        self.assertEqual(report["rows_analyzed"], 3)
+        self.assertEqual(report["first_order_preview"]["order_id"], "PZV_FBS_RET_7720160")
+        self.assertEqual(report["first_order_preview"]["status"], "В СКК")
+        self.assertEqual(report["first_order_preview"]["ticket"], "https://ticket.example/1")
+        self.assertEqual(report["status_counts"], {"В СКК": 1, "Найден": 1, "Аномалия": 1})
+        self.assertTrue(report["read_only"])
+
     def test_header_requires_all_core_columns(self):
         rows = [
             ["Комментарий", "Тикет", "Наименование", "Группировка"],
