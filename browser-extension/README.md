@@ -261,3 +261,8 @@ This relies on Chromium's `InjectionResult.documentId` metadata (available in mo
 The desktop Browser page now describes the confirmed-tab workflow rather than the superseded configured-URL/background-tab flow. Open the three logged-in resource tabs, map their HTTPS URLs in the extension popup, select and confirm the three candidates, then start the audit from the desktop. Only currently rendered, supported tables are included. The exact site headers and date formats remain an adapter contract until verified against the user's live sites.
 
 Run `node --test tests/browser_automation.test.cjs tests/browser_desktop_dispatch.test.cjs tests/navigation_ui.test.cjs` for selected-document replacement, dispatch and UI copy regression checks.
+
+
+## Header-only site schema diagnostic
+
+After confirming the three open tabs in the popup, **Проверить заголовки таблиц** can inspect up to eight visible HTML tables (or ARIA grids) per source and display only their column-header labels. It uses the same exact tab/path, granted-permission and main-frame `documentId` checks before and after each inspection. It does not read table body cells, order identifiers, search-field values, or full page text; the header labels remain in the popup and are not sent to the desktop/native host or persisted. This diagnostic is intended to establish the actual column names before a site adapter is approved. If no headers are visible, the adapter must not guess.
