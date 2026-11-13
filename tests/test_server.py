@@ -305,7 +305,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual(data["summary"], {"found": 1, "in_progress": 1, "manual_review": 0})
         self.assertEqual(data["results"][0]["source_row"], 10)
-        self.assertEqual(data["results"][1]["proposal"]["comment"], "Выдан")
+        self.assertIsNone(data["results"][1]["proposal"]["comment"])
         self.assertTrue(data["read_only"])
         self.assertFalse(data["write_enabled"])
         self.assertEqual(self.store.list_tasks(), [])
