@@ -24,13 +24,14 @@ class InventaAnalysisTests(unittest.TestCase):
 
     def test_analyzes_duplicates_statuses_and_invalid_rows_with_sheet_row_numbers(self):
         result = analyze_inventa(self.rows, "Тестовая ИНВента")
-        self.assertEqual(result["rows_analyzed"], 4)
+        self.assertEqual(result["rows_analyzed"], 3)
+        self.assertEqual(result["non_order_rows_skipped"], 1)
         self.assertEqual(result["sheet_title"], "Тестовая ИНВента")
         self.assertEqual(result["status_counts"], {"В работе": 1, "Аномалия": 1, "Потеря": 1})
         self.assertEqual(result["duplicate_order_ids"], [{"order_id": "LO-1", "rows": [3, 4]}])
         self.assertEqual(result["invalid_date_rows"], [5])
         self.assertEqual(result["invalid_cost_rows"], [5])
-        self.assertEqual(result["missing_required"], {"name": 1, "order_id": 1, "status": 1})
+        self.assertEqual(result["missing_required"], {"name": 0, "status": 0})
         self.assertTrue(result["read_only"])
         self.assertEqual(result["first_order_preview"], {
             "row": 3, "order_id": "LO-1", "partner_code": "P-1",
@@ -69,6 +70,38 @@ class InventaAnalysisTests(unittest.TestCase):
         self.assertEqual(report["first_order_preview"]["ticket"], "https://ticket.example/1")
         self.assertEqual(report["status_counts"], {"В СКК": 1, "Найден": 1, "Аномалия": 1})
         self.assertTrue(report["read_only"])
+
+    def test_real_archive_layout_infers_blank_product_name_and_normalizes_serial_date(self):
+        rows = [
+            ["Дата выгрузки", "Id заказа", "main_partner_code_original", "Стоимость",
+             "", "Комментарий", "Тикет", "", "Группировка заказов", "ВПР"],
+            [46256, "PVZ_FBS_RET_7720160", "PVZ_FBS_RET_7720160", 29980,
+             "Кеды RALF RINGER", "В СКК 2026/10/27 00:26:29",
+             "FA254276C66034580038", "Исключение",
+             "170 ЧП вне ячейки ВП", "#N/A"],
+            [46256, "", "", "", "", "Итого", "", "", "", ""],
+            [46256, "5891405835", "5891405835", 24319,
+             "Кроссовки", "Найден, исключить", "",
+             "Найден, исключить", "170 ЧП вне ячейки ВП", "#N/A"],
+        ]
+        header, columns = detect_header(rows)
+        self.assertEqual(header, 0)
+        self.assertEqual(columns["name"], 4)
+        self.assertEqual(columns["status"], 7)
+        report = analyze_inventa(rows, "22.08 (Архив)")
+        self.assertEqual(report["rows_analyzed"], 2)
+        self.assertEqual(report["non_order_rows_skipped"], 1)
+        first = report["first_order_preview"]
+        self.assertEqual(first["row"], 2)
+        self.assertEqual(first["order_id"], "PVZ_FBS_RET_7720160")
+        self.assertEqual(first["partner_code"], "PVZ_FBS_RET_7720160")
+        self.assertEqual(first["date"], "2026-08-22")
+        self.assertEqual(first["cost"], "29980")
+        self.assertEqual(first["name"], "Кеды RALF RINGER")
+        self.assertEqual(first["status"], "Исключение")
+        self.assertEqual(first["ticket"], "FA254276C66034580038")
+        self.assertEqual(report["missing_ticket_rows"], [4])
+        self.assertEqual(report["invalid_date_rows"], [])
 
     def test_header_requires_all_core_columns(self):
         rows = [
