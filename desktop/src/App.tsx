@@ -237,10 +237,12 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
     }catch(error){setSheetError(String(error));}
     finally{setBusy(false);}
   };
+  const sheetTabs=tabs.filter(tab=>/^https:\/\/docs\.google\.com\/spreadsheets\/d\/[A-Za-z0-9_-]{10,256}\/edit\/?(?:\?gid=\d{1,16})?$/.test(tab.url));
+  const hasDiscoveredSheet=sheetTabs.length>0;
+
   const analyzeActiveInventa=async()=>{
     setBusy(true);setSheetError("");setSheetNotice("");setInventaReport(null);
     try{
-      const sheetTabs=tabs.filter(tab=>/^https:\/\/docs\.google\.com\/spreadsheets\/d\/[A-Za-z0-9_-]{10,256}\/edit\/?(?:\?gid=\d{1,16})?$/.test(tab.url));
       const namedInventa=sheetTabs.filter(tab=>/inventa|инвент/i.test(tab.title));
       // Prefer the most recently discovered named sheet when multiple copies are open.
       const candidates=namedInventa.length?namedInventa:sheetTabs;
@@ -265,6 +267,11 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
     google_oauth_redirect_uri_mismatch:"Google отклонил адрес возврата. Проверь тип OAuth-клиента: нужен Desktop app.",
     google_oauth_unsupported_grant_type:"Google отклонил тип OAuth-обмена. Проверь настройки Desktop OAuth-клиента.",
     google_oauth_invalid_scope:"Google не выдал запрошенный доступ только для чтения Google Sheets.",
+    google_reauthorization_required:"Google отклонил обмен кода или ранее выданный доступ. Повтори подключение; токен не был подтверждён.",
+    google_refresh_response_invalid:"Google вернул некорректный ответ обновления доступа. Требуется повторная авторизация.",
+    google_network_unavailable:"Не удалось связаться с Google для завершения авторизации. Проверь интернет и повтори подключение.",
+    google_request_timeout:"Google не ответил вовремя. Повтори подключение.",
+    google_response_invalid:"Google вернул некорректный ответ. Доступ не подтверждён.",
     oauth_response_invalid:"Google вернул неполный или неожиданный ответ. Токен не сохранён.",
     oauth_connection_failed:"Ответ Google получен, но обмен кода на токен или безопасное сохранение не завершились. Повтори подключение.",
     google_request_failed:"Google отклонил запрос обмена. Проверь Client ID и настройки OAuth consent screen.",
@@ -318,10 +325,12 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
           <>
           <div className="google-read-form">
             <div className="google-actions">
-              <button className="primary" disabled={busy} onClick={()=>void analyzeActiveInventa()}>{busy?"Анализируем…":"Обработать первый заказ"}</button>
+              <button className="primary" disabled={busy||!hasDiscoveredSheet} onClick={()=>void analyzeActiveInventa()}>{busy?"Анализируем…":"Обработать первый заказ"}</button>
               <button className="secondary" disabled={busy} onClick={()=>void disconnectSheets()}>Отключить Google</button>
             </div>
-            <small>Маления автоматически определяет последнюю обнаруженную таблицу Google Sheets и активный лист, распознаёт заголовки и показывает первый заказ. Для обнаружения достаточно проверить структуру активной вкладки в расширении — ручной ввод ссылок не нужен. Исходная таблица доступна только для чтения и не изменяется.</small>
+            <small>{hasDiscoveredSheet
+              ? "Обнаружена Google Таблица. Malenia автоматически выберет последнюю найденную ИНВенту и прочитает её через Google Sheets API. Источник доступен только для чтения."
+              : "Сначала открой ИНВенту в Яндекс Браузере и нажми в расширении «Проверить структуру активной вкладки». Ссылка вручную не нужна."}</small>
           </div>
           {inventaReport?<div className="sheet-preview">
             <div className="sheet-preview-head"><b>{inventaReport.source.spreadsheet_title} · {inventaReport.source.sheet_title}</b><small>{inventaReport.analysis.rows_analyzed} строк</small></div>
