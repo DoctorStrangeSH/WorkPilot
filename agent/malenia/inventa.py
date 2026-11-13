@@ -128,7 +128,17 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
             no_ticket.append(offset)
         if group:
             groups[group] += 1
-        records.append({"row": offset, "order_id": order_id, "status": status})
+        records.append({
+            "row": offset,
+            "order_id": order_id,
+            "partner_code": "" if _blank(cell(row, "partner")) else str(cell(row, "partner")).strip(),
+            "date": "" if _blank(cell(row, "date")) else str(cell(row, "date")).strip(),
+            "cost": "" if _blank(cell(row, "cost")) else str(cell(row, "cost")).strip(),
+            "name": "" if _blank(cell(row, "name")) else str(cell(row, "name")).strip(),
+            "ticket": "" if _blank(cell(row, "ticket")) else str(cell(row, "ticket")).strip(),
+            "status": status,
+            "group": group,
+        })
 
     duplicates = [{"order_id": key, "rows": positions}
                   for key, positions in ids.items() if len(positions) > 1]
@@ -137,6 +147,14 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
         "header_row": header_index + 1,
         "columns": {key: index + 1 for key, index in columns.items()},
         "rows_analyzed": len(records),
+        # Bounded read-only preview; not a verified cross-system decision.
+        "first_order_preview": records[0] if records else None,
+        "first_order_cross_check": {
+            "state": "needs_external_sources",
+            "verified": False,
+            "missing_sources": ["DataLens", "Asgard"],
+            "write_enabled": False,
+        } if records else None,
         "status_counts": dict(statuses),
         "top_groups": [{"name": name, "count": count} for name, count in groups.most_common(10)],
         "missing_required": dict(missing),
