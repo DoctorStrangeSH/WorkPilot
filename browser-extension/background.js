@@ -115,7 +115,7 @@ async function pollDesktopAudit() {
     const roles = ["inventory", "datalens", "asgard"];
     if (!selected?.browserSessionOnly || !Number.isFinite(selected.confirmedAt) ||
         Date.now() - selected.confirmedAt > 30 * 60 * 1000 ||
-        !confirmed || Object.keys(confirmed).sort().join(",") !== roles.join(",")) return;
+        !confirmed || Object.keys(confirmed).sort().join(",") !== [...roles].sort().join(",")) return;
     const rawTargets = {};
     const selectedTabs = {};
     for (const role of roles) {
