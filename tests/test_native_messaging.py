@@ -123,6 +123,33 @@ class NativeMessagingProtocolTests(unittest.TestCase):
             self.assertFalse(handle_message({"type": "inspect_active_page", **payload},
                                             self.store)["ok"])
 
+    def test_capability_snapshot_is_bounded_and_ephemeral(self):
+        before_tabs = self.store.list_browser_tabs()
+        before_events = self.store.list_events()
+        page = {"url": "https://example.com/orders?session=secret",
+                "title": "Orders", "table_headers": ["Cargo place", "Status"],
+                "search_labels": ["Search cargo place"], "has_aria_grid": True,
+                "virtualized": False, "login_required": False}
+        result = handle_message({"type": "inspect_capabilities", "page": page}, self.store)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["type"], "capabilities_inspected")
+        self.assertFalse(result["persisted"])
+        self.assertNotIn("session", json.dumps(result))
+        self.assertEqual(self.store.list_browser_tabs(), before_tabs)
+        self.assertEqual(self.store.list_events(), before_events)
+        invalid = [
+            {**page, "raw_text": "private"},
+            {**page, "table_headers": ["x"] * 41},
+            {**page, "search_labels": ["x"] * 31},
+            {**page, "has_aria_grid": "yes"},
+            {**page, "url": "file:///private"},
+        ]
+        for candidate in invalid:
+            rejected = handle_message({"type": "inspect_capabilities",
+                                       "page": candidate}, self.store)
+            self.assertFalse(rejected["ok"])
+            self.assertEqual(rejected["error"], "invalid_capability_snapshot")
+
     def test_reconcile_site_tables_remains_ephemeral(self):
         snapshots = {
             "inventory": {
