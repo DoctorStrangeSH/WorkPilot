@@ -261,7 +261,9 @@ inspectButton.addEventListener("click", async () => {
     }
     if (response.type!=="capabilities_inspected" || response.persisted!==false ||
         !response.page || !Array.isArray(response.page.tables)) throw bridgeError("host_protocol");
-    const role = /inventa|инвент/i.test(page.hostname+" "+summary.title) ? "ИНВента" :
+    const role = page.hostname === "docs.google.com" &&
+      /\/spreadsheets\/d\/[A-Za-z0-9_-]{10,256}\/edit\/?$/.test(page.pathname) ? "Google Sheets" :
+      /inventa|инвент/i.test(page.hostname+" "+summary.title) ? "ИНВента" :
       /datalens|data.?lens/i.test(page.hostname+" "+summary.title) ? "DataLens" :
       /asgard|асгард/i.test(page.hostname+" "+summary.title) ? "Asgard" : "Неизвестный ресурс";
     const tableDetails = Array.isArray(summary.tables) ? summary.tables.map((table,index)=>
