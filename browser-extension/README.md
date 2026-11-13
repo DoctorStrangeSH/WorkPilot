@@ -205,19 +205,32 @@ While a desktop-initiated audit is running, the extension now reports **only** f
 The popup still shows its own more detailed but nonidentifying diagnostic reason codes. The desktop shows the most recent active source and counts, not live per-record statuses. The existing summary of the latest successfully reconciled run remains separate; a failed run does not replace that summary. This does not enable corporate writes or prove the private sites have been tested.
 
 
-## Open-tab discovery foundation (experimental, not yet wired)
+## Open-tab discovery (experimental, user-confirmed selection only)
 
-`browser-extension/tab_discovery.js` contains a deterministic, side-effect-free
-candidate matcher for the next milestone. It accepts the browser's current tab
-metadata, three **explicit user-confirmed HTTPS origin/path mappings**, and the
-set of granted exact-origin host-permission patterns. It returns zero/one/many
-candidate states per role; duplicate matches are marked `ambiguous` and are
-never auto-selected. Query strings and fragments are stripped from displayed
-candidate URLs. Unknown origins, lookalike hostnames, non-HTTPS URLs, embedded
-credentials, and tabs outside the configured path prefix are ignored.
+The extension popup now contains a separate **Найти уже открытые рабочие вкладки**
+flow. The user enters the HTTPS page URLs they recognize as ИНВента, DataLens
+and Asgard. Malenia stores only each URL's origin and path prefix, discarding
+query strings and fragments, then queries the current open tabs and the host
+permissions already granted to the extension. It does not request new access
+silently. A missing permission is reported with instructions to grant access
+through the browser's extension settings.
 
-This helper does **not** query the browser, persist mappings, request permissions,
-bind a live document identity, read page content, or trigger an audit. It is a
-tested foundation only; the popup and desktop workflow still use the existing
-configured-URL audit path until the full tab/document lifecycle is integrated.
-Run `node --test tests/tab_discovery.test.cjs` to validate the matching rules.
+Candidates are matched only against those explicit mappings and exact-origin
+permission patterns. A duplicate match is marked ambiguous and every candidate
+must be selected manually. All three roles must be selected before confirmation.
+Immediately before confirmation, Malenia fetches each selected tab again and
+revalidates its current URL, origin, path and host permission. A closed or
+navigated tab, or revoked permission, invalidates the selection.
+
+Confirmed tab IDs and sanitized locations are held in `chrome.storage.session`
+only; the mapping origin/path prefixes are stored in local extension storage.
+Session references disappear when the browser session ends. No page content is
+read by this flow, no duplicate tabs are opened, and no corporate records are
+changed. **The current audit engine is not yet wired to consume these selected
+tab references.** Any future reader must repeat the tab/URL/permission checks
+immediately before injecting a read into the selected tab; it must not trust a
+stored tab ID alone.
+
+Run `node --test tests/tab_discovery.test.cjs tests/browser_open_tab_discovery.test.cjs`
+to validate matching, duplicate selection, permission revocation, closed tabs,
+navigation changes and query/fragment sanitization.
