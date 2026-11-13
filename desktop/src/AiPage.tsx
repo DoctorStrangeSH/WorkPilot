@@ -126,17 +126,24 @@ export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCrea
     }catch{setFeedbackNotice("Не удалось сохранить оценку навыка.");}
   };
   return <section className="page ai-page" aria-labelledby="ai-title">
-    <div className="page-head"><div><div className="eyebrow">ЛОКАЛЬНЫЙ ПОМОЩНИК</div><h1 id="ai-title">Ассистент Malenia</h1><p>Общайтесь с Шерлоком, разбирайте данные и готовьте рабочие планы.</p></div></div>
+    <div className="page-head"><div><div className="eyebrow">ВАШ ИИ-ПОМОЩНИК</div><h1 id="ai-title">Маления · Шерлок</h1><p>Расскажите, что хотите сделать. Подключение к рабочим сайтам настраивается отдельно.</p></div></div>
 
     <div className="assistant-status-card">
       <div className="assistant-avatar"><BrainCircuit size={23}/></div>
       <div className="assistant-status-copy"><b>{!connected?"Локальное ядро остановлено":!status?"Проверяем подключение":!status.available?"Шерлок пока недоступен":status.models.length?"Шерлок готов к работе":"Нужно установить модель"}</b>
-        <p>{!connected?"Запустите агента на главной странице.":!status?"Проверяем локальный движок…":!status.available?"Запустите локальный движок или проверьте его состояние в настройках.":status.models.length?"Можно задавать вопросы, разбирать вставленный текст и работать с подтверждёнными заметками.":"Выберите модель в настройках ниже."}</p>
+        <p>{!connected?"Откройте настройки и запустите локальный агент.":!status?"Проверяем локальный движок…":!status.available?"Локальный агент работает, но движок Ollama не отвечает. Нажмите «Запустить Шерлока» ниже.":status.models.length?"Модель доступна для диалога. Доступ к рабочим сайтам подключается отдельно.":"Движок работает, но модель ещё не установлена. Скачайте её ниже."}</p>
       </div>
       <span className={connected&&status?.available&&status.models.length?"assistant-status-dot ready":"assistant-status-dot"} aria-hidden="true"/>
     </div>
 
-    <div className="assistant-capability-note"><ShieldCheck size={15}/><span><b>Важно о доступе к ресурсам:</b> Google Sheets, DataLens и Asgard пока не подключены напрямую к Malenia. Сейчас можно анализировать текст и файлы, которые вы сами передали, а также подтверждённые локальные заметки. Не вставляйте пароли, токены и другие секреты.</span></div>
+    {connected&&(!status?.available||!status.models.length)?<div className="ai-controls" role="group" aria-label="Восстановление Шерлока">
+      <button className="primary" disabled={busy} onClick={()=>void startModel()}>Запустить Шерлока</button>
+      <button className="secondary" disabled={busy} onClick={()=>void installSherlock()}>Установить модель Шерлока</button>
+      <button className="secondary" disabled={busy} onClick={()=>void refresh()}>Проверить ещё раз</button>
+      <small>Установка скачивает выбранную модель ({modelLabel(installModel)}); нужен интернет и свободное место.</small>
+    </div>:null}
+
+    <div className="assistant-capability-note"><ShieldCheck size={15}/><span><b>Рабочая среда:</b> через Browser Bridge можно передать открытые вкладки. Шерлок пока не управляет сайтами и не получает их содержимое автоматически; подключение действий находится в разработке. Пароли и токены не вставляйте.</span></div>
 
     {error ? <p className="alert error" role="alert">{error}</p> : null}
     {setupStatus?<p role="status" className="alert success">{setupStatus}</p>:null}
@@ -175,9 +182,9 @@ export function AiPage({connected,onTaskCreated}: {connected: boolean;onTaskCrea
 
     <div className="prompt-suggestions" aria-label="Примеры запросов">
       <span>Быстрый старт</span>
-      <button type="button" onClick={()=>setDraft("Помоги составить пошаговый план проверки заказа по данным, которые я вставлю.")}>План проверки заказа</button>
-      <button type="button" onClick={()=>setDraft("Разбери эту таблицу и кратко объясни, что означают её столбцы.")}>Разобрать таблицу</button>
-      <button type="button" onClick={()=>setDraft("Сравни два фрагмента данных, которые я вставлю, и найди расхождения.")}>Найти расхождения</button>
+      <button type="button" onClick={()=>setDraft("Помоги мне организовать рабочий день и расставить приоритеты.")}>Спланировать день</button>
+      <button type="button" onClick={()=>setDraft("Какие действия ты сейчас можешь выполнить сама и какие подключения для этого нужны?")}>Что ты умеешь?</button>
+      <button type="button" onClick={()=>setDraft("Составь план автоматизации моих повторяющихся задач.")}>Автоматизировать рутину</button>
     </div>
 
     <div className="panel ai-messages" role="log" aria-live="polite" aria-label="Переписка с Шерлоком">
