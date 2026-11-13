@@ -155,10 +155,10 @@ function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];a
     job?.status==="failed"?"Проверка завершилась с ошибкой":
     job?.status==="expired"?"Расширение не ответило вовремя":"Задачи пока нет";
   return <section className="page">
-    <div className="page-head"><div><div className="eyebrow">BROWSER BRIDGE · PREVIEW</div><h1>Браузер</h1><p>Browser Bridge: ручная передача вкладки и автоматическое чтение трёх разрешённых HTTPS-страниц.</p></div><span className="browser-state"><i className={connected?"":"idle"}/>{connected?"Агент подключён":"Сначала запустите агента"}</span></div>
-    <div className="browser-safety"><div><ShieldCheck size={19}/></div><section><b>Приватность по умолчанию</b><p>Расширение не читает cookies, пароли и историю браузера. Для разрешённого поиска оно может вводить грузоместо только в строго распознанное поле. Отдельная команда может считать ограниченный видимый текст страницы, а автоматический обход — последовательно прочитать три явно разрешённых домена. Тексты не сохраняются. Экспериментальный поиск и сверка выполняются по разрешённым страницам, но на реальных корпоративных сайтах ещё не проверены. Изменение статусов не подключено.</p></section></div>
+    <div className="page-head"><div><div className="eyebrow">BROWSER BRIDGE · PREVIEW</div><h1>Браузер</h1><p>Browser Bridge: выбор уже открытых вкладок ИНВенты, DataLens и Asgard и безопасная сверка видимых таблиц.</p></div><span className="browser-state"><i className={connected?"":"idle"}/>{connected?"Агент подключён":"Сначала запустите агента"}</span></div>
+    <div className="browser-safety"><div><ShieldCheck size={19}/></div><section><b>Приватность по умолчанию</b><p>Расширение не читает cookies, пароли и историю браузера. Для проверки открой три рабочие страницы, укажи их адреса в popup расширения, найди вкладки и подтверди каждую вручную. Аудит читает только ограниченные видимые ячейки таблиц в выбранных вкладках, не извлекает полный текст страницы и не сохраняет строки заказов. Вкладки не открываются повторно, не переключаются и не закрываются. Поддерживаются только известные заголовки таблиц без пагинации; совместимость с реальными корпоративными страницами ещё не подтверждена. Статусы не изменяются.</p></section></div>
     <div className="panel browser-panel" data-testid="browser-audit-runner">
-      <div className="panel-head"><div><h3>Проверить заказы автоматически</h3><p>Только чтение. Расширение использует ранее настроенные сайты и разрешения.</p></div>
+      <div className="panel-head"><div><h3>Проверить заказы автоматически</h3><p>Только чтение. Используются три вкладки, предварительно найденные и подтверждённые в popup расширения.</p></div>
         <button className="primary" disabled={!connected||sending||job?.status==="pending"||job?.status==="running"} onClick={()=>void requestAudit()}>
           <Play size={15}/>{sending?"Отправляем…":"Запустить проверку"}</button>
       </div>
@@ -171,7 +171,7 @@ function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];a
           {job.failed_role?<span>Ошибка при чтении: <b>{{inventory:"ИНВента",datalens:"DataLens",asgard:"Asgard"}[job.failed_role]}</b></span>:null}
         </div>:null}
       {requestError?<p className="alert error" role="alert">{requestError}</p>:null}
-      <p className="note">Для выполнения требуется запущенный браузер с установленным Browser Bridge, предварительно настроенными тремя HTTPS-страницами и разрешённым доступом. При отсутствии расширения команда истечёт; повторный запуск возможен вручную.</p>
+      <p className="note">Перед запуском открой ИНВенту, DataLens и Asgard в Яндекс Браузере. В popup Malenia Browser Bridge укажи HTTPS-адреса, нажми «Найти вкладки», выбери все три и подтверди их. Затем запусти проверку здесь. Выбор действует до 30 минут в текущем сеансе браузера. Если вкладка изменится, разрешение будет отозвано или таблица не поддерживается, источник завершится с пометкой «требует внимания».</p>
     </div>
     <div className="panel browser-panel" data-testid="browser-audit-summary">
       <div className="panel-head"><div><h3>Последняя автоматическая сверка</h3><p>Только итоговые числа · без грузомест и содержимого сайтов</p></div></div>
@@ -186,7 +186,7 @@ function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];a
     <div className="panel browser-panel"><div className="panel-head"><div><h3>Вкладки, которыми вы поделились</h3><p>Последние 20 локальных записей</p></div><span className="live">{tabs.length} SHARED</span></div>
       {tabs.length?<div className="browser-tab-list">{tabs.map(tab=><article className="browser-tab" key={tab.id}><span className="browser-tab-icon"><Globe2 size={16}/></span><div className="browser-tab-copy"><b>{tab.title}</b><a href={tab.url} target="_blank" rel="noreferrer">{tab.url}</a><small>Передано вручную · {time(tab.shared_at)}</small></div></article>)}</div>:<Empty title="Пока нет переданных вкладок" text="Установите Malenia Browser Bridge, затем откройте нужную страницу и нажмите кнопку расширения «Поделиться вкладкой»."/>}
     </div>
-    <div className="note"><CircleHelp size={15}/>Native Messaging работает только после регистрации расширения и хоста. Поддержка проверяется на установленной версии Яндекс Браузера; автоматический доступ к вкладкам не включён.</div>
+    <div className="note"><CircleHelp size={15}/>Native Messaging работает только после регистрации расширения и хоста. Совместимость извлечения таблиц с реальными страницами ИНВенты, DataLens и Asgard ещё нужно проверить на твоих авторизованных вкладках.</div>
   </section>;
 }
 
