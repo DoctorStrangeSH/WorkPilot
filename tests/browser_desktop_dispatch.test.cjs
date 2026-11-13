@@ -26,6 +26,7 @@ test('browser bridge polls local desktop queue without any remote permission',()
 test('desktop audit requires fresh confirmed open tabs and exact current locations',()=>{
   assert.match(source,/MaleniaAutomation\.normalizeTargets\(rawTargets\)/);
   assert.match(source,/selectedTabs/);
+  assert.match(source,/exactGetSearch:true,selectedTabs/);
   assert.match(source,/confirmedAt/);
   assert.match(source,/30 \* 60 \* 1000/);
   assert.match(source,/currentUrl\.pathname !== entry\.path/);
