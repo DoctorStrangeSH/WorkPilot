@@ -268,6 +268,22 @@ var MaleniaAutomation = (() => {
         const currentKey = finalUrl.href;
         if (visited.has(currentKey)) throw new Error("pagination_cycle");
         visited.add(currentKey);
+        let selectedDocumentId = null;
+        if (selectedTab) {
+          const identity = await chromeApi.scripting.executeScript({
+            target: {tabId},
+            func: () => ({href:location.href})
+          });
+          const frame = identity?.[0];
+          let identityUrl;
+          try { identityUrl = new URL(frame?.result?.href || ""); } catch { identityUrl = null; }
+          if (!frame || frame.frameId !== 0 || typeof frame.documentId !== "string" ||
+              !frame.documentId || !identityUrl || identityUrl.origin !== selectedTab.origin ||
+              identityUrl.pathname !== selectedTab.path) {
+            throw new Error("selected_document_changed");
+          }
+          selectedDocumentId = frame.documentId;
+        }
         const results = await chromeApi.scripting.executeScript({
           target: {tabId},
           func: (resourceRole, includeText) => {
@@ -343,11 +359,29 @@ var MaleniaAutomation = (() => {
           args: selectedTab ? [role, false] : [role]
         });
         if (selectedTab) {
-          const afterRead = await chromeApi.tabs.get(tabId);
-          const afterUrl = new URL(afterRead.url || "");
+          const readFrame = results?.[0];
+          if (!readFrame || readFrame.frameId !== 0 ||
+              readFrame.documentId !== selectedDocumentId) {
+            throw new Error("selected_document_changed");
+          }
+          const [afterRead, afterIdentity] = await Promise.all([
+            chromeApi.tabs.get(tabId),
+            chromeApi.scripting.executeScript({
+              target: {tabId},
+              func: () => ({href:location.href})
+            })
+          ]);
+          const afterUrl = new URL(afterRead?.url || "");
+          const finalFrame = afterIdentity?.[0];
+          let documentUrl;
+          try { documentUrl = new URL(finalFrame?.result?.href || ""); }
+          catch { documentUrl = null; }
           if (afterUrl.origin !== selectedTab.origin || afterUrl.pathname !== selectedTab.path ||
+              !finalFrame || finalFrame.frameId !== 0 ||
+              finalFrame.documentId !== selectedDocumentId || !documentUrl ||
+              documentUrl.origin !== selectedTab.origin || documentUrl.pathname !== selectedTab.path ||
               !await chromeApi.permissions.contains({origins:[selectedTab.origin + "/*"]})) {
-            throw new Error("navigation_outside_allowed_origin");
+            throw new Error("selected_document_changed");
           }
         }
         const snapshot = results?.[0]?.result;
