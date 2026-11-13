@@ -458,6 +458,71 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
                 return self._access_token
         return self._refresh_access_token()
 
+    def read_active_sheet(self, spreadsheet_url: str, gid: str | None = None) -> dict[str, Any]:
+        """Resolve an explicitly shared Google Sheets tab and read its used grid."""
+        from urllib.parse import parse_qs, urlsplit
+        try:
+            parsed = urlsplit(spreadsheet_url)
+            match = re.fullmatch(r"/spreadsheets/d/([A-Za-z0-9_-]{10,256})/edit/?", parsed.path)
+            query = parse_qs(parsed.query)
+            spreadsheet_id = match.group(1) if match else ""
+            selected_gid = gid or (query.get("gid", [None])[0])
+            if (parsed.scheme != "https" or parsed.hostname != "docs.google.com"
+                    or parsed.username or parsed.password or parsed.fragment
+                    or (selected_gid is not None and not re.fullmatch(r"\d{1,16}", selected_gid))):
+                raise ValueError
+        except (ValueError, TypeError):
+            raise GoogleSheetsError("invalid_google_sheets_url") from None
+        if not spreadsheet_id:
+            raise GoogleSheetsError("invalid_google_sheets_url")
+        token = self._get_access_token()
+        metadata_url = (f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}"
+                        "?fields=properties.title,sheets.properties")
+        request = Request(metadata_url, headers={"Authorization": f"Bearer {token}",
+                         "Accept": "application/json"}, method="GET")
+        metadata = self._request_json(request, _MAX_SHEETS_RESPONSE_BYTES)
+        sheets = metadata.get("sheets")
+        if not isinstance(sheets, list) or not sheets or len(sheets) > 100:
+            raise GoogleSheetsError("google_sheets_metadata_invalid")
+        selected = None
+        for item in sheets:
+            properties = item.get("properties", {}) if isinstance(item, dict) else {}
+            if selected_gid is not None and str(properties.get("sheetId")) == selected_gid:
+                selected = properties
+                break
+        if selected_gid is None:
+            # If the browser did not provide a gid, select only a tab with a
+            # recognizable INVenta header signature; prefer non-archive tabs.
+            from .inventa import detect_header
+            candidates = sorted(
+                [item.get("properties", {}) for item in sheets if isinstance(item, dict)],
+                key=lambda p: ("архив" in str(p.get("title", "")).casefold(),
+                               int(p.get("index", 9999))),
+            )
+            for properties in candidates[:20]:
+                title = properties.get("title")
+                if not isinstance(title, str) or not title:
+                    continue
+                sample = self.read_values(spreadsheet_id, f"'{title.replace(chr(39), chr(39)*2)}'!A1:Z12")
+                try:
+                    detect_header(sample["values"])
+                    selected = properties
+                    break
+                except ValueError:
+                    continue
+        if not isinstance(selected, dict):
+            raise GoogleSheetsError("google_sheets_tab_not_detected")
+        title = selected.get("title")
+        sheet_id = selected.get("sheetId")
+        if not isinstance(title, str) or not isinstance(sheet_id, int):
+            raise GoogleSheetsError("google_sheets_metadata_invalid")
+        escaped_title = title.replace("'", "''")
+        values = self.read_values(spreadsheet_id, f"'{escaped_title}'!A:Z")
+        return {"spreadsheet_id": spreadsheet_id, "spreadsheet_title": metadata.get("properties", {}).get("title", ""),
+                "sheet_title": title, "sheet_id": sheet_id, "range": values["range"],
+                "values": values["values"], "read_only": False,
+                "source": "explicit_browser_tab", "gid_selected": selected_gid is not None}
+
     def write_values(self, spreadsheet_id: str, range_a1: str, values: list[list[Any]]) -> dict[str, Any]:
         """Write literal values to an exact range; callers must enforce approval."""
         if not isinstance(spreadsheet_id, str) or _SPREADSHEET_ID_RE.fullmatch(spreadsheet_id) is None:
