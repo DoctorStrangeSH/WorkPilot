@@ -100,3 +100,5 @@ var MaleniaTabDiscovery = (() => {
 
   return Object.freeze({discover, normalizeMapping});
 })();
+
+if (typeof module !== "undefined" && module.exports) module.exports = MaleniaTabDiscovery;
