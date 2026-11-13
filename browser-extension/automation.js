@@ -62,7 +62,7 @@ var MaleniaAutomation = (() => {
     "search_origin_mismatch", "unexpected_document", "empty_page",
     "unmapped_paginated_table", "pagination_cycle", "pagination_limit",
     "changed_table_schema", "too_many_rows", "native_host_rejected",
-    "page_timeout", "tab_closed", "unsupported_search_form",
+    "page_timeout", "tab_closed", "permissions_missing", "selected_document_changed", "unsupported_search_form",
     "dynamic_search_ui", "unsupported_dynamic_search",
     "dynamic_search_no_result_update", "dynamic_search_unchanged_table"
   ]);
