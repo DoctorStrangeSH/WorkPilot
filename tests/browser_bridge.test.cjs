@@ -14,12 +14,13 @@ function popup(url = 'https://example.com/orders?secret=remove#private', options
   const calls = [], timers = new Map();
   let sequence = 0, queries = 0;
   const requestedOrigins = [];
+  let pageErrorPending = options.pageError;
   const chrome = {
     runtime: {lastError: null, sendNativeMessage(host, message, callback) { calls.push({host, message, callback}); }},
     tabs: {async query() { queries++; return [{id: 7, title: 'x'.repeat(400), url}]; }},
     permissions: {async getAll() {return {origins: []};}, async request(value) {requestedOrigins.push(value); return options.permissionGranted !== false;}},
     storage: {local: {async get() {return {};}, async set() {}}, session: {async set() {}, async get() {return {};}}},
-    scripting: {async executeScript() {if (options.pageError) throw new Error(options.pageError); return [{result:{title:'Orders',table_headers:['Order ID','Status'],tables:[{kind:'html-table',columns:['Order ID','Status'],visible_rows:3,declared_rows:3}],search_labels:['Search'],has_aria_grid:true,virtualized:false,login_required:false}}];}}
+    scripting: {async executeScript() {if (pageErrorPending) {const error=pageErrorPending; pageErrorPending=null; throw new Error(error);} return [{result:{title:'Orders',table_headers:['Order ID','Status'],tables:[{kind:'html-table',columns:['Order ID','Status'],visible_rows:3,declared_rows:3}],search_labels:['Search'],has_aria_grid:true,virtualized:false,login_required:false}}];}}
   };
   vm.runInNewContext(source, {document: {getElementById: id => nodes[id], createElement: () => ({addEventListener(){},setAttribute(){},appendChild(){}})}, chrome, URL, MaleniaTabDiscovery,
     crypto: {randomUUID: () => 'request-id'},
