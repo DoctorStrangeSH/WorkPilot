@@ -266,7 +266,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
 
   const analyzeActiveInventa=async()=>{
     setBusy(true);setSheetError("");setSheetNotice("");setInventaReport(null);
-    const activeTab=tabs.find(tab=>/https:\/\/docs\\.google\\.com\/spreadsheets\/d\//.test(tab.url));
+    const activeTab=tabs.find(tab=>/https:\/\/docs\.google\.com\/spreadsheets\/d\//.test(tab.url));
     const spreadsheetUrl=activeTab?.url||"https://docs.google.com/spreadsheets/d/1zPgIA_Au6J8_NEAPsTZo1TLkfFJYUTYKxtIwUWRHS30/edit";
     try{
       const result=await invoke<any>("analyze_active_inventa",{spreadsheetUrl});
