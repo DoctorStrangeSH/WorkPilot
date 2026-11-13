@@ -40,7 +40,12 @@ function setup({tabs,origins,changeOnGet,storedMappings}={}) {
       }
     },
     permissions:{async getAll(){return {origins:[...granted]};},async contains({origins}){return origins.every(x=>granted.includes(x));}},
-    scripting:{async executeScript({target,func}){\n      const tab=currentTabs.find(x=>x.id===target.tabId);\n      if(func.toString().includes("tables = []")) return [{frameId:0,documentId:"doc-"+target.tabId,result:{origin:new URL(tab.url).origin,href:tab.url,tables:[["cargo_place","inventory_date"]]}}];\n      return [{frameId:0,documentId:"doc-"+target.tabId,result:{href:tab.url}}];\n    }},\n    storage:{
+    scripting:{async executeScript({target,func}){
+      const tab=currentTabs.find(x=>x.id===target.tabId);
+      if(func.toString().includes("tables = []")) return [{frameId:0,documentId:"doc-"+target.tabId,result:{origin:new URL(tab.url).origin,href:tab.url,tables:[["cargo_place","inventory_date"]]}}];
+      return [{frameId:0,documentId:"doc-"+target.tabId,result:{href:tab.url}}];
+    }},
+    storage:{
       local:{async get(key){return {[key]:local[key]};},async set(value){Object.assign(local,value);}},
       session:{async set(value){Object.assign(session,value);},async get(key){return {[key]:session[key]};}}
     }
