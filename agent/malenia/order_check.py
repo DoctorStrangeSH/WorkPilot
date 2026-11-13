@@ -152,11 +152,26 @@ def evaluate_order(
     if asgard_status == "Выдан":
         return {
             "decision": DECISION_ASGARD,
-            "proposed_status": "В работе",
-            "comment": "Выдан",
-            "color": "orange",
+            "proposed_status": "Выдан",
+            "comment": None,
+            "color": "green",
             "reason_code": "asgard_issued",
             "evidence": base_evidence,
+            "write_enabled": False,
+        }
+
+    # The Asgard card can expose two independent statuses (order and box).
+    # Only the exact, explicitly supplied pair is accepted; partial snapshots
+    # stay in manual review instead of inferring the missing status.
+    statuses = asgard_record.get("statuses")
+    if isinstance(statuses, list) and len(statuses) == 2 and statuses == ["В работе", "В работе"]:
+        return {
+            "decision": DECISION_ASGARD,
+            "proposed_status": "В работе",
+            "comment": None,
+            "color": "orange",
+            "reason_code": "asgard_both_statuses_in_progress",
+            "evidence": {**base_evidence, "statuses": statuses},
             "write_enabled": False,
         }
 
