@@ -33,6 +33,14 @@ class InventaAnalysisTests(unittest.TestCase):
         self.assertEqual(result["missing_required"], {"name": 1, "order_id": 1, "status": 1})
         self.assertTrue(result["read_only"])
 
+    def test_header_requires_all_core_columns(self):
+        rows = [
+            ["Комментарий", "Тикет", "Наименование", "Группировка"],
+            ["x", "https://ticket", "Товар", "Группа"],
+        ]
+        with self.assertRaisesRegex(ValueError, "headers"):
+            detect_header(rows)
+
     def test_rejects_unrecognized_headers_and_oversized_input(self):
         with self.assertRaisesRegex(ValueError, "headers"):
             analyze_inventa([["A", "B"], ["x", "y"]])
