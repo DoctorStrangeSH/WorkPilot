@@ -192,11 +192,29 @@ inspectButton.addEventListener("click", async () => {
       const clean = value => String(value || "").replace(/\s+/g," ").trim().slice(0,120);
       const headers = Array.from(document.querySelectorAll("table thead th, [role=columnheader]"))
         .filter(visible).map(el=>clean(el.innerText || el.getAttribute("aria-label"))).filter(Boolean).slice(0,40);
+      // Capture schema only, never cell values: this lets us map real DataLens/Asgard
+      // layouts without guessing selectors or transferring order data during diagnosis.
+      const tables = [];
+      for (const node of Array.from(document.querySelectorAll("table,[role=grid],[role=table]")).filter(visible).slice(0,12)) {
+        const isGrid = node.getAttribute("role") === "grid" || node.getAttribute("role") === "table";
+        const headNodes = isGrid
+          ? Array.from(node.querySelectorAll('[role=columnheader]'))
+          : Array.from(node.querySelectorAll("thead th")).length
+            ? Array.from(node.querySelectorAll("thead th"))
+            : Array.from(node.querySelector("tr")?.querySelectorAll("th") || []);
+        const columns = headNodes.filter(visible).map(el=>clean(el.innerText || el.getAttribute("aria-label"))).filter(Boolean).slice(0,20);
+        if (!columns.length) continue;
+        const rowSelector = isGrid ? '[role=row]' : 'tbody tr';
+        const visibleRows = Array.from(node.querySelectorAll(rowSelector)).filter(visible).length;
+        const declaredRows = node.getAttribute("aria-rowcount");
+        tables.push({kind:isGrid?"aria-grid":"html-table",columns,visible_rows:Math.min(visibleRows,1000),
+          declared_rows:declaredRows && /^\\d+$/.test(declaredRows)?Math.min(Number(declaredRows),1000000):null});
+      }
       const labels = Array.from(document.querySelectorAll("input:not([type=hidden]), [role=searchbox]"))
         .filter(visible).map(el=>clean(el.getAttribute("aria-label") || el.getAttribute("placeholder") ||
           (el.labels && Array.from(el.labels).map(x=>x.innerText).join(" ")))).filter(Boolean).slice(0,30);
       const body = document.body ? document.body.innerText.slice(0,5000).toLowerCase() : "";
-      return {title:document.title.slice(0,300),table_headers:headers,search_labels:labels,
+      return {title:document.title.slice(0,300),table_headers:headers,tables,search_labels:labels,
         has_aria_grid:!!document.querySelector('[role="grid"],[role="table"]'),
         virtualized:!!document.querySelector('[aria-rowcount], [data-virtualized="true"], .ag-virtual-list-viewport'),
         login_required:/sign in|log in|войти|авторизац|вход в аккаунт/.test(body)};
@@ -210,10 +228,14 @@ inspectButton.addEventListener("click", async () => {
     const role = /inventa|инвент/i.test(page.hostname+" "+summary.title) ? "ИНВента" :
       /datalens|data.?lens/i.test(page.hostname+" "+summary.title) ? "DataLens" :
       /asgard|асгард/i.test(page.hostname+" "+summary.title) ? "Asgard" : "Неизвестный ресурс";
+    const tableDetails = Array.isArray(summary.tables) ? summary.tables.map((table,index)=>
+      "\\nТаблица "+(index+1)+" ("+table.kind+", строк видно: "+table.visible_rows+
+      (table.declared_rows===null?"":"/"+table.declared_rows)+"): "+table.columns.join(" · ")
+    ).join("") : "";
     auditStatus.textContent = role+": "+(summary.login_required?"похоже, требуется вход": "страница доступна")+
-      "; заголовков: "+summary.table_headers.length+"; полей поиска: "+summary.search_labels.length+
+      "; таблиц: "+(summary.tables?.length||0)+"; полей поиска: "+summary.search_labels.length+
       (summary.has_aria_grid?"; есть ARIA grid":"")+(summary.virtualized?"; вероятна виртуализация":"")+
-      ". Сырые данные не сохранялись.";
+      tableDetails+"\\nПереданы только заголовки и размеры, значения ячеек не читались.";
     auditStatus.className = "status ok";
     setStatus("Структурная диагностика завершена. Это ещё не проверка заказов.", "ok");
   } catch (error) {
