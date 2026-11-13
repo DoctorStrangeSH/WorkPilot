@@ -8,7 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { PermissionsPage, type PermissionRequest, type PermissionDecision } from "./PermissionsPage";
 import {
   Activity, ArrowUpRight, BrainCircuit, Check, ChevronDown, CircleHelp,
-  Clock3, Cpu, Database, Globe2, LayoutDashboard, ListTodo, ClipboardCheck,
+  Clock3, Cpu, Database, Globe2, ListTodo,
   LoaderCircle, LockKeyhole, MemoryStick, MoreHorizontal, Play, Plus, Plug,
   Search, Settings2, ShieldCheck, Sparkles, Square, X
 } from "lucide-react";
@@ -27,7 +27,7 @@ const bytes=(n:number)=>n ? (n/1024/1024/1024).toFixed(1)+" ГБ" : "—";
 const time=(v:string)=>{try{return new Intl.DateTimeFormat("ru-RU",{hour:"2-digit",minute:"2-digit"}).format(new Date(v));}catch{return v;}};
 
 export default function App(){
-  const [page,setPage]=useState<Page>("overview");
+  const [page,setPage]=useState<Page>("ai");
   const [data,setData]=useState<Dashboard|null>(null);
   const [busy,setBusy]=useState(false);
   const permissionDecisionBusy=useRef(false);
@@ -67,13 +67,9 @@ export default function App(){
       <div className="workspace"><div className="workspace-avatar">M</div><div><b>Моё пространство</b><small>Локальный компьютер</small></div><ChevronDown size={15}/></div>
       <div className="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
       <nav>
-        <Nav icon={<LayoutDashboard/>} label="Главная" active={page==="overview"} onClick={()=>setPage("overview")}/>
         <Nav icon={<Sparkles/>} label="Ассистент" active={page==="ai"} onClick={()=>setPage("ai")}/>
+        <Nav icon={<Globe2/>} label="Моя рабочая среда" active={page==="browser"} onClick={()=>setPage("browser")}/>
         <Nav icon={<ListTodo/>} label="Задания" active={page==="tasks"} count={data?.tasks.length} onClick={()=>setPage("tasks")}/>
-        <Nav icon={<ClipboardCheck/>} label="Проверка заказа" active={page==="orders"} onClick={()=>setPage("orders")}/>
-        <Nav icon={<ListTodo/>} label="Список заказов" active={page==="order_batch"} onClick={()=>setPage("order_batch")}/>
-        <Nav icon={<Globe2/>} label="Браузер" active={page==="browser"} onClick={()=>setPage("browser")}/>
-        <Nav icon={<Plug/>} label="Источники" active={page==="sources"} onClick={()=>setPage("sources")}/>
       </nav>
       <div className="nav-label separated">ЗНАНИЯ И БЕЗОПАСНОСТЬ</div>
       <nav>
@@ -125,7 +121,7 @@ export default function App(){
         {page==="knowledge"&&<KnowledgePage connected={connected}/>}
         {page==="skills"&&<SkillsPage connected={connected}/>}
         {page==="ai"&&<AiPage connected={connected} onTaskCreated={()=>void refresh()}/>}
-        {page==="settings"&&<section className="page"><div className="page-head"><div><div className="eyebrow">КОНФИГУРАЦИЯ</div><h1>Настройки</h1><p>Состояние локальной среды и параметры запуска.</p></div></div><div className="settings-grid"><Setting icon={<Database/>} title="Локальный агент" text="Python Runtime слушает только localhost." value={connected?"Запущен":"Остановлен"} action={<button className={connected?"danger":"primary"} onClick={connected?stopAgent:runAgent} disabled={busy}>{connected?<Square size={14}/>:<Play size={14}/>} {connected?"Остановить":"Запустить"}</button>}/><Setting icon={<ShieldCheck/>} title="Приватность" text="Секреты браузера не извлекаются. API доступен только локально." value="Local-first"/><Setting icon={<Cpu/>} title="Среда разработки" text="Windows · Python 3.11+ · SQLite · Tauri 2" value="Версия 0.6.0"/><Setting icon={<Globe2/>} title="Будущие подключения" text="Ручная передача вкладок Яндекс Браузера доступна через Browser Bridge. Шерлок поддерживает локальную модель и включаемый интернет-поиск." value="Доступны"/></div></section>}
+        {page==="settings"&&<section className="page"><div className="page-head"><div><div className="eyebrow">КОНФИГУРАЦИЯ</div><h1>Настройки</h1><p>Подключение Малении и защита ваших данных.</p></div></div><div className="settings-grid"><Setting icon={<Database/>} title="Локальный агент" text="Работает только на вашем компьютере. Состояние Шерлока и установка модели находятся в разделе «Ассистент»." value={connected?"Запущен":"Остановлен"} action={<button className={connected?"danger":"primary"} onClick={connected?stopAgent:runAgent} disabled={busy}>{connected?<Square size={14}/>:<Play size={14}/>} {connected?"Остановить":"Запустить"}</button>}/><Setting icon={<ShieldCheck/>} title="Приватность" text="Доступ к рабочим страницам предоставляется через расширение браузера. Важные изменения требуют подтверждения." value="Локально"/><Setting icon={<Globe2/>} title="Рабочая среда" text="Откройте одноимённый раздел и расширение Malenia в Яндекс Браузере, чтобы передать список вкладок." value="Browser Bridge"/></div></section>}
       </div>
       <footer className="statusbar"><span><i className={connected?"":"idle"}/>{connected?"Локальный агент активен":"Локальный агент остановлен"}</span><span><LockKeyhole size={12}/>Локальная среда　·　Malenia 0.6.0</span></footer>
     </main>
