@@ -143,6 +143,8 @@ This is a generic capability, **not evidence** that actual ИНВента, DataL
 
 ## Opt-in exact cargo search (experimental)
 
+When exact cargo search is enabled, the read-only walker now consults the DataLens results **before visiting Asgard**. It skips an Asgard lookup for a cargo place only when an exact `main_partner_code_original` match has a valid `OK` scan from `SC ID 101366` on a calendar day strictly later than the supplied inventory cutoff. Earlier scans, same-day scans, unsuccessful scans, other SC IDs, invalid timestamps or missing evidence continue to Asgard. If every cargo has qualifying evidence, no Asgard tab is opened; the reconciliation engine still receives an empty Asgard table and independently verifies the final decision. This optimization currently applies to the experimental browser-table pipeline, not yet the Google Sheets OAuth first-order card.
+
 A new opt-in checkbox `Искать каждое грузоместо автоматически` enables a **read-only navigation-only** search mode. After collecting the current inventory table, the extension takes at most **20 unique cargo codes** and independently visits DataLens and Asgard once per code. It accepts only conservative identifiers containing ASCII letters/digits, dot, underscore or hyphen. Search never uses a guessed selector or executes a page-provided script.
 
 The limited generic adapter recognizes **exactly one** native HTML form on the corresponding site with:

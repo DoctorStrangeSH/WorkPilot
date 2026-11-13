@@ -72,6 +72,43 @@ var MaleniaAutomation = (() => {
   }
 
   const MAX_SEARCHES = 20;
+  // Optimization only: the Python reconciliation engine remains authoritative.
+  // We may avoid sending a cargo code to Asgard only with complete, exact
+  // evidence of a later successful scan at the approved SC.
+  function asgardSearchKeys(inventory, datalens) {
+    if (!inventory || !datalens || !Array.isArray(inventory.rows) ||
+        !Array.isArray(datalens.rows) || !Array.isArray(inventory.columns) ||
+        !Array.isArray(datalens.columns)) return null;
+    const invFields = ["cargo_place", "inventory_date"];
+    const scanFields = ["main_partner_code_original", "sc_id", "result", "scanned_at"];
+    if (!invFields.every(x => inventory.columns.includes(x)) ||
+        !scanFields.every(x => datalens.columns.includes(x))) return null;
+    const col = (table, field) => table.columns.indexOf(field);
+    const unresolved = [];
+    for (const row of inventory.rows) {
+      if (!Array.isArray(row)) return null;
+      const cargo = row[col(inventory, "cargo_place")];
+      const cutoff = row[col(inventory, "inventory_date")];
+      if (typeof cargo !== "string" || !/^[A-Za-z0-9_.-]{1,128}$/.test(cargo) ||
+          typeof cutoff !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(cutoff) ||
+          !Number.isFinite(Date.parse(cutoff)) ||
+          new Date(cutoff).toISOString().slice(0, 10) !== cutoff) return null;
+      const matching = datalens.rows.filter(scan => Array.isArray(scan) &&
+        scan[col(datalens, "main_partner_code_original")] === cargo &&
+        scan[col(datalens, "sc_id")] === "101366" &&
+        scan[col(datalens, "result")] === "OK");
+      const valid = matching.every(scan => {
+        const raw = scan[col(datalens, "scanned_at")];
+        return typeof raw === "string" &&
+          /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/.test(raw) &&
+          Number.isFinite(Date.parse(raw));
+      });
+      if (!valid || !matching.some(scan => scan[col(datalens, "scanned_at")].slice(0, 10) > cutoff)) {
+        unresolved.push(cargo);
+      }
+    }
+    return unresolved;
+  }
   async function exactGetSearch(chromeApi, tabId, role, cargo, origin) {
     if (!["datalens", "asgard"].includes(role) ||
         typeof cargo !== "string" || !/^[A-Za-z0-9_.-]{1,128}$/.test(cargo)) {
@@ -385,15 +422,23 @@ var MaleniaAutomation = (() => {
     for (const role of ROLES) {
       await onProgress({phase: "reading", role, results: [...results]});
       try {
+        const inventoryKeys = snapshots.inventory?.rows?.map(row =>
+          row[snapshots.inventory.columns.indexOf("cargo_place")]);
         const searchKeys = role !== "inventory" && options.exactGetSearch ?
-          snapshots.inventory?.rows?.map(row =>
-            row[snapshots.inventory.columns.indexOf("cargo_place")]) : null;
+          (role === "asgard" ? asgardSearchKeys(snapshots.inventory, snapshots.datalens) ??
+            inventoryKeys : inventoryKeys) : null;
         if (role !== "inventory" && options.exactGetSearch &&
-            (!Array.isArray(searchKeys) || !searchKeys.length ||
+            (!Array.isArray(searchKeys) || (role !== "asgard" && !searchKeys.length) ||
              searchKeys.length > MAX_SEARCHES || new Set(searchKeys).size !== searchKeys.length ||
              searchKeys.some(key => typeof key !== "string" ||
                !/^[A-Za-z0-9_.-]{1,128}$/.test(key)))) {
           throw new Error("invalid_inventory_search_keys");
+        }
+        if (role === "asgard" && Array.isArray(searchKeys) && !searchKeys.length) {
+          snapshots.asgard = {columns:["cargo_place", "status"],rows:[]};
+          results.push({role, status:"read", characters:0, pages:0});
+          await onProgress({phase:"reading",role,results:[...results]});
+          continue;
         }
         const keys = searchKeys || [null];
         let table = null, characters = 0, pages = 0;
@@ -453,5 +498,5 @@ var MaleniaAutomation = (() => {
     await onProgress(summary);
     return summary;
   }
-  return {ROLES, MAX_TEXT, MAX_PAGES, MAX_SEARCHES, normalizeTargets, origins, nextPage, exactGetSearch, reactiveSearch, reasonCode, waitLoaded, run};
+  return {ROLES, MAX_TEXT, MAX_PAGES, MAX_SEARCHES, normalizeTargets, origins, nextPage, exactGetSearch, reactiveSearch, asgardSearchKeys, reasonCode, waitLoaded, run};
 })();

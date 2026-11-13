@@ -235,7 +235,7 @@ test('ARIA grid extractor rejects known rowcount larger than rendered rows', () 
   assert.match(source, /\[role="columnheader"\]/);
 });
 
-test('opted-in GET search automatically queries both sites for inventory cargo codes', async () => {
+test('opted-in GET search skips Asgard for confirmed post-inventory scans', async () => {
   const api=runner(), chrome=fakeBrowser();
   const originalGet=chrome.tabs.get, urls=[];
   chrome.tabs.update=async (id,{url})=>{
@@ -273,16 +273,16 @@ test('opted-in GET search automatically queries both sites for inventory cargo c
     calls.push(msg);
     if(msg.type==='reconcile_site_tables') {
       assert.equal(msg.snapshots.datalens.rows.length,2);
-      assert.equal(msg.snapshots.asgard.rows.length,2);
+      assert.equal(msg.snapshots.asgard.rows.length,0);
       return {ok:true,type:'site_tables_reconciled',read_only:true,write_enabled:false,
         persisted:false,total:2,summary:{found:2,in_progress:0,manual_review:0}};
     }
     return {ok:true,type:'page_inspected',persisted:false,characters:msg.page.text.length};
   },async()=>{}, {exactGetSearch:true});
   assert.equal(result.phase,'reconciled');
-  assert.equal(urls.length,4);
-  assert.equal(chrome.stats.created,5);
-  assert.equal(chrome.stats.removed,5);
+  assert.equal(urls.length,2);
+  assert.equal(chrome.stats.created,3);
+  assert.equal(chrome.stats.removed,3);
   assert.equal(calls.filter(m=>m.type==='reconcile_site_tables').length,1);
   assert.ok(urls.every(url=>new URL(url).searchParams.size===1));
 });
@@ -519,9 +519,26 @@ test('full audit falls back from GET forms to reactive search per cargo',async()
     return {ok:true,type:'page_inspected',persisted:false,characters:message.page.text.length};
   },async()=>{},{exactGetSearch:true});
   assert.equal(result.phase,'reconciled');
-  assert.equal(reactive,2);
+  assert.equal(reactive,1);
   assert.equal(native,1);
-  assert.equal(chrome.stats.removed,3);
+  assert.equal(chrome.stats.removed,2);
+});
+
+test('Asgard search includes only cargo without a later successful scan at SC 101366', () => {
+  const api=runner();
+  const inventory={columns:['cargo_place','inventory_date'],rows:[
+    ['LATER','2026-08-22'],['EARLIER','2026-08-22'],
+    ['WRONG-SC','2026-08-22'],['SAME-DAY','2026-08-22']]};
+  const datalens={columns:['main_partner_code_original','sc_id','result','scanned_at'],rows:[
+    ['LATER','101366','OK','2026-08-23T09:00:00'],
+    ['EARLIER','101366','OK','2026-08-21T09:00:00'],
+    ['WRONG-SC','777','OK','2026-08-24T09:00:00'],
+    ['SAME-DAY','101366','OK','2026-08-22T22:00:00']]};
+  assert.deepEqual(Array.from(api.asgardSearchKeys(inventory,datalens)),
+    ['EARLIER','WRONG-SC','SAME-DAY']);
+  datalens.rows.push(['LATER','101366','OK','not-a-date']);
+  assert.ok(Array.from(api.asgardSearchKeys(inventory,datalens)).includes('LATER'));
+  assert.equal(api.asgardSearchKeys(inventory,{columns:['code'],rows:[]}),null);
 });
 
 test('unrelated result-table mutations do not count as successful reactive search',async()=>{
