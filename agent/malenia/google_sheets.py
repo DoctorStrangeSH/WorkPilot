@@ -40,7 +40,7 @@ from .secret_store import SecretStoreError, WindowsCredentialStore
 
 _MAX_TOKEN_RESPONSE_BYTES = 64 * 1024
 _MAX_SHEETS_RESPONSE_BYTES = 2 * 1024 * 1024
-_MAX_SHEETS_CELLS = 50_000
+_MAX_SHEETS_CELLS = 100_000
 _MAX_RANGE_LENGTH = 200
 _SPREADSHEET_ID_RE = re.compile(r"^[A-Za-z0-9_-]{10,256}$")
 _REFRESH_TOKEN_KEY = "google-sheets-refresh-token"
@@ -599,7 +599,7 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
         if not isinstance(values, list) or any(not isinstance(row, list) for row in values):
             raise GoogleSheetsError("google_sheets_values_invalid")
         cell_count = sum(len(row) for row in values)
-        if len(values) > 1000 or cell_count > _MAX_SHEETS_CELLS:
+        if len(values) > 5000 or cell_count > _MAX_SHEETS_CELLS:
             raise GoogleSheetsError("google_sheets_range_too_large")
         return {
             "range": payload.get("range", range_a1.strip()),
