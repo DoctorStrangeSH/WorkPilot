@@ -802,3 +802,10 @@ Current limitations found while inspecting actual code:
 - Removed the stale verification key/status logic and orphaned sheet preview state. Sources UI now reflects only the actual OAuth authorization state and does not imply that a manually selected range was verified.
 - Commit: `f7683b1a`.
 - User expectation remains: one-click, automatic investigation; no manual order IDs, spreadsheet ranges, Excel downloads, or edits to source tables.
+
+
+## 2026-11-13 — CI test maintenance
+
+- Latest failing Desktop run on `99d2bc9b` was not a build failure: stale UI test expected a removed "Разобрать таблицу" quick-start prompt and old text. Updated `tests/ai_ui.test.cjs` to assert the current "Что ты умеешь?" prompt and exact current composer text. Commit: `3b11f381`.
+- Python tests on `3b11f381` passed. Desktop checks and Windows installer were still in progress at last check (`43397577529`, `43397577605`); verify before claiming green.
+- Product direction unchanged: investigation-only, no spreadsheet edits. Browser Bridge currently still requires manually entering three URLs in its popup and opens background duplicate tabs; this conflicts with the user's requested automatic use of already-open Yandex tabs. Replace this with explicit user-initiated capability discovery over already-open tabs (safe metadata only) and remove manual three-URL requirement before calling it ready.
