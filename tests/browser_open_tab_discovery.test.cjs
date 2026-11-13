@@ -17,7 +17,7 @@ function makeNode() {
 }
 function setup({tabs,origins,changeOnGet,storedMappings}={}) {
   const ids=["status","share","shareAll","retry","inspect","auditStatus","discoverTabs",
-    "confirmTabs","discoveryResults","discoveryStatus","mapInventory","mapDatalens","mapAsgard"];
+    "confirmTabs","inspectMappedTabs","discoveryResults","discoveryStatus","mapInventory","mapDatalens","mapAsgard"];
   const nodes=Object.fromEntries(ids.map(id=>[id,makeNode()]));
   const nativeCalls=[], local={}, session={};
   let currentTabs=(tabs||[
@@ -39,10 +39,10 @@ function setup({tabs,origins,changeOnGet,storedMappings}={}) {
         return {...tab};
       }
     },
-    permissions:{async getAll(){return {origins:[...granted]};}},
-    storage:{
+    permissions:{async getAll(){return {origins:[...granted]};},async contains({origins}){return origins.every(x=>granted.includes(x));}},
+    scripting:{async executeScript({target,func}){\n      const tab=currentTabs.find(x=>x.id===target.tabId);\n      if(func.toString().includes("tables = []")) return [{frameId:0,documentId:"doc-"+target.tabId,result:{origin:new URL(tab.url).origin,href:tab.url,tables:[["cargo_place","inventory_date"]]}}];\n      return [{frameId:0,documentId:"doc-"+target.tabId,result:{href:tab.url}}];\n    }},\n    storage:{
       local:{async get(key){return {[key]:local[key]};},async set(value){Object.assign(local,value);}},
-      session:{async set(value){Object.assign(session,value);}}
+      session:{async set(value){Object.assign(session,value);},async get(key){return {[key]:session[key]};}}
     }
   };
   vm.runInNewContext(source,{document:{getElementById:id=>nodes[id],createElement:()=>makeNode()},
@@ -118,3 +118,13 @@ test("query strings and fragments are not stored in confirmed tab references",as
   const saved=JSON.stringify(p.session.maleniaConfirmedOpenTabs);
   assert.doesNotMatch(saved,/secret|\?/);
 });
+test("header-only diagnostics read confirmed tabs in place and never inspect table rows",async()=>{
+  const p=setup();await p.connect();await p.discover();await p.chooseAll();await p.confirm();
+  await p.nodes.inspectMappedTabs.handlers.click();await flush();
+  assert.match(p.nodes.discoveryStatus.textContent,/только заголовки/);
+  assert.equal(p.nodes.discoveryStatus.className,"status ok");
+  assert.equal(p.nodes.discoveryResults.children.length,3);
+  assert.match(p.nodes.discoveryResults.children[0].children[1].textContent,/cargo_place/);
+  assert.match(p.nodes.discoveryResults.children[0].children[1].textContent,/inventory_date/);
+});
+
