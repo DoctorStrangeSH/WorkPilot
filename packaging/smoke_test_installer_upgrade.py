@@ -71,27 +71,40 @@ def main():
                 return json.load(response)
 
         executable = target / 'resources/malenia-agent/malenia-agent.exe'
-        def start():
-            process = subprocess.Popen([str(executable), '--port', str(port)], env=env,
-                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            for _ in range(150):
-                if process.poll() is not None:
-                    raise RuntimeError('Installed agent exited')
-                try:
-                    runtime = api('/v1/runtime')
-                    assert runtime['release'] == release
-                    assert 'task_idempotency' in runtime['capabilities']
-                    return process
-                except (URLError, OSError):
-                    time.sleep(0.1)
-            process.terminate()
-            process.wait(timeout=10)
-            raise RuntimeError('Installed agent did not become ready')
-
         def stop(process):
             if process.poll() is None:
                 process.terminate()
-            process.wait(timeout=10)
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=10)
+
+        def start():
+            process = subprocess.Popen([str(executable), '--port', str(port)], env=env,
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                for _ in range(150):
+                    if process.poll() is not None:
+                        raise RuntimeError('Installed agent exited before becoming ready')
+                    try:
+                        runtime = api('/v1/runtime')
+                    except (URLError, OSError):
+                        time.sleep(0.1)
+                        continue
+                    if runtime.get('release') != release:
+                        raise AssertionError(
+                            f'Installed agent release mismatch: expected {release}, '
+                            f'got {runtime.get("release")!r}')
+                    if 'task_idempotency' not in runtime.get('capabilities', []):
+                        raise AssertionError('Installed agent is missing task_idempotency')
+                    return process
+                raise RuntimeError('Installed agent did not become ready')
+            except BaseException:
+                # A failed readiness/version assertion must never orphan the
+                # frozen process or keep its DLLs locked during temp cleanup.
+                stop(process)
+                raise
 
         process = start()
         body = {'title': 'Preserve reviewed task', 'description': 'Fixture only', 'request_id': str(uuid4())}
