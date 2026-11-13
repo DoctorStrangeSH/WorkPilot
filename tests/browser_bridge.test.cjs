@@ -7,7 +7,7 @@ const MaleniaTabDiscovery = require('../browser-extension/tab_discovery.js');
 const source = fs.readFileSync(path.join(__dirname, '../browser-extension/popup.js'), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function popup(url = 'https://example.com/orders?secret=remove#private') {
-  const nodes = Object.fromEntries(['status', 'share', 'shareAll', 'retry', 'inspect', 'auditStatus', 'discoverTabs', 'confirmTabs', 'discoveryResults', 'discoveryStatus', 'mapInventory', 'mapDatalens', 'mapAsgard'].map(id => [id, {
+  const nodes = Object.fromEntries(['status', 'share', 'shareAll', 'retry', 'inspect', 'auditStatus', 'discoverTabs', 'confirmTabs', 'inspectMappedTabs', 'discoveryResults', 'discoveryStatus', 'mapInventory', 'mapDatalens', 'mapAsgard'].map(id => [id, {
     disabled: true, textContent: '', className: '', handlers: {},
     addEventListener(type, callback) { this.handlers[type] = callback; }
   }]));
@@ -17,7 +17,7 @@ function popup(url = 'https://example.com/orders?secret=remove#private') {
     runtime: {lastError: null, sendNativeMessage(host, message, callback) { calls.push({host, message, callback}); }},
     tabs: {async query() { queries++; return [{id: 7, title: 'x'.repeat(400), url}]; }},
     permissions: {async getAll() {return {origins: []};}},
-    storage: {local: {async get() {return {};}, async set() {}}, session: {async set() {}}},
+    storage: {local: {async get() {return {};}, async set() {}}, session: {async set() {}, async get() {return {};}}},
     scripting: {async executeScript() {return [{result:{title:'Orders',table_headers:['Order ID','Status'],search_labels:['Search'],has_aria_grid:true,virtualized:false,login_required:false}}];}}
   };
   vm.runInNewContext(source, {document: {getElementById: id => nodes[id], createElement: () => ({addEventListener(){},setAttribute(){},appendChild(){}})}, chrome, URL, MaleniaTabDiscovery,
