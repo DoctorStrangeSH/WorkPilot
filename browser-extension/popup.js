@@ -2,6 +2,7 @@ const HOST_NAME = "com.malenia.browser";
 const RESPONSE_TIMEOUT_MS = 5000;
 const statusNode = document.getElementById("status");
 const shareButton = document.getElementById("share");
+const shareAllButton = document.getElementById("shareAll");
 const retryButton = document.getElementById("retry");
 const inspectButton = document.getElementById("inspect");
 const auditButton = document.getElementById("audit");
@@ -16,6 +17,7 @@ function setStatus(message, kind = "") {
 
 function updateButtons() {
   shareButton.disabled = busy || !connected;
+  shareAllButton.disabled = busy || !connected;
   inspectButton.disabled = busy || !connected;
   auditButton.disabled = busy || !connected;
   retryButton.disabled = busy;
@@ -97,6 +99,39 @@ async function connect() {
 }
 
 retryButton.addEventListener("click", () => void connect());
+function sanitizedTab(tab) {
+  if (typeof tab?.url !== "string") return null;
+  let page;
+  try { page = new URL(tab.url); } catch { return null; }
+  if (!["http:", "https:"].includes(page.protocol) || page.username || page.password) return null;
+  return {title: typeof tab.title === "string" ? tab.title.slice(0, 300) : "", url: page.origin + page.pathname};
+}
+shareAllButton.addEventListener("click", async () => {
+  if (busy || !connected) return;
+  busy = true;
+  updateButtons();
+  setStatus("Передаём список вкладок без содержимого страниц…");
+  let sent = 0;
+  let attempted = false;
+  try {
+    const tabs = await chrome.tabs.query({});
+    const candidates = tabs.map(sanitizedTab).filter(Boolean).slice(0, 100);
+    if (!candidates.length) { setStatus("Не нашлось обычных HTTP(S)-вкладок."); return; }
+    for (const tab of candidates) {
+      attempted = true;
+      const response = await sendNativeMessage({type:"share_active_tab",request_id:crypto.randomUUID(),tab});
+      if (!response?.ok) throw bridgeError("protocol");
+      sent += 1;
+    }
+    setStatus(`Передано вкладок: ${sent}. Откройте «Браузер» в Malenia.`, "ok");
+  } catch (error) {
+    if (attempted) connected = false;
+    setStatus(`Передано ${sent} вкладок. ${diagnostic(error, attempted)}`, "error");
+  } finally {
+    busy = false;
+    updateButtons();
+  }
+});
 shareButton.addEventListener("click", async () => {
   if (busy || !connected) return;
   busy = true;
