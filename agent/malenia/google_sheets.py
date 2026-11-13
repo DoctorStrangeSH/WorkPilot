@@ -186,7 +186,7 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
                         return
                     attempt.code = code
                     attempt.event.set()
-                    GoogleSheetsConnector._response(self, 200, "Malenia получила ответ Google. Можно закрыть эту вкладку и вернуться в приложение.")
+                    GoogleSheetsConnector._response(self, 200, "Ответ Google принят. Malenia проверяет разрешение и сохраняет доступ. Вернитесь в приложение.")
 
                 def do_GET(self) -> None:
                     attempt = session["attempt"]
@@ -402,11 +402,20 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
             try:
                 parsed_error = json.loads(raw_error.decode("utf-8"))
                 if isinstance(parsed_error, dict):
-                    error_code = parsed_error.get("error")
+                    candidate = parsed_error.get("error")
+                    if isinstance(candidate, str) and re.fullmatch(r"[a-z_]{1,64}", candidate):
+                        error_code = candidate
             except (UnicodeDecodeError, json.JSONDecodeError):
                 pass
             if error_code == "invalid_grant":
                 raise GoogleSheetsError("google_reauthorization_required", status) from error
+            if request.full_url == GOOGLE_TOKEN_ENDPOINT and error_code in {
+                "invalid_client", "unauthorized_client", "invalid_request",
+                "redirect_uri_mismatch", "unsupported_grant_type", "invalid_scope",
+            }:
+                # Keep Google's stable OAuth error category, never its raw body,
+                # description, request data, authorization code, or credentials.
+                raise GoogleSheetsError("google_oauth_" + error_code, status) from error
             raise GoogleSheetsError("google_request_failed", status) from error
         except URLError as error:
             raise GoogleSheetsError("google_network_unavailable") from error
