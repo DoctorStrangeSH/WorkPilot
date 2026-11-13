@@ -28,7 +28,7 @@ class FakeGoogleSheets:
         self.calls.append(("connect", client_id, client_secret))
         return {"status": "authorizing", "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth?fixture"}
 
-    def read_values(self, spreadsheet_id, range_a1):
+    def read_values(self, spreadsheet_id, range_a1, value_render_option="UNFORMATTED_VALUE"):
         self.calls.append(("read", spreadsheet_id, range_a1))
         return {"range": range_a1, "values": self.values, "read_only": True}
 
