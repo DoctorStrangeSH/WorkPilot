@@ -155,10 +155,10 @@ function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];a
     job?.status==="failed"?"Проверка завершилась с ошибкой":
     job?.status==="expired"?"Расширение не ответило вовремя":"Задачи пока нет";
   return <section className="page">
-    <div className="page-head"><div><div className="eyebrow">BROWSER BRIDGE · PREVIEW</div><h1>Браузер</h1><p>Browser Bridge: выбор уже открытых вкладок ИНВенты, DataLens и Asgard и безопасная сверка видимых таблиц.</p></div><span className="browser-state"><i className={connected?"":"idle"}/>{connected?"Агент подключён":"Сначала запустите агента"}</span></div>
-    <div className="browser-safety"><div><ShieldCheck size={19}/></div><section><b>Приватность по умолчанию</b><p>Расширение не читает cookies, пароли и историю браузера. Для проверки открой три рабочие страницы, укажи их адреса в popup расширения, найди вкладки и подтверди каждую вручную. Аудит читает только ограниченные видимые ячейки таблиц в выбранных вкладках, не извлекает полный текст страницы и не сохраняет строки заказов. Вкладки не открываются повторно, не переключаются и не закрываются. Поддерживаются только известные заголовки таблиц без пагинации; совместимость с реальными корпоративными страницами ещё не подтверждена. Статусы не изменяются.</p></section></div>
+    <div className="page-head"><div><div className="eyebrow">BROWSER BRIDGE · PREVIEW</div><h1>Браузер</h1><p>Browser Bridge: подключение к рабочим страницам и системам, которые ты постепенно обучаешь Malenia использовать.</p></div><span className="browser-state"><i className={connected?"":"idle"}/>{connected?"Агент подключён":"Сначала запустите агента"}</span></div>
+    <div className="browser-safety"><div><ShieldCheck size={19}/></div><section><b>Приватность по умолчанию</b><p>Расширение не читает cookies, пароли и историю браузера. Malenia должна работать с множеством сайтов: сначала обнаруживает открытые страницы, затем получает отдельное разрешение на нужный сайт и использует подходящий навык. Инвентаризация — первый проверочный сценарий, а не ограничение продукта. Пока доступен только прототип чтения; полноценное выполнение задач и адаптеры конкретных систем ещё развиваются.</p></section></div>
     <div className="panel browser-panel" data-testid="browser-audit-runner">
-      <div className="panel-head"><div><h3>Проверить заказы автоматически</h3><p>Только чтение. Используются три вкладки, предварительно найденные и подтверждённые в popup расширения.</p></div>
+      <div className="panel-head"><div><h3>Проверить заказы автоматически</h3><p>Только чтение. Используются ресурсы, которые ты явно разрешил Malenia.</p></div>
         <button className="primary" disabled={!connected||sending||job?.status==="pending"||job?.status==="running"} onClick={()=>void requestAudit()}>
           <Play size={15}/>{sending?"Отправляем…":"Запустить проверку"}</button>
       </div>
@@ -171,7 +171,7 @@ function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];a
           {job.failed_role?<span>Ошибка при чтении: <b>{{inventory:"ИНВента",datalens:"DataLens",asgard:"Asgard"}[job.failed_role]}</b></span>:null}
         </div>:null}
       {requestError?<p className="alert error" role="alert">{requestError}</p>:null}
-      <p className="note">Перед запуском открой ИНВенту, DataLens и Asgard в Яндекс Браузере. В popup Malenia Browser Bridge укажи HTTPS-адреса, нажми «Найти вкладки», выбери все три и подтверди их. Затем запусти проверку здесь. Выбор действует до 30 минут в текущем сеансе браузера. Если вкладка изменится, разрешение будет отозвано или таблица не поддерживается, источник завершится с пометкой «требует внимания».</p>
+      <p className="note">Открой нужные рабочие страницы в Яндекс Браузере и передай их через Browser Bridge. Разрешение выдаётся отдельно для каждого сайта. Если страница изменилась или формат пока не поддерживается, Malenia объяснит, что нужно сделать.</p>
     </div>
     <div className="panel browser-panel" data-testid="browser-audit-summary">
       <div className="panel-head"><div><h3>Последняя автоматическая сверка</h3><p>Только итоговые числа · без грузомест и содержимого сайтов</p></div></div>
