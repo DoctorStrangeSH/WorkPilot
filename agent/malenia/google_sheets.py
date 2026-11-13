@@ -601,4 +601,4 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
             raise GoogleSheetsError("google_sheets_range_too_large")
         return {"range": payload.get("range", range_a1.strip()),
                 "majorDimension": payload.get("majorDimension", "ROWS"),
-                "values": values, "read_only": False}
+                "values": values, "read_only": True}
