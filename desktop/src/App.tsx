@@ -242,7 +242,7 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
     try{
       const sheetTabs=tabs.filter(tab=>/^https:\/\/docs\.google\.com\/spreadsheets\/d\/[A-Za-z0-9_-]{10,256}\/edit\/?(?:\?gid=\d{1,16})?$/.test(tab.url));
       const namedInventa=sheetTabs.filter(tab=>/inventa|инвент/i.test(tab.title));
-      // Prefer the most recently shared named sheet when multiple copies are open.
+      // Prefer the most recently discovered named sheet when multiple copies are open.
       const candidates=namedInventa.length?namedInventa:sheetTabs;
       const activeTab=[...candidates].sort((a,b)=>
         Date.parse(b.shared_at||"")-Date.parse(a.shared_at||"")
