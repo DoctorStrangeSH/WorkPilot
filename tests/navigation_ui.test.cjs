@@ -40,7 +40,7 @@ test('sources page shows truthful connection state and no fake connect actions',
 
 test('Google Sheets onboarding is explicitly read-only and calls the native connector', () => {
   assert.match(app, /Google OAuth Desktop Client ID/);
-  assert.match(app, /только для чтения Google Sheets/);
+  assert.match(app, /Google Sheets подключается отдельно только для чтения/);
   assert.match(app, /connect_google_sheets/);
   assert.match(app, /get_google_sheets_status/);
   assert.match(app, /read_google_sheet/);
@@ -52,7 +52,7 @@ test('Google Sheets onboarding is explicitly read-only and calls the native conn
 
 test('expired Google refresh tokens return the user to a safe reauthorization flow', () => {
   assert.match(app, /reauthorization_required/);
-  assert.match(app, /google_reauthorization_required/);
+  assert.match(app, /sheetsStatus\.status==="reauthorization_required"/);
   assert.match(app, /result\.client_id/);
   assert.match(app, /Требуется повторная авторизация/);
 });
