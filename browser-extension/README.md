@@ -266,3 +266,16 @@ Run `node --test tests/browser_automation.test.cjs tests/browser_desktop_dispatc
 ## Header-only site schema diagnostic
 
 After confirming the three open tabs in the popup, **Проверить заголовки таблиц** can inspect up to eight visible HTML tables (or ARIA grids) per source and display only their column-header labels. It uses the same exact tab/path, granted-permission and main-frame `documentId` checks before and after each inspection. It does not read table body cells, order identifiers, search-field values, or full page text; the header labels remain in the popup and are not sent to the desktop/native host or persisted. This diagnostic is intended to establish the actual column names before a site adapter is approved. If no headers are visible, the adapter must not guess.
+
+
+## First-order INVenta pilot (November 2026)
+
+The first acceptance test is deliberately limited to one read-only order preview from the user's most recently shared Google Sheets tab. It does not require entering three resource URLs or selecting DataLens/Asgard first.
+
+1. Open the actual ИНВента spreadsheet in Yandex Browser.
+2. Open Malenia Browser Bridge and press **Поделиться вкладкой** for that active sheet.
+3. In Malenia, connect Google Sheets once using its separate read-only OAuth flow (the ChatGPT Google Drive connection is not inherited by the desktop app).
+4. Open **Источники** and press **Обработать первый заказ**.
+5. Malenia selects the most recently shared tab titled ИНВента, detects a worksheet from its header row, and displays the first non-empty order row with its source row number and missing fields.
+
+This is a first-stage order intake/validation, not yet a verified cross-system reconciliation. The DataLens/Asgard checks remain explicitly unverified until their live, authorized adapters are connected. No spreadsheet cells are changed, no order status is written, and no ticket is created. A row with missing evidence must remain marked for review rather than being reported as completed.
