@@ -179,6 +179,17 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
                     or not isinstance(headers, list) or len(headers) > 40
                     or not isinstance(labels, list) or len(labels) > 30
                     or any(not isinstance(v, str) or len(v) > 120 for v in headers + labels)
+                    or not isinstance(page["tables"], list) or len(page["tables"]) > 12
+                    or any(not isinstance(table, dict) or set(table) !=
+                           {"kind", "columns", "visible_rows", "declared_rows"}
+                           or table["kind"] not in {"html-table", "aria-grid"}
+                           or not isinstance(table["columns"], list)
+                           or not 1 <= len(table["columns"]) <= 20
+                           or not all(isinstance(v, str) and 0 < len(v) <= 120 for v in table["columns"])
+                           or type(table["visible_rows"]) is not int or not 0 <= table["visible_rows"] <= 1000
+                           or (table["declared_rows"] is not None and
+                               (type(table["declared_rows"]) is not int or not 0 <= table["declared_rows"] <= 1000000))
+                           for table in page["tables"])
                     or any(not isinstance(page[k], bool) for k in
                            ("has_aria_grid", "virtualized", "login_required"))):
                 raise ValueError("invalid capability fields")
