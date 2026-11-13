@@ -187,7 +187,7 @@ inspectButton.addEventListener("click", async () => {
     if (!["http:","https:"].includes(page.protocol) || page.username || page.password) throw new Error("url");
     const results = await chrome.scripting.executeScript({target:{tabId:tab.id},func:() => {
       const visible = el => !!(el && (el.getClientRects().length || el.getBoundingClientRect().width));
-      const clean = value => String(value || "").replace(/\\s+/g," ").trim().slice(0,120);
+      const clean = value => String(value || "").replace(/\s+/g," ").trim().slice(0,120);
       const headers = Array.from(document.querySelectorAll("table thead th, [role=columnheader]"))
         .filter(visible).map(el=>clean(el.innerText || el.getAttribute("aria-label"))).filter(Boolean).slice(0,40);
       const labels = Array.from(document.querySelectorAll("input:not([type=hidden]), [role=searchbox]"))
