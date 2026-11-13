@@ -296,3 +296,8 @@ A page can be structurally diagnosed without being a supported order adapter. If
 ### Troubleshooting active-page structure inspection
 
 The popup first attempts to inspect the active tab using the temporary `activeTab` grant. If Yandex Browser reports that the extension lacks page access, the popup asks for an optional host permission scoped to exactly the active HTTPS origin (for example, `https://orders.example.com/*`); it never requests all-site access. Approve that prompt and retry. The popup reports a safe stage code (`tab_lookup`, `page_access`, `site_permission`, or `host_response`) and a stage-specific explanation. Raw browser exceptions, full URLs, query strings and session values are never shown. If the stage is `host_response`, update/reinstall the desktop app and re-register the native host with the currently installed extension ID.
+
+
+### Автоматическое обнаружение активной Google Таблицы
+
+Откройте нужную Google Таблицу в Яндекс Браузере и нажмите в расширении «Проверить структуру активной вкладки». При успешной проверке Browser Bridge автоматически регистрирует в локальном Malenia только заголовок, URL документа без параметров сессии и числовой `gid` активного листа. Значения ячеек, cookies, токены и остальные query/fragment-параметры не передаются. Нажимать «Поделиться вкладкой» отдельно не требуется. В приложении откройте «Подключения» → «Обработать первый заказ»: Malenia использует OAuth Google Sheets с единственным scope `spreadsheets.readonly` и читает активный лист через API. Если `gid` отсутствует, анализатор ищет лист с распознаваемой структурой ИНВенты; источник не изменяется.
