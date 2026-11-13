@@ -270,10 +270,11 @@ inspectButton.addEventListener("click", async () => {
     ).join("") : "";
     const sheetDetected = response.tab_registered === true;
     auditStatus.textContent = role+": "+(summary.login_required?"похоже, требуется вход": "страница доступна")+
-      "; таблиц: "+(summary.tables?.length||0)+"; полей поиска: "+summary.search_labels.length+
-      (summary.has_aria_grid?"; есть ARIA grid":"")+(summary.virtualized?"; вероятна виртуализация":"")+
-      (sheetDetected?"; Google Таблица автоматически обнаружена и передана Malenia":"")+
-      tableDetails+"\nПереданы только заголовки и размеры, значения ячеек не читались.";
+      (sheetDetected
+        ? "; Google Sheets: активный документ и лист обнаружены, переданы в Malenia для чтения через API"
+        : "; HTML/ARIA-таблиц: "+(summary.tables?.length||0)+"; полей поиска: "+summary.search_labels.length+
+          (summary.has_aria_grid?"; есть ARIA grid":"")+(summary.virtualized?"; вероятна виртуализация":"")+
+          tableDetails+"\nПереданы только заголовки и размеры, значения ячеек не читались.");
     auditStatus.className = "status ok";
     setStatus(sheetDetected
       ? "Google Таблица обнаружена. Теперь её можно обработать в разделе «Подключения»."
