@@ -71,11 +71,28 @@ class OrderCheckRuleTests(unittest.TestCase):
         self.assertEqual(result["color"], "orange")
         self.assertFalse(result["write_enabled"])
 
-    def test_asgard_issued_maps_to_in_progress_orange(self):
+    def test_asgard_issued_maps_to_issued_green(self):
         result = evaluate_order(self.order, [], {"status": "Выдан"})
+        self.assertEqual(result["proposed_status"], "Выдан")
+        self.assertIsNone(result["comment"])
+        self.assertEqual(result["color"], "green")
+
+    def test_asgard_both_statuses_in_progress_maps_to_in_progress(self):
+        result = evaluate_order(
+            self.order, [],
+            {"status": "В работе", "statuses": ["В работе", "В работе"]},
+        )
         self.assertEqual(result["proposed_status"], "В работе")
-        self.assertEqual(result["comment"], "Выдан")
+        self.assertEqual(result["reason_code"], "asgard_both_statuses_in_progress")
+        self.assertEqual(result["evidence"]["statuses"], ["В работе", "В работе"])
         self.assertEqual(result["color"], "orange")
+
+    def test_asgard_partial_or_unknown_second_status_requires_review(self):
+        result = evaluate_order(
+            self.order, [],
+            {"status": "В работе", "statuses": ["В работе", "Ожидает"]},
+        )
+        self.assertEqual(result["decision"], DECISION_MANUAL_REVIEW)
 
     def test_asgard_in_transit_requires_box_and_extended_history(self):
         missing_box = evaluate_order(
