@@ -308,7 +308,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         self.assertEqual(result["sheet_title"], "Текущие")
         self.assertTrue(result["gid_selected"])
         self.assertEqual(result["values"][1][0], "CP-001")
-        self.assertFalse(result["read_only"])
+        self.assertTrue(result["read_only"])
 
     def test_read_active_sheet_rejects_non_google_urls(self):
         connector = GoogleSheetsConnector(FakeCredentialStore(), FakeOpener())
