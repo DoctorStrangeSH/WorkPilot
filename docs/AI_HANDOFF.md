@@ -851,3 +851,12 @@ Latest fix commit at this note: `4f46fdd1d7c9dc77a4b26e3244f6ed8b14af87e4` (late
 - Desktop SourcesPage can then find the discovered tab without the separate Share tab action and call Google Sheets API via existing OAuth PKCE + Windows Credential Manager with the exact readonly scope.
 - INVenta parser now recognizes `Дата выгрузки` and can infer the blank-header status column from repeated known status values. This is based on the user's screenshot; confirm against actual API data before trusting any output.
 - End-to-end DataLens/Asgard comparison is still not confirmed. Do not claim the first order is fully processed until the API read and both external lookups succeed on the user's live systems.
+
+
+## 2026-11-13 — OAuth callback diagnostics and first-order UI
+- User completed Google's consent flow and saw the local callback acknowledgement, but the Connections card still showed `Ошибка авторизации`. Important: the local callback page previously acknowledged only that the authorization code/state arrived; it did **not** mean token exchange and Windows Credential Manager persistence had succeeded.
+- Changed callback wording to explicitly say Malenia is still validating the Google grant and saving access.
+- Token endpoint failures now expose only an allowlisted stable OAuth category (e.g. `google_oauth_invalid_client`, `google_oauth_unauthorized_client`, `google_oauth_redirect_uri_mismatch`, `google_oauth_invalid_scope`) and HTTP status internally. Raw provider error bodies/descriptions, authorization codes, tokens, client secrets and user URLs are never surfaced.
+- Connections UI now maps safe OAuth categories to actionable Russian guidance. The «Обработать первый заказ» action remains visible while Google is not yet authorized, but is deliberately disabled with an explanation; after authorization it is enabled only when an active Google Sheet has been discovered.
+- Added tests for safe OAuth token-exchange error classification and accurate callback wording. Python tests passed on commit `ffe128db`; Desktop and Windows installer workflows were still running when this note was authored. Re-check Actions on the final branch head before sharing an installer.
+- On the user's next attempt, ask them to read the exact human-readable error shown under the Google connection card. Do not ask for or repeat their Client ID/secret. The current failure cannot be diagnosed from the callback acknowledgement alone.
