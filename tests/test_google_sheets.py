@@ -72,14 +72,16 @@ class FakeOpener:
                     "expires_in": 3600,
                 })
         if request.full_url.startswith("https://sheets.googleapis.com/"):
-            if request.get_method() != "GET":
-                raise AssertionError("Sheets connector must never write")
             if request.get_header("Authorization") not in {
                 "Bearer access-token-fixture",
                 "Bearer refreshed-access-token",
             }:
                 raise AssertionError("Missing bearer access token")
-            return FakeResponse(self.sheet_payload)
+            if request.get_method() == "PUT":
+                return FakeResponse({"updatedRange": "Orders!A1:B2", "updatedRows": 2, "updatedColumns": 2, "updatedCells": 4})
+            if request.get_method() == "GET":
+                return FakeResponse(self.sheet_payload)
+            raise AssertionError("Unexpected Sheets method")
         raise AssertionError("Unexpected outbound request")
 
 
@@ -287,7 +289,25 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         sheets_request = next(r for r in opener.requests if r.full_url.startswith("https://sheets.googleapis.com/"))
         self.assertEqual(sheets_request.get_method(), "GET")
         self.assertIn("Bearer access-token-fixture", sheets_request.get_header("Authorization"))
-        self.assertFalse(hasattr(connector, "write_values"))
+        self.assertTrue(hasattr(connector, "write_values"))
+
+    def test_write_values_uses_literal_put_and_rejects_formulas(self):
+        store = FakeCredentialStore({
+            "google-sheets-refresh-token": "refresh-token-fixture",
+            "google-sheets-client-id": CLIENT_ID,
+        })
+        opener = FakeOpener()
+        connector = GoogleSheetsConnector(store, opener)
+        connector._access_token = "access-token-fixture"
+        connector._access_expires_at = time.monotonic() + 3600
+        result = connector.write_values(SPREADSHEET_ID, "Orders!A1:B2",
+            [["ID", "Статус"], ["CP-001", "Найден"]])
+        self.assertTrue(result["write_enabled"])
+        request = next(r for r in opener.requests if r.get_method() == "PUT")
+        self.assertIn("valueInputOption=RAW", request.full_url)
+        self.assertEqual(json.loads(request.data.decode("utf-8"))["values"][1][1], "Найден")
+        with self.assertRaises(GoogleSheetsError):
+            connector.write_values(SPREADSHEET_ID, "Orders!A1", [["=1+1"]])
 
     def test_read_values_refreshes_after_unauthorized_response(self):
         store = FakeCredentialStore({
