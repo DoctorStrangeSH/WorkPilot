@@ -32,6 +32,15 @@ class InventaAnalysisTests(unittest.TestCase):
         self.assertEqual(result["invalid_cost_rows"], [5])
         self.assertEqual(result["missing_required"], {"name": 1, "order_id": 1, "status": 1})
         self.assertTrue(result["read_only"])
+        self.assertEqual(result["first_order_preview"], {
+            "row": 3, "order_id": "LO-1", "partner_code": "P-1",
+            "date": "2026-09-12", "cost": "59880", "name": "Куртка",
+            "ticket": "https://ticket/1", "status": "В работе",
+            "group": "170 ЧП вне ячейки",
+        })
+        self.assertEqual(result["first_order_cross_check"]["state"], "needs_external_sources")
+        self.assertFalse(result["first_order_cross_check"]["verified"])
+        self.assertFalse(result["first_order_cross_check"]["write_enabled"])
 
     def test_header_requires_all_core_columns(self):
         rows = [
