@@ -239,6 +239,26 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                 return
 
             if parsed.path in {
+            if parsed.path == "/v1/integrations/google-sheets/analyze-active":
+                payload = self._read_json(4096)
+                if payload is None:
+                    return
+                if set(payload) - {"spreadsheet_url", "gid"} or not isinstance(payload.get("spreadsheet_url"), str):
+                    self._send(422, {"error": "invalid_google_sheets_active_url"})
+                    return
+                try:
+                    source = sheets.read_active_sheet(payload["spreadsheet_url"], payload.get("gid"))
+                    from .inventa import analyze_inventa
+                    report = analyze_inventa(source["values"], source["sheet_title"])
+                    self._send(200, {"source": {key: source[key] for key in (
+                        "spreadsheet_id", "spreadsheet_title", "sheet_title", "sheet_id",
+                        "range", "gid_selected")}, "analysis": report,
+                        "read_only": True})
+                except (GoogleSheetsError, ValueError) as error:
+                    code = error.code if isinstance(error, GoogleSheetsError) else str(error)
+                    self._send(422, {"error": code})
+                return
+
             if parsed.path == "/v1/integrations/google-sheets/edit-preview":
                 payload = self._read_json(32 * 1024)
                 if payload is None:
