@@ -208,7 +208,7 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
                 runtime.get("release").and_then(Value::as_str) == Some(env!("CARGO_PKG_VERSION"))
                     && runtime.get("protocol").and_then(Value::as_u64) == Some(1)
                     && runtime.get("capabilities").and_then(Value::as_array)
-                        .map(|items| ["task_idempotency", "explicit_knowledge", "knowledge_only", "public_search", "google_sheets_readonly"].iter().all(|cap| items.iter().any(|item| item.as_str() == Some(*cap))))
+                        .map(|items| ["task_idempotency", "explicit_knowledge", "knowledge_only", "public_search", "google_sheets_editor_approval"].iter().all(|cap| items.iter().any(|item| item.as_str() == Some(*cap))))
                         .unwrap_or(false)
             }).unwrap_or(false);
             if !compatible {
