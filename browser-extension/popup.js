@@ -377,7 +377,12 @@ confirmDiscoveryButton.addEventListener("click", async () => {
     });
     discoverySetStatus("Три вкладки подтверждены. Страницы ещё не читались; перед будущим чтением Маления повторно проверит вкладки и разрешения.", "ok");
   } catch (error) {
-    discoverySetStatus(error.message || "Не удалось подтвердить вкладки. Повтори поиск.", "error");
+    const safeMessage = typeof error?.message === "string" &&
+      (error.message.includes("закрыта") || error.message.includes("изменилась") ||
+       error.message.includes("Разрешение отозвано"))
+      ? error.message
+      : "Вкладка закрыта или стала недоступна. Выполни поиск заново.";
+    discoverySetStatus(safeMessage, "error");
     discoveryRefreshConfirm();
   } finally {
     busy = false;
