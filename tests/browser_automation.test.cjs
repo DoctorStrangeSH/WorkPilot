@@ -662,6 +662,50 @@ test("selected-tab audit rejects a document replacement between identity check a
   assert.equal(reconciled,false);
 });
 
+test("selected-tab audit rejects host permission revocation before reconciliation", async () => {
+  const api=runner();
+  const records={
+    inventory:{id:41,url:"https://inventory.example/orders"},
+    datalens:{id:42,url:"https://analytics.example/reports"},
+    asgard:{id:43,url:"https://asgard.example/history"}
+  };
+  let permissionChecks=0;
+  const chrome={
+    tabs:{
+      onUpdated:{addListener(){},removeListener(){}},
+      async get(id){return Object.values(records).find(x=>x.id===id);}
+    },
+    permissions:{async contains(){permissionChecks++;return permissionChecks<2;}},
+    scripting:{async executeScript({target,func,args}) {
+      const url=Object.values(records).find(x=>x.id===target.tabId).url;
+      if(func.toString().includes("location.href")) {
+        return [{frameId:0,documentId:"doc-"+target.tabId,result:{href:url}}];
+      }
+      const role=args[0];
+      const table={
+        inventory:{columns:["cargo_place","inventory_date"],rows:[["TEST-1","2026-09-12"]]},
+        datalens:{columns:["main_partner_code_original","sc_id","result","scanned_at"],rows:[["TEST-1","1","OK","2026-09-13T10:00:00"]]},
+        asgard:{columns:["cargo_place","status"],rows:[]}
+      }[role];
+      return [{frameId:0,documentId:"doc-"+target.tabId,result:{
+        origin:new URL(url).origin,text:"",table,next:null,incomplete:false
+      }}];
+    }}
+  };
+  const selectedTabs=Object.fromEntries(Object.entries(records).map(([role,tab])=>[
+    role,{tabId:tab.id,origin:new URL(tab.url).origin,path:new URL(tab.url).pathname}
+  ]));
+  let reconciled=false;
+  const result=await api.run(chrome,{
+    inventory:records.inventory.url,datalens:records.datalens.url,asgard:records.asgard.url
+  },async message=>{if(message.type==="reconcile_site_tables")reconciled=true;return {};},
+  async()=>{}, {selectedTabs,exactGetSearch:false});
+  assert.equal(result.phase,"needs_attention");
+  assert.equal(result.results[0].status,"needs_attention");
+  assert.equal(reconciled,false);
+  assert.ok(permissionChecks>=2);
+});
+
 test("confirmed open tab path change fails closed before DOM read", async () => {
   const api=runner();
   let executed=0;
