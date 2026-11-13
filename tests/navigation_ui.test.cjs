@@ -29,7 +29,7 @@ test('the navigation groups work, knowledge, safety and system areas', () => {
 
 test('connections are visible and reachable from the primary navigation', () => {
   assert.match(app, /<Nav icon=\{<Plug\/>\} label="Подключения" active=\{page==="sources"\}/);
-  assert.match(app, /<SourcesPage tabs=\{data\?\.browser_tabs\?\?\[\]\} connected=\{connected\} busy=\{busy\} onStartAgent=\{runAgent\}/);
+  assert.match(app, /<SourcesPage tabs=\{data\?\.browser_tabs\?\?\[\]\} connected=\{connected\} agentBusy=\{busy\} onStartAgent=\{runAgent\}/);
   assert.match(app, /Запустить агента/);
   assert.match(app, /Google OAuth Desktop Client ID/);
 });
