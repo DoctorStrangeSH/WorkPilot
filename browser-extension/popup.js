@@ -246,8 +246,15 @@ inspectButton.addEventListener("click", async () => {
     const summary = results?.[0]?.result;
     if (!summary || typeof summary !== "object") throw new Error("snapshot");
     stage = "host_response";
+    const queryGid = page.searchParams.get("gid");
+    const fragmentGid = new URLSearchParams(page.hash.replace(/^#/, "")).get("gid");
+    const activeGid = /^\d{1,16}$/.test(queryGid || "") ? queryGid :
+      /^\d{1,16}$/.test(fragmentGid || "") ? fragmentGid : null;
+    const safePageUrl = page.origin + page.pathname +
+      (page.hostname === "docs.google.com" && /\/spreadsheets\/d\/[A-Za-z0-9_-]{10,256}\/edit\/?$/.test(page.pathname) && activeGid
+        ? "?gid=" + encodeURIComponent(activeGid) : "");
     const response = await sendNativeMessage({type:"inspect_capabilities",request_id:crypto.randomUUID(),
-      page:{url:page.origin+page.pathname,...summary}});
+      page:{url:safePageUrl,...summary}});
     if (!response?.ok) {
       if (response.error === "invalid_capability_snapshot") throw bridgeError("host_rejected");
       throw bridgeError("host_protocol");
@@ -261,12 +268,16 @@ inspectButton.addEventListener("click", async () => {
       "\nТаблица "+(index+1)+" ("+table.kind+", строк видно: "+table.visible_rows+
       (table.declared_rows===null?"":"/"+table.declared_rows)+"): "+table.columns.join(" · ")
     ).join("") : "";
+    const sheetDetected = response.tab_registered === true;
     auditStatus.textContent = role+": "+(summary.login_required?"похоже, требуется вход": "страница доступна")+
       "; таблиц: "+(summary.tables?.length||0)+"; полей поиска: "+summary.search_labels.length+
       (summary.has_aria_grid?"; есть ARIA grid":"")+(summary.virtualized?"; вероятна виртуализация":"")+
+      (sheetDetected?"; Google Таблица автоматически обнаружена и передана Malenia":"")+
       tableDetails+"\nПереданы только заголовки и размеры, значения ячеек не читались.";
     auditStatus.className = "status ok";
-    setStatus("Структурная диагностика завершена. Это ещё не проверка заказов.", "ok");
+    setStatus(sheetDetected
+      ? "Google Таблица обнаружена. Теперь её можно обработать в разделе «Подключения»."
+      : "Структурная диагностика завершена. Это ещё не проверка заказов.", "ok");
   } catch (error) {
     const raw = typeof error?.message === "string" ? error.message : "";
     const reason = error?.bridgeCode ? diagnostic(error) :
