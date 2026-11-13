@@ -191,14 +191,11 @@ function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];a
 }
 
 type GoogleSheetsStatus = {connected:boolean;status:string;error:string|null;client_id?:string};
-type GoogleSheetsData = {range:string;majorDimension:string;values:(string|number|boolean|null)[][];read_only:boolean};
 
 function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected:boolean;onOpenBrowser:()=>void}){
   const [clientId,setClientId]=useState("");
   const [clientSecret,setClientSecret]=useState("");
   const [sheetsStatus,setSheetsStatus]=useState<GoogleSheetsStatus>({connected:false,status:"not_connected",error:null});
-  const [sheetData,setSheetData]=useState<GoogleSheetsData|null>(null);
-  const [verifiedKey,setVerifiedKey]=useState<string|null>(null);
   const [busy,setBusy]=useState(false);
   const [sheetError,setSheetError]=useState("");
   const [sheetNotice,setSheetNotice]=useState("");
@@ -234,8 +231,6 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
     setBusy(true);setSheetError("");setSheetNotice("");
     try{
       await invoke("disconnect_google_sheets");
-      setSheetData(null);
-      setVerifiedKey(null);
       setSheetsStatus({connected:false,status:"not_connected",error:null});
       setSheetNotice("Локальные данные авторизации удалены. При необходимости отзовите разрешение также в Google Account.");
     }catch(error){setSheetError(String(error));}
@@ -254,9 +249,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
   };
 
   const sheetsAuthorized=sheetsStatus.status==="authorized"||sheetsStatus.connected;
-  const sheetVerified=sheetsAuthorized&&verifiedKey===spreadsheetId.trim()+"|"+range.trim();
-  const statusLabel=sheetVerified?"Подключён · диапазон проверен":
-    sheetsAuthorized?"Авторизация сохранена · проверьте таблицу":
+  const statusLabel=sheetsAuthorized?"Подключён · доступ только для чтения":
     sheetsStatus.status==="authorizing"?"Ожидает подтверждения в браузере":
     sheetsStatus.status==="reauthorization_required"?"Требуется повторная авторизация":
     sheetsStatus.status==="denied"?"Доступ не предоставлен":
@@ -272,7 +265,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
     {sheetNotice?<p className="alert success" role="status">{sheetNotice}</p>:null}
     <div className="sources-grid">
       <article className="panel source-card google-source-card">
-        <div className="source-card-top"><span className="source-icon sheets"><Database size={19}/></span><span className={"source-state "+(sheetVerified?"ready":"pending")}>{statusLabel}</span></div>
+        <div className="source-card-top"><span className="source-icon sheets"><Database size={19}/></span><span className={"source-state "+(sheetsAuthorized?"ready":"pending")}>{statusLabel}</span></div>
         <h2>Google Sheets · ИНВента</h2>
         <p>Отдельная авторизация Malenia. Запрашивается только доступ на чтение Google Sheets. Исходные данные остаются нетронутыми; результат расследования хранится отдельно в Malenia.</p>
         {!connected?<p className="source-help">Сначала запустите локальный агент на главной странице.</p>:null}
@@ -306,7 +299,6 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
         {sheetsStatus.status==="denied"?<p className="source-help">Разрешение не было предоставлено. Можно повторить подключение.</p>:null}
         {sheetsStatus.status==="expired"?<p className="source-help">Окно авторизации не получило ответ вовремя. Начните подключение заново.</p>:null}
         {sheetsStatus.status==="error"?<p className="source-help">Google не подтвердил нужный scope или OAuth завершился ошибкой. Проверьте OAuth consent screen и Client ID.</p>:null}
-        {sheetData?<div className="sheet-preview"><div className="sheet-preview-head"><b>Предпросмотр</b><small>{sheetData.range} · только чтение</small></div>{sheetData.values.length?<div className="sheet-preview-scroll"><table><tbody>{sheetData.values.slice(0,20).map((row,i)=><tr key={i}>{row.slice(0,12).map((cell,j)=><td key={j}>{String(cell??"")}</td>)}</tr>)}</tbody></table></div>:<p>В указанном диапазоне нет заполненных ячеек.</p>}<small>Показаны максимум 20 строк и 12 столбцов. Полный результат остаётся в текущем окне приложения.</small></div>:null}
       </article>
       <article className="panel source-card"><div className="source-card-top"><span className="source-icon datalens"><Activity size={19}/></span><span className="source-state pending">Не подключён</span></div><h2>Yandex DataLens</h2><p>Дашборд пока не читается приложением. Сначала будет реализовано чтение выбранной авторизованной вкладки или официального API.</p><small>Следующий шаг: read-only доступ и отдельная проверка разрешений.</small></article>
       <article className="panel source-card"><div className="source-card-top"><span className="source-icon asgard"><Globe2 size={19}/></span><span className="source-state pending">Не подключён</span></div><h2>Asgard</h2><p>Рабочая сессия остаётся в Яндекс Браузере. Malenia пока не читает статусы или историю коробок на этой странице.</p><small>Следующий шаг: разрешённое чтение выбранной страницы.</small></article>
