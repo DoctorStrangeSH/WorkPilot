@@ -272,7 +272,7 @@ var MaleniaAutomation = (() => {
           target: {tabId},
           func: (resourceRole, includeText) => {
             // User-selected mode extracts structured table cells only.
-            const text = includeText && document.body ? document.body.innerText : "";
+            const text = includeText !== false && document.body ? document.body.innerText : "";
             const required = {
               inventory: ["cargo_place", "inventory_date"],
               datalens: ["main_partner_code_original", "sc_id", "result", "scanned_at"],
@@ -340,7 +340,7 @@ var MaleniaAutomation = (() => {
               next: nextAnchor ? nextAnchor.href : null
             };
           },
-          args: [role, !selectedTab]
+          args: selectedTab ? [role, false] : [role]
         });
         if (selectedTab) {
           const afterRead = await chromeApi.tabs.get(tabId);
