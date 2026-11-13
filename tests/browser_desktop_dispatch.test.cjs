@@ -17,14 +17,18 @@ test('browser bridge polls local desktop queue without any remote permission',()
   assert.match(source,/periodInMinutes:1/);
   assert.match(source,/type:"claim_browser_audit"/);
   assert.match(source,/type:"finish_browser_audit"/);
-  assert.match(source,/chrome\\.storage\\.session\\.get\\("maleniaConfirmedOpenTabs"\\)/);
+  assert.match(source,/chrome\.storage\.session\.get\("maleniaConfirmedOpenTabs"\)/);
   assert.match(source,/chrome\.permissions\.contains/);
   assert.match(source,/if \(running\) return;/);
   assert.match(source,/succeeded = result\.phase === "reconciled"/);
 });
 
-test('extension runs desktop job only through bounded read-only walker',()=>{
-  assert.match(source,/MaleniaAutomation\.normalizeTargets\(stored\.maleniaTargets\)/);
+test('desktop audit requires fresh confirmed open tabs and exact current locations',()=>{
+  assert.match(source,/MaleniaAutomation\.normalizeTargets\(rawTargets\)/);
+  assert.match(source,/selectedTabs/);
+  assert.match(source,/confirmedAt/);
+  assert.match(source,/30 \* 60 \* 1000/);
+  assert.match(source,/currentUrl\.pathname !== entry\.path/);
   assert.match(source,/MaleniaAutomation\.run\(chrome,targets/);
   assert.doesNotMatch(source,/chrome\.cookies|chrome\.webRequest|executeScript\(\{code:/);
   assert.doesNotMatch(source,/eval\(/);
