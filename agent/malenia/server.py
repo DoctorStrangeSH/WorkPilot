@@ -312,6 +312,7 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                     self._send(502, {"error": error.code})
                 return
 
+            if parsed.path in {
                 "/v1/integrations/google-sheets/connect",
                 "/v1/integrations/google-sheets/disconnect",
                 "/v1/integrations/google-sheets/read",
