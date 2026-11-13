@@ -2,7 +2,7 @@
 
 No network calls, browser launches, tokens, or credentials are handled here.
 The eventual desktop integration must use a loopback listener and the
-Windows Credential Manager backend; it must not add broader scopes.
+Windows Credential Manager backend; it must not add broader scopes. The investigation workflow is read-only.
 """
 
 from __future__ import annotations
@@ -17,9 +17,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 
 GOOGLE_AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
-GOOGLE_SHEETS_READWRITE_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
-# Backwards-compatible symbol name; this integration now requests editor access.
-GOOGLE_SHEETS_READONLY_SCOPE = GOOGLE_SHEETS_READWRITE_SCOPE
+GOOGLE_SHEETS_READONLY_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
 GOOGLE_CALLBACK_PATH = "/"
 
 _VERIFIER_RE = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
