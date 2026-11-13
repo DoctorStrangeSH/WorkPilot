@@ -19,6 +19,7 @@ from malenia.store import TaskStore
 class FakeGoogleSheets:
     def __init__(self):
         self.calls = []
+        self.values = [["fixture"]]
 
     def status(self):
         return {"connected": False, "status": "not_connected", "error": None}
@@ -29,10 +30,11 @@ class FakeGoogleSheets:
 
     def read_values(self, spreadsheet_id, range_a1):
         self.calls.append(("read", spreadsheet_id, range_a1))
-        return {"range": range_a1, "values": [["fixture"]], "read_only": True}
+        return {"range": range_a1, "values": self.values, "read_only": True}
 
     def write_values(self, spreadsheet_id, range_a1, values):
         self.calls.append(("write", spreadsheet_id, range_a1, values))
+        self.values = values
         return {"updatedRange": range_a1, "updatedCells": sum(len(row) for row in values), "write_enabled": True}
 
     def disconnect(self):
