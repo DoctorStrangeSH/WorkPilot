@@ -52,7 +52,7 @@ class OrderCheckRuleTests(unittest.TestCase):
             {"status": "Выдан"},
         )
         self.assertEqual(result["decision"], DECISION_ASGARD)
-        self.assertEqual(result["comment"], "Выдан")
+        self.assertIsNone(result["comment"])
 
     def test_matching_successful_scan_with_invalid_date_requires_review(self):
         result = evaluate_order(
