@@ -61,6 +61,50 @@ def _infer_status_column(rows: list[list[Any]], header_index: int, mapping: dict
     return max(candidates)[1] if candidates else None
 
 
+def _infer_name_column(rows: list[list[Any]], header_index: int, mapping: dict[str, int]) -> int | None:
+    """Infer an unlabeled product-name column when the export omits its header."""
+    if "name" in mapping:
+        return mapping["name"]
+    header = rows[header_index]
+    used = set(mapping.values())
+    width = max((len(row) for row in rows[header_index + 1:header_index + 51]), default=0)
+    candidates: list[tuple[float, float, int]] = []
+    for column in range(width):
+        if column in used or (column < len(header) and not _blank(header[column])):
+            continue
+        values = [row[column] for row in rows[header_index + 1:header_index + 51]
+                  if column < len(row) and not _blank(row[column])]
+        if len(values) < 2:
+            continue
+        text_values = [str(value).strip() for value in values]
+        text_ratio = sum(not isinstance(value, (int, float, bool)) for value in values) / len(values)
+        status_ratio = sum(any(marker in _norm(value) for marker in _STATUS_MARKERS)
+                           for value in text_values) / len(text_values)
+        url_ratio = sum(str(value).strip().lower().startswith(("http://", "https://"))
+                        for value in values) / len(values)
+        # Product descriptions are predominantly text, but unlike status,
+        # ticket and comment fields they are not URLs or recognized status labels.
+        if text_ratio >= 0.8 and status_ratio < 0.35 and url_ratio < 0.5:
+            candidates.append((len(values) / max(1, min(50, len(rows) - header_index - 1)),
+                               text_ratio - status_ratio - url_ratio, column))
+    return max(candidates)[2] if candidates else None
+
+
+def _normalize_date(value: Any) -> str:
+    """Convert Google Sheets serial dates and common textual dates to ISO dates."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if 1 <= value <= 100000:
+            return (date(1899, 12, 30) + timedelta(days=float(value))).isoformat()
+        return str(value)
+    raw = str(value or "").strip()
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(raw[:10], fmt).date().isoformat()
+        except ValueError:
+            pass
+    return raw
+
+
 def detect_header(rows: list[list[Any]], scan_rows: int = 12) -> tuple[int, dict[str, int]]:
     if not isinstance(rows, list) or not rows:
         raise ValueError("empty_sheet")
@@ -75,6 +119,9 @@ def detect_header(rows: list[list[Any]], scan_rows: int = 12) -> tuple[int, dict
         status_column = _infer_status_column(rows, row_index, mapping)
         if status_column is not None:
             mapping["status"] = status_column
+        name_column = _infer_name_column(rows, row_index, mapping)
+        if name_column is not None:
+            mapping["name"] = name_column
         score = len(mapping)
         if set(REQUIRED).issubset(mapping) and (best is None or score > len(best[1])):
             best = (row_index, mapping)
@@ -135,12 +182,13 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
         if all(_blank(value) for value in row):
             continue
         order_id = ("" if _blank(cell(row, "order_id")) else str(cell(row, "order_id"))).strip()
+        # Rows without an order ID are report notes/totals/empty export lines,
+        # not orders. Do not inflate missing-field counts with them.
+        if not order_id:
+            continue
         status = ("" if _blank(cell(row, "status")) else str(cell(row, "status"))).strip()
         group = ("" if _blank(cell(row, "group")) else str(cell(row, "group"))).strip()
-        if order_id:
-            ids[order_id].append(offset)
-        else:
-            missing["order_id"] += 1
+        ids[order_id].append(offset)
         if not status:
             missing["status"] += 1
         else:
@@ -163,7 +211,7 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
             "row": offset,
             "order_id": order_id,
             "partner_code": "" if _blank(cell(row, "partner")) else str(cell(row, "partner")).strip(),
-            "date": "" if _blank(cell(row, "date")) else str(cell(row, "date")).strip(),
+            "date": "" if _blank(cell(row, "date")) else _normalize_date(cell(row, "date")),
             "cost": "" if _blank(cell(row, "cost")) else str(cell(row, "cost")).strip(),
             "name": "" if _blank(cell(row, "name")) else str(cell(row, "name")).strip(),
             "ticket": "" if _blank(cell(row, "ticket")) else str(cell(row, "ticket")).strip(),
@@ -178,6 +226,7 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
         "header_row": header_index + 1,
         "columns": {key: index + 1 for key, index in columns.items()},
         "rows_analyzed": len(records),
+        "non_order_rows_skipped": max(0, len(data) - len(records)),
         # Bounded read-only preview; not a verified cross-system decision.
         "first_order_preview": records[0] if records else None,
         "first_order_cross_check": {
