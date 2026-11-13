@@ -185,7 +185,7 @@ async function pollDesktopAudit() {
       }
       const result = await MaleniaAutomation.run(chrome,targets,
         message=>session.send(message),report,
-        {exactGetSearch:false,selectedTabs});
+        {exactGetSearch:true,selectedTabs});
       succeeded = result.phase === "reconciled";
     } catch {
       await progress({phase:"needs_attention",results:[],error:"setup_or_connection"});
