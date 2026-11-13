@@ -553,3 +553,82 @@ test('unrelated result-table mutations do not count as successful reactive searc
   await assert.rejects(()=>api.reactiveSearch(chrome,7,'asgard','ABC-1',
     'https://asgard.example'),/dynamic_search_unchanged_table/);
 });
+
+
+test("confirmed open tabs are read in place without creating, navigating, closing or sending page text", async () => {
+  const api=runner();
+  const records={
+    inventory:{id:11,url:"https://inventory.example/orders",status:"complete"},
+    datalens:{id:12,url:"https://analytics.example/reports",status:"complete"},
+    asgard:{id:13,url:"https://asgard.example/history",status:"complete"}
+  };
+  const byId=Object.fromEntries(Object.values(records).map(tab=>[tab.id,tab]));
+  const stats={created:0,removed:0,updated:0,executed:0,permissionChecks:0};
+  const chrome={
+    tabs:{
+      onUpdated:{addListener(){},removeListener(){}},
+      async get(id){return byId[id] || null;},
+      async create(){stats.created++;throw Error("must not create");},
+      async update(){stats.updated++;throw Error("must not navigate");},
+      async remove(){stats.removed++;throw Error("must not close");}
+    },
+    permissions:{async contains({origins}){stats.permissionChecks++;return origins.every(x=>[
+      "https://inventory.example/*","https://analytics.example/*","https://asgard.example/*"
+    ].includes(x));}},
+    scripting:{async executeScript({target,args}) {
+      stats.executed++;
+      const role=args[0];
+      const expected={
+        inventory:{columns:["cargo_place","inventory_date"],rows:[["TEST-001","2026-09-12"]]},
+        datalens:{columns:["main_partner_code_original","sc_id","result","scanned_at"],rows:[["TEST-001","101366","OK","2026-09-15T08:00:00"]]},
+        asgard:{columns:["cargo_place","status"],rows:[["TEST-001","accepted"]]}
+      }[role];
+      assert.equal(args[1],false,"selected-tab mode must not request full page text");
+      assert.equal(target.tabId,records[role].id);
+      return [{result:{origin:new URL(records[role].url).origin,text:"",table:expected,next:null,incomplete:false}}];
+    }}
+  };
+  const selectedTabs=Object.fromEntries(Object.entries(records).map(([role,tab])=>[
+    role,{tabId:tab.id,origin:new URL(tab.url).origin,path:new URL(tab.url).pathname}
+  ]));
+  const sent=[];
+  const result=await api.run(chrome,{
+    inventory:records.inventory.url,datalens:records.datalens.url,asgard:records.asgard.url
+  },async message=>{
+    sent.push(message);
+    if(message.type==="reconcile_site_tables")return {
+      ok:true,type:"site_tables_reconciled",read_only:true,write_enabled:false,
+      persisted:false,total:1,summary:{found:1,in_progress:0,manual_review:0}
+    };
+    throw Error("selected-tab mode must not send page text to the host");
+  },async()=>{}, {selectedTabs,exactGetSearch:false});
+  assert.equal(result.phase,"reconciled");
+  assert.equal(stats.created,0);
+  assert.equal(stats.updated,0);
+  assert.equal(stats.removed,0);
+  assert.equal(stats.executed,3);
+  assert.ok(stats.permissionChecks>=6);
+  assert.deepEqual(sent.map(x=>x.type),["reconcile_site_tables"]);
+});
+
+test("confirmed open tab path change fails closed before DOM read", async () => {
+  const api=runner();
+  let executed=0;
+  const chrome={
+    tabs:{
+      onUpdated:{addListener(){},removeListener(){}},
+      async get(id){return {id,url:"https://inventory.example/other",status:"complete"};}
+    },
+    permissions:{async contains(){return true;}},
+    scripting:{async executeScript(){executed++;return [];}}
+  };
+  const selectedTabs={inventory:{tabId:21,origin:"https://inventory.example",path:"/orders"}};
+  const result=await api.run(chrome,{
+    inventory:"https://inventory.example/orders",
+    datalens:"https://analytics.example/reports",
+    asgard:"https://asgard.example/history"
+  },async()=>({}),async()=>{}, {selectedTabs});
+  assert.equal(result.phase,"needs_attention");
+  assert.equal(result.results[0].status,"needs_attention");
+  assert.equal(executed,0);
+});
