@@ -12,14 +12,14 @@ from typing import Any
 
 ALIASES = {
     "order_id": {"id заказа", "номер заказа", "заказ", "order id", "order_id"},
-    "date": {"дата", "дата заказа", "inventory date", "date"},
+    "date": {"дата", "дата заказа", "дата выгрузки", "inventory date", "date"},
     "partner": {"main_partner_code_original", "main_partner", "партнер", "партнёр"},
     "cost": {"стоимость", "сумма", "цена", "cost", "amount"},
     "name": {"наименование", "товар", "название", "name", "product"},
     "comment": {"комментарий", "comment", "примечание"},
     "ticket": {"тикет", "ticket", "ссылка на тикет"},
     "status": {"статус", "status"},
-    "group": {"группировка заказов", "группировка", "group", "grouping"},
+    "group": {"группировка заказов", "группировка заказа", "группировка", "group", "grouping"},
 }
 REQUIRED = ("order_id", "date", "cost", "status")
 ANOMALY_WORDS = ("аномал", "потер", "ошиб", "не найден", "проблем")
@@ -33,6 +33,34 @@ def _norm(value: Any) -> str:
     return re.sub(r"\s+", " ", ("" if value is None else str(value)).strip().casefold().replace("ё", "е"))
 
 
+_STATUS_MARKERS = (
+    "в скк", "исключение", "найден", "в работе", "аномал", "потер",
+    "отгрузили после", "подана на иск", "ретеншн", "ожидает", "не найден",
+)
+
+
+def _infer_status_column(rows: list[list[Any]], header_index: int, mapping: dict[str, int]) -> int | None:
+    """Infer an unlabeled status column from repeated, recognizable status values."""
+    if "status" in mapping:
+        return mapping["status"]
+    width = max((len(row) for row in rows[header_index + 1:header_index + 51]), default=0)
+    candidates: list[tuple[float, int]] = []
+    for column in range(width):
+        if column in mapping.values():
+            continue
+        values = [
+            _norm(row[column]) for row in rows[header_index + 1:header_index + 51]
+            if column < len(row) and not _blank(row[column])
+        ]
+        if len(values) < 2:
+            continue
+        matches = sum(any(marker in value for marker in _STATUS_MARKERS) for value in values)
+        ratio = matches / len(values)
+        if matches >= 2 and ratio >= 0.5:
+            candidates.append((ratio + min(matches, 10) / 100, column))
+    return max(candidates)[1] if candidates else None
+
+
 def detect_header(rows: list[list[Any]], scan_rows: int = 12) -> tuple[int, dict[str, int]]:
     if not isinstance(rows, list) or not rows:
         raise ValueError("empty_sheet")
@@ -44,6 +72,9 @@ def detect_header(rows: list[list[Any]], scan_rows: int = 12) -> tuple[int, dict
             for field, aliases in ALIASES.items():
                 if label in {_norm(alias) for alias in aliases} and field not in mapping:
                     mapping[field] = col_index
+        status_column = _infer_status_column(rows, row_index, mapping)
+        if status_column is not None:
+            mapping["status"] = status_column
         score = len(mapping)
         if set(REQUIRED).issubset(mapping) and (best is None or score > len(best[1])):
             best = (row_index, mapping)
