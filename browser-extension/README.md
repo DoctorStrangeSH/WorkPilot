@@ -250,3 +250,14 @@ claim is made until tested against those authorized live sites.
 Run `node --test tests/tab_discovery.test.cjs tests/browser_open_tab_discovery.test.cjs tests/browser_automation.test.cjs`
 to validate matching, duplicate selection, revocation, stale tabs, in-place
 read-only extraction and fail-closed navigation handling.
+
+
+## Stable document identity for confirmed tabs (current audit path)
+
+The confirmed-tab reader now binds each table extraction to the browser's main-frame `documentId`, not just a tab ID and URL path. Before reading it performs a minimal main-frame identity probe; the table read must return the same `documentId`; after reading it probes again and rechecks the current tab URL and host permission. A document replacement, redirect, missing identity metadata, tab change or permission loss fails closed before reconciliation. The reader never logs or sends the document ID to the desktop host; it is used only inside the extension for the duration of that source read.
+
+This relies on Chromium's `InjectionResult.documentId` metadata (available in modern Chromium-based browsers). If the installed Yandex Browser build does not provide it, the new confirmed-tab audit intentionally stops instead of falling back to a weaker tab-ID-only check.
+
+The desktop Browser page now describes the confirmed-tab workflow rather than the superseded configured-URL/background-tab flow. Open the three logged-in resource tabs, map their HTTPS URLs in the extension popup, select and confirm the three candidates, then start the audit from the desktop. Only currently rendered, supported tables are included. The exact site headers and date formats remain an adapter contract until verified against the user's live sites.
+
+Run `node --test tests/browser_automation.test.cjs tests/browser_desktop_dispatch.test.cjs tests/navigation_ui.test.cjs` for selected-document replacement, dispatch and UI copy regression checks.
