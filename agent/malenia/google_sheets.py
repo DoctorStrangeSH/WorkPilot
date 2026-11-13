@@ -465,10 +465,19 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
             parsed = urlsplit(spreadsheet_url)
             match = re.fullmatch(r"/spreadsheets/d/([A-Za-z0-9_-]{10,256})/edit/?", parsed.path)
             query = parse_qs(parsed.query)
+            fragment_query = parse_qs(parsed.fragment)
             spreadsheet_id = match.group(1) if match else ""
-            selected_gid = gid or (query.get("gid", [None])[0])
+            query_gids = query.get("gid", [])
+            fragment_gids = fragment_query.get("gid", [])
+            if len(query_gids) > 1 or len(fragment_gids) > 1:
+                raise ValueError
+            query_gid = query_gids[0] if query_gids else None
+            fragment_gid = fragment_gids[0] if fragment_gids else None
+            if query_gid and fragment_gid and query_gid != fragment_gid:
+                raise ValueError
+            selected_gid = gid or query_gid or fragment_gid
             if (parsed.scheme != "https" or parsed.hostname != "docs.google.com"
-                    or parsed.username or parsed.password or parsed.fragment
+                    or parsed.username or parsed.password
                     or (selected_gid is not None and not re.fullmatch(r"\d{1,16}", selected_gid))):
                 raise ValueError
         except (ValueError, TypeError):
