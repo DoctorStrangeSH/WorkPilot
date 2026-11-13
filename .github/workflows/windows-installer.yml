@@ -196,7 +196,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: malenia-windows-package
-          path: \${{ runner.temp }}/malenia-windows-package.zip
+          path: ${{ runner.temp }}/malenia-windows-package.zip
           if-no-files-found: error
           retention-days: 14
 
