@@ -79,6 +79,8 @@ class FakeOpener:
                 raise AssertionError("Missing bearer access token")
             if request.get_method() == "PUT":
                 return FakeResponse({"updatedRange": "Orders!A1:B2", "updatedRows": 2, "updatedColumns": 2, "updatedCells": 4})
+            if request.get_method() == "GET" and "/values/" not in request.full_url:
+                return FakeResponse({"properties": {"title": "ИНВента"}, "sheets": [{"properties": {"sheetId": 123, "title": "Текущие", "index": 0}}]})
             if request.get_method() == "GET":
                 return FakeResponse(self.sheet_payload)
             raise AssertionError("Unexpected Sheets method")
@@ -290,6 +292,28 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         self.assertEqual(sheets_request.get_method(), "GET")
         self.assertIn("Bearer access-token-fixture", sheets_request.get_header("Authorization"))
         self.assertTrue(hasattr(connector, "write_values"))
+
+    def test_read_active_sheet_extracts_document_and_tab_from_url(self):
+        store = FakeCredentialStore({
+            "google-sheets-refresh-token": "refresh-token-fixture",
+            "google-sheets-client-id": CLIENT_ID,
+        })
+        opener = FakeOpener()
+        connector = GoogleSheetsConnector(store, opener)
+        connector._access_token = "access-token-fixture"
+        connector._access_expires_at = time.monotonic() + 3600
+        url = "https://docs.google.com/spreadsheets/d/" + SPREADSHEET_ID + "/edit?gid=123"
+        result = connector.read_active_sheet(url)
+        self.assertEqual(result["spreadsheet_id"], SPREADSHEET_ID)
+        self.assertEqual(result["sheet_title"], "Текущие")
+        self.assertTrue(result["gid_selected"])
+        self.assertEqual(result["values"][1][0], "CP-001")
+        self.assertFalse(result["read_only"])
+
+    def test_read_active_sheet_rejects_non_google_urls(self):
+        connector = GoogleSheetsConnector(FakeCredentialStore(), FakeOpener())
+        with self.assertRaises(GoogleSheetsError):
+            connector.read_active_sheet("https://evil.test/spreadsheets/d/" + SPREADSHEET_ID + "/edit")
 
     def test_write_values_uses_literal_put_and_rejects_formulas(self):
         store = FakeCredentialStore({
