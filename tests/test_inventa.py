@@ -43,6 +43,39 @@ class InventaAnalysisTests(unittest.TestCase):
         result = analyze_inventa(self.rows + [["", "", "", "", "", "", "", "", "", ""]])
         self.assertEqual(result["rows_analyzed"], 4)
 
+    def test_first_order_requires_unique_id_cargo_and_valid_date(self):
+        result = analyze_inventa(self.rows, "12.09.2026")
+        self.assertEqual(result["first_order"]["order_id"], "LO-3")
+        self.assertEqual(result["first_order"]["inventory_date"], "2026-09-12")
+        rows = self.rows[:2] + [[46256, "LO-4", "CARGO-4", 100, "Товар", "", "", "В работе", "", ""]]
+        first = analyze_inventa(rows, "22.08.2026")["first_order"]
+        self.assertEqual((first["source_row"], first["order_id"], first["cargo_place"]), (3, "LO-4", "CARGO-4"))
+        self.assertEqual(first["inventory_date"], "2026-08-22")
+
+    def test_does_not_guess_cargo_place_from_order_id(self):
+        rows = [["Дата", "Id заказа", "Стоимость", "Статус"],
+                ["2026-09-12", "LO-1", 100, "В работе"]]
+        result = analyze_inventa(rows, "12.09.2026")
+        self.assertIsNone(result["first_order"])
+        self.assertEqual(result["first_order_blocker"], "cargo_column_not_mapped")
+
+    def test_sheet_date_overrides_row_date_and_status(self):
+        rows = [["Дата", "Id заказа", "Грузоместо", "Стоимость", "Статус"],
+                ["2026-08-20", "ORDER-1", "BOX-1", 100, "Выдан"],
+                [46256, "ORDER-2", "BOX-2", 200, "Не найден"]]
+        report = analyze_inventa(rows, "22.08 (Архив)")
+        self.assertEqual(report["sheet_inventory_date"], "2026-08-22")
+        self.assertEqual(report["first_order"]["order_id"], "ORDER-1")
+        self.assertEqual(report["first_order"]["inventory_date"], "2026-08-22")
+
+    def test_undated_or_ambiguous_archive_does_not_guess_year(self):
+        rows = [["Дата", "Id заказа", "Грузоместо", "Стоимость", "Статус"],
+                ["2025-08-22", "O-1", "B-1", 100, "Выдан"],
+                ["2026-08-22", "O-2", "B-2", 100, "Выдан"]]
+        self.assertEqual(analyze_inventa(rows, "22 августа")['first_order_blocker'], "sheet_date_not_verified")
+        self.assertEqual(analyze_inventa(rows, "22 августа 2026")['sheet_inventory_date'], "2026-08-22")
+        self.assertEqual(analyze_inventa(rows, "Архив")['first_order_blocker'], "sheet_date_not_verified")
+
 
 if __name__ == "__main__":
     unittest.main()

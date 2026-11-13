@@ -238,8 +238,9 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
   };
   const analyzeActiveInventa=async()=>{
     setBusy(true);setSheetError("");setSheetNotice("");setInventaReport(null);
-    const activeTab=tabs.find(tab=>/https:\/\/docs\.google\.com\/spreadsheets\/d\//.test(tab.url));
-    const spreadsheetUrl=activeTab?.url||"https://docs.google.com/spreadsheets/d/1zPgIA_Au6J8_NEAPsTZo1TLkfFJYUTYKxtIwUWRHS30/edit";
+    const activeTab=tabs.find(tab=>/^https:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9_-]+(?:\/|$)/.test(tab.url));
+    if(!activeTab){setSheetError("Не найдена переданная вкладка Google Sheets. Открой ИНВенту в браузере и поделись этой вкладкой через Browser Bridge.");setBusy(false);return;}
+    const spreadsheetUrl=activeTab.url;
     try{
       const result=await invoke<any>("analyze_active_inventa",{spreadsheetUrl});
       setInventaReport(result);
@@ -292,7 +293,12 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
             <div className="sheet-preview-head"><b>{inventaReport.source.spreadsheet_title} · {inventaReport.source.sheet_title}</b><small>{inventaReport.analysis.rows_analyzed} строк</small></div>
             <div className="sources-notice"><b>Статусы</b> {Object.entries(inventaReport.analysis.status_counts).map(([k,v])=>k+": "+v).join(" · ")}</div>
             <p><b>Дубли ID:</b> {inventaReport.analysis.duplicate_order_ids.length} · <b>Ошибочные даты:</b> {inventaReport.analysis.invalid_date_rows.length} · <b>Ошибочные суммы:</b> {inventaReport.analysis.invalid_cost_rows.length} · <b>Без тикета:</b> {inventaReport.analysis.missing_ticket_rows.length}</p>
-            <p><b>Не заполнено:</b> {Object.entries(inventaReport.analysis.missing_required).map(([k,v])=>k+": "+v).join(" · ")||"нет"}</p>
+            <p><b>Дата листа для проверки:</b> {inventaReport.analysis.sheet_inventory_date||"не подтверждена"} · <b>Не заполнено:</b> {Object.entries(inventaReport.analysis.missing_required).map(([k,v])=>k+": "+v).join(" · ")||"нет"}</p>
+            {inventaReport.analysis.first_order?<div data-testid="inventa-first-order">
+              <h3>Первый заказ для проверки</h3>
+              <p><b>ID:</b> {inventaReport.analysis.first_order.order_id} · <b>Грузоместо:</b> {inventaReport.analysis.first_order.cargo_place} · <b>Дата ИНВенты:</b> {inventaReport.analysis.first_order.inventory_date} · <b>Строка:</b> {inventaReport.analysis.first_order.source_row}</p>
+              <p>Проверяем не исходный статус, а дату листа. Следующий этап: найти грузоместо в DataLens по main_partner_code_original, проверить скан OK от СЦ 101366 строго после даты листа. Если такого скана нет — проверить Asgard. До получения доказательств статус заказа не определён.</p>
+            </div>:<p role="status">Не удалось безопасно выделить первый заказ: {inventaReport.analysis.first_order_blocker==="sheet_date_not_verified"?"дата листа или её год не определены однозначно":inventaReport.analysis.first_order_blocker==="cargo_column_not_mapped"?"нет подтверждённой колонки грузоместа":"нет однозначной строки с ID и грузоместом"}. Для проверки в DataLens требуется точное грузоместо и подтверждённая дата листа.</p>}
           </div>:null}
           </> }
         {sheetsStatus.status==="authorizing"?<p className="source-help">Завершите подтверждение в системном браузере. Malenia не увидит пароль Google.</p>:null}

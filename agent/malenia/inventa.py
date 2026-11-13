@@ -13,7 +13,7 @@ from typing import Any
 ALIASES = {
     "order_id": {"id заказа", "номер заказа", "заказ", "order id", "order_id"},
     "date": {"дата", "дата заказа", "inventory date", "date"},
-    "partner": {"main_partner_code_original", "main_partner", "партнер", "партнёр"},
+    "partner": {"main_partner_code_original", "main_partner", "партнер", "партнёр", "грузоместо", "грузо место"},
     "cost": {"стоимость", "сумма", "цена", "cost", "amount"},
     "name": {"наименование", "товар", "название", "name", "product"},
     "comment": {"комментарий", "comment", "примечание"},
@@ -23,6 +23,9 @@ ALIASES = {
 }
 REQUIRED = ("order_id", "date", "cost", "status")
 ANOMALY_WORDS = ("аномал", "потер", "ошиб", "не найден", "проблем")
+MONTH_NAMES = {"января": 1, "февраля": 2, "марта": 3, "апреля": 4,
+               "мая": 5, "июня": 6, "июля": 7, "августа": 8,
+               "сентября": 9, "октября": 10, "ноября": 11, "декабря": 12}
 
 
 def _blank(value: Any) -> bool:
@@ -80,12 +83,60 @@ def _number_ok(value: Any) -> bool:
         return False
 
 
+def _iso_inventory_date(value: Any) -> str | None:
+    """Normalize a sheet calendar day, never invent an inventory time."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if not 1 <= value <= 100000 or int(value) != value:
+            return None
+        return (date(1899, 12, 30) + timedelta(days=int(value))).isoformat()
+    raw = str(value or "").strip()
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(raw, fmt).date().isoformat()
+        except ValueError:
+            pass
+    return None
+
+
+def _inventory_day_from_title(title: str, rows: list[list[Any]], date_col: int | None) -> str | None:
+    """Sheet name determines day/month; row dates may only disambiguate its year."""
+    name = title.strip().casefold()
+    numeric = re.search(r"(?<!\d)(\d{1,2})[./-](\d{1,2})(?:[./-](\d{4}))?(?!\d)", name)
+    named = re.search(r"(?<!\d)(\d{1,2})\s+(" + "|".join(MONTH_NAMES) + r")(?:\s+(\d{4}))?(?!\d)", name)
+    if numeric:
+        day, month = int(numeric[1]), int(numeric[2])
+        year = int(numeric[3]) if numeric[3] else None
+    elif named:
+        day, month = int(named[1]), MONTH_NAMES[named[2]]
+        year = int(named[3]) if named[3] else None
+    else:
+        return None
+    if year is None:
+        # Never silently apply the current year to an archival inventory tab.
+        # A matching cell date may *only* establish the year, not override
+        # the day/month supplied by the sheet name.
+        matches = set()
+        if date_col is not None:
+            for row in rows:
+                parsed = _iso_inventory_date(row[date_col]) if date_col < len(row) else None
+                if parsed and parsed[5:10] == f"{month:02d}-{day:02d}":
+                    matches.add(int(parsed[:4]))
+        if len(matches) != 1:
+            return None
+        year = matches.pop()
+    try:
+        return date(year, month, day).isoformat()
+    except ValueError:
+        return None
+
+
 def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, Any]:
     """Summarize an auto-read sheet; never invent statuses or repair source cells."""
     if not isinstance(rows, list) or len(rows) > 10000:
         raise ValueError("inventa_row_limit")
     header_index, columns = detect_header(rows)
     data = rows[header_index + 1:]
+    sheet_inventory_date = _inventory_day_from_title(sheet_title, data, columns.get("date"))
     records: list[dict[str, Any]] = []
     ids: dict[str, list[int]] = defaultdict(list)
     statuses: Counter[str] = Counter()
@@ -95,6 +146,8 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
     invalid_costs: list[int] = []
     no_ticket: list[int] = []
     anomaly_rows: list[int] = []
+    first_order: dict[str, Any] | None = None
+    candidates: list[dict[str, Any]] = []
 
     def cell(row: list[Any], key: str) -> Any:
         index = columns.get(key)
@@ -104,6 +157,13 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
         if all(_blank(value) for value in row):
             continue
         order_id = ("" if _blank(cell(row, "order_id")) else str(cell(row, "order_id"))).strip()
+        cargo_place = ("" if _blank(cell(row, "partner")) else str(cell(row, "partner"))).strip()
+        inventory_date = sheet_inventory_date
+        if order_id and cargo_place and inventory_date:
+            candidates.append({"source_row": offset, "order_id": order_id,
+                           "cargo_place": cargo_place, "inventory_date": inventory_date,
+                           "status": ("" if _blank(cell(row, "status")) else str(cell(row, "status"))).strip(),
+                           "ticket": ("" if _blank(cell(row, "ticket")) else str(cell(row, "ticket"))).strip()})
         status = ("" if _blank(cell(row, "status")) else str(cell(row, "status"))).strip()
         group = ("" if _blank(cell(row, "group")) else str(cell(row, "group"))).strip()
         if order_id:
@@ -130,10 +190,14 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
             groups[group] += 1
         records.append({"row": offset, "order_id": order_id, "status": status})
 
+    cargo_counts = Counter(item["cargo_place"] for item in candidates)
+    first_order = next((item for item in candidates if len(ids[item["order_id"]]) == 1
+                        and cargo_counts[item["cargo_place"]] == 1), None)
     duplicates = [{"order_id": key, "rows": positions}
                   for key, positions in ids.items() if len(positions) > 1]
     return {
         "sheet_title": str(sheet_title)[:200],
+        "sheet_inventory_date": sheet_inventory_date,
         "header_row": header_index + 1,
         "columns": {key: index + 1 for key, index in columns.items()},
         "rows_analyzed": len(records),
@@ -145,6 +209,10 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
         "invalid_cost_rows": invalid_costs[:200],
         "missing_ticket_rows": no_ticket[:200],
         "anomaly_status_rows": anomaly_rows[:200],
+        "first_order": first_order,
+        "first_order_blocker": None if first_order else (
+            "sheet_date_not_verified" if sheet_inventory_date is None else
+            "cargo_column_not_mapped" if "partner" not in columns else "no_unambiguous_order_with_cargo_and_date"),
         "read_only": True,
         "source_rows_are_evidence_not_edits": True,
     }

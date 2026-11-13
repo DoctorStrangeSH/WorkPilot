@@ -47,6 +47,9 @@ test('Google Sheets onboarding is explicitly read-only and calls the native conn
   assert.match(app, /disconnect_google_sheets/);
   assert.match(app, /Исходные данные остаются нетронутыми/);
   assert.doesNotMatch(app, /write_google_sheet|update_google_sheet/);
+  assert.match(app, /Не найдена переданная вкладка Google Sheets/);
+  assert.match(app, /inventa-first-order/);
+  assert.doesNotMatch(app, /1zPgIA_Au6J8_NEAPsTZo1TLkfFJYUTYKxtIwUWRHS30/);
 });
 
 
