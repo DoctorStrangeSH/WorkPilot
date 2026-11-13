@@ -649,7 +649,7 @@ test("selected DataLens and Asgard tabs perform only labelled read-only cargo lo
         : role==="datalens"
           ? {columns:["main_partner_code_original","sc_id","result","scanned_at"],rows:[["TEST-ORDER-1","101366","OK","2026-09-14T10:00:00"]]}
           : {columns:["cargo_place","status"],rows:[["TEST-ORDER-1","Принят на ФФ"]]};
-      return [{frameId:0,documentId:"doc-"+target.id,result:{
+      return [{frameId:0,documentId:"doc-"+target.tabId,result:{
         origin:new URL(tab.url).origin,text:"",table,next:null,incomplete:false
       }}];
     }}
