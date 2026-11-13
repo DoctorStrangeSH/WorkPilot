@@ -353,6 +353,36 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         self.assertEqual(len(sheets_requests), 2)
         self.assertEqual(sheets_requests[1].get_header("Authorization"), "Bearer refreshed-access-token")
 
+    def test_read_active_sheet_resolves_google_hash_gid(self):
+        store = FakeCredentialStore({
+            "google-sheets-refresh-token": "refresh-token-fixture",
+            "google-sheets-client-id": CLIENT_ID,
+        })
+        opener = FakeOpener()
+        connector = GoogleSheetsConnector(store, opener)
+        connector._access_token = "access-token-fixture"
+        connector._access_expires_at = time.monotonic() + 3600
+        url = "https://docs.google.com/spreadsheets/d/" + SPREADSHEET_ID + "/edit#gid=123"
+        result = connector.read_active_sheet(url)
+        self.assertEqual(result["spreadsheet_id"], SPREADSHEET_ID)
+        self.assertEqual(result["sheet_id"], 123)
+        self.assertTrue(result["gid_selected"])
+        values_request = [r for r in opener.requests if "/values/" in r.full_url][-1]
+        self.assertIn("'Текущие'!A:Z", values_request.full_url)
+        self.assertEqual(values_request.get_method(), "GET")
+
+    def test_read_active_sheet_rejects_conflicting_query_and_fragment_gids(self):
+        store = FakeCredentialStore({
+            "google-sheets-refresh-token": "refresh-token-fixture",
+            "google-sheets-client-id": CLIENT_ID,
+        })
+        connector = GoogleSheetsConnector(store, FakeOpener())
+        with self.assertRaisesRegex(GoogleSheetsError, "invalid_google_sheets_url"):
+            connector.read_active_sheet(
+                "https://docs.google.com/spreadsheets/d/" + SPREADSHEET_ID +
+                "/edit?gid=123#gid=456"
+            )
+
     def test_invalid_spreadsheet_or_range_fails_before_network(self):
         store = FakeCredentialStore({
             "google-sheets-refresh-token": "refresh-token-fixture",
