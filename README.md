@@ -109,3 +109,12 @@ Malenia не извлекает cookies, пароли или токены из �
 - Token error handling now classifies only safe parameter categories when Google's bounded `error_description` mentions `code_verifier`, `redirect_uri`, `client_id`, `client_secret`, or authorization code. Raw provider descriptions and any authorization material are never returned or logged.
 - Added regression tests for those mappings and for ensuring no provider description/client ID leaks. Python tests passed on 3.11, 3.12, and 3.13 for commit `ce0ec0b5`.
 - Still not proven: exact root cause of the user's original provider error. The next built version should display a more specific safe category if Google returns one; if it remains generic, inspect Google Cloud client type/configuration and exact token request metadata without collecting secrets.
+
+
+## 2026-11-13 — INVenta archive parser correction
+- User confirmed Google OAuth works after adding the OAuth Desktop Client Secret. A real read-only Google Sheets read succeeded for `22.08 (Архив)` (185 rows).
+- Screenshot evidence: first row/order ID `PVZ_FBS_RET_7720160`, partner/cargo code same value, Sheets serial date `46256` (2026-08-22), cost `29980`, product `Кеды RALF RINGER`, status `Исключение`, ticket `FA254276C66034580038`.
+- Actual export has a blank header for the product-name column (E) and a blank header for status (H). The parser already inferred status; it now also infers the unlabeled product column without confusing mapped comment/ticket/group columns.
+- Google Sheets serial dates are normalized to ISO calendar dates. Rows without an order ID are treated as report/summary/empty rows and skipped from order-level missing-field counts.
+- The desktop first-order preview now shows the product name and labels the date as export date. Source remains read-only; DataLens and Asgard checks remain explicitly unverified.
+- Regression tests cover the real screenshot shape and serial date. Python matrix passed 3.11/3.12/3.13 at commit `959471ce`; Desktop check at that commit was still running when last checked. A later UI commit adds the product line; re-check CI before packaging.
