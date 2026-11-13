@@ -668,7 +668,7 @@ test("selected DataLens and Asgard tabs perform only labelled read-only cargo lo
     };
     throw Error("selected tab flow must not forward page text");
   },async()=>{}, {selectedTabs,exactGetSearch:true});
-  assert.equal(result.phase,"reconciled");
+  assert.equal(result.phase,"reconciled",JSON.stringify(result));
   assert.equal(reactiveSearches,2);
   assert.equal(created,0);assert.equal(updated,0);assert.equal(removed,0);
   assert.deepEqual(sent.map(x=>x.type),["reconcile_site_tables"]);
