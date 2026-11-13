@@ -204,6 +204,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
   const [busy,setBusy]=useState(false);
   const [sheetError,setSheetError]=useState("");
   const [sheetNotice,setSheetNotice]=useState("");
+  const [inventaReport,setInventaReport]=useState<any|null>(null);
 
   const refreshSheetsStatus=useCallback(async()=>{
     if(!connected){setSheetsStatus({connected:false,status:"agent_stopped",error:null});return;}
@@ -263,6 +264,18 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
     finally{setBusy(false);}
   };
 
+  const analyzeActiveInventa=async()=>{
+    setBusy(true);setSheetError("");setSheetNotice("");setInventaReport(null);
+    const activeTab=tabs.find(tab=>/https:\/\/docs\\.google\\.com\/spreadsheets\/d\//.test(tab.url));
+    const spreadsheetUrl=activeTab?.url||"https://docs.google.com/spreadsheets/d/1zPgIA_Au6J8_NEAPsTZo1TLkfFJYUTYKxtIwUWRHS30/edit";
+    try{
+      const result=await invoke<any>("analyze_active_inventa",{spreadsheetUrl});
+      setInventaReport(result);
+      setSheetNotice("ИНВента прочитана. Анализ выполнен без изменения исходной таблицы.");
+    }catch(error){setSheetError(String(error));}
+    finally{setBusy(false);}
+  };
+
   const sheetsAuthorized=sheetsStatus.status==="authorized"||sheetsStatus.connected;
   const sheetVerified=sheetsAuthorized&&verifiedKey===spreadsheetId.trim()+"|"+range.trim();
   const statusLabel=sheetVerified?"Подключён · диапазон проверен":
@@ -277,14 +290,14 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
 
   return <section className="page sources-page">
     <div className="page-head"><div><div className="eyebrow">РАБОЧИЕ ПОДКЛЮЧЕНИЯ</div><h1>Источники</h1><p>Каждый источник подключается отдельно, с минимальными разрешениями и понятным статусом.</p></div></div>
-    <div className="sources-notice"><ShieldCheck size={17}/><span>Google Sheets можно подключить отдельно в режиме только чтения. ChatGPT не передаёт свои подключения Malenia. DataLens и Asgard пока не подключены.</span></div>
+    <div className="sources-notice"><ShieldCheck size={17}/><span>Google Sheets подключается отдельно с правами чтения и редактирования. Каждая запись требует отдельного подтверждения. ChatGPT не передаёт свои подключения Malenia.</span></div>
     {sheetError?<p className="alert error" role="alert">{sheetError}</p>:null}
     {sheetNotice?<p className="alert success" role="status">{sheetNotice}</p>:null}
     <div className="sources-grid">
       <article className="panel source-card google-source-card">
         <div className="source-card-top"><span className="source-icon sheets"><Database size={19}/></span><span className={"source-state "+(sheetVerified?"ready":"pending")}>{statusLabel}</span></div>
         <h2>Google Sheets · ИНВента</h2>
-        <p>Отдельная авторизация Malenia. Запрашивается только <code>spreadsheets.readonly</code>: приложение может читать таблицы, но не изменять их. Важно: сам Google scope разрешает просмотр всех доступных аккаунту таблиц; Malenia отправляет GET только для ID и диапазона, которые ты явно укажешь.</p>
+        <p>Отдельная авторизация Malenia. Запрашивается Google Sheets scope чтения и записи. Он технически распространяется на таблицы аккаунта, доступные приложению. Malenia ограничивает рабочий сценарий выбранной ИНВентой; запись возможна только после просмотра точного diff и подтверждения.</p>
         {!connected?<p className="source-help">Сначала запустите локальный агент на главной странице.</p>:null}
         {!sheetsAuthorized?
           <div className="google-connect-form">
@@ -298,18 +311,18 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
             <small>Создай OAuth client типа Desktop и включи Google Sheets API. Если consent screen в режиме Testing, добавь свой аккаунт в Test users. Desktop-приложения являются public clients: Google указывает, что Client Secret необязателен и не может считаться защищённым секретом. Если конкретный проект требует его при обмене токена, введи его здесь — он сохранится только в Windows Credential Manager. Не отправляй его в чат. Важно: если внешний OAuth-проект оставить в режиме Testing, refresh token для этого scope истечёт через 7 дней. Для постоянной работы не оставляй внешний проект в Testing; для личного использования Google допускает исключение из полной проверки, но может показывать предупреждение о непроверенном приложении.</small>
           </div>:
           <div className="google-read-form">
-            <label>ID таблицы
-              <input value={spreadsheetId} onChange={e=>{setSpreadsheetId(e.target.value);setSheetData(null);setVerifiedKey(null);}} maxLength={256} placeholder="ID между /d/ и /edit в ссылке Google Sheets" disabled={busy}/>
-            </label>
-            <label>Диапазон ячеек
-              <input value={range} onChange={e=>{setRange(e.target.value);setSheetData(null);setVerifiedKey(null);}} maxLength={200} placeholder="Например: Лист1!A1:Z100" disabled={busy}/>
-            </label>
             <div className="google-actions">
-              <button className="primary" disabled={busy||!spreadsheetId.trim()||!range.trim()} onClick={()=>void readSheet()}>{busy?"Читаем…":"Прочитать диапазон"}</button>
-              <button className="secondary" disabled={busy} onClick={()=>void disconnectSheets()}>Отключить</button>
+              <button className="primary" disabled={busy} onClick={()=>void analyzeActiveInventa()}>{busy?"Анализируем…":"Найти ИНВенту и проанализировать"}</button>
+              <button className="secondary" disabled={busy} onClick={()=>void disconnectSheets()}>Отключить Google</button>
             </div>
-            <small>Читается только указанный диапазон. Обновление ячеек, комментариев и статусов отключено.</small>
-          </div>}
+            <small>Маления ищет Google Sheets во вкладках, которыми ты поделился через Browser Bridge. Если gid отсутствует, она определяет лист по заголовкам ИНВенты. Данные исходной таблицы не меняются при анализе.</small>
+          </div>
+          {inventaReport?<div className="sheet-preview">
+            <div className="sheet-preview-head"><b>{inventaReport.source.spreadsheet_title} · {inventaReport.source.sheet_title}</b><small>{inventaReport.analysis.rows_analyzed} строк</small></div>
+            <div className="sources-notice"><b>Статусы</b> {Object.entries(inventaReport.analysis.status_counts).map(([k,v])=>k+": "+v).join(" · ")}</div>
+            <p><b>Дубли ID:</b> {inventaReport.analysis.duplicate_order_ids.length} · <b>Ошибочные даты:</b> {inventaReport.analysis.invalid_date_rows.length} · <b>Ошибочные суммы:</b> {inventaReport.analysis.invalid_cost_rows.length} · <b>Без тикета:</b> {inventaReport.analysis.missing_ticket_rows.length}</p>
+            <p><b>Не заполнено:</b> {Object.entries(inventaReport.analysis.missing_required).map(([k,v])=>k+": "+v).join(" · ")||"нет"}</p>
+          </div>:null}}
         {sheetsStatus.status==="authorizing"?<p className="source-help">Завершите подтверждение в системном браузере. Malenia не увидит пароль Google.</p>:null}
         {sheetsStatus.status==="denied"?<p className="source-help">Разрешение не было предоставлено. Можно повторить подключение.</p>:null}
         {sheetsStatus.status==="expired"?<p className="source-help">Окно авторизации не получило ответ вовремя. Начните подключение заново.</p>:null}
