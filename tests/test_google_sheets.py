@@ -442,6 +442,36 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
             with self.assertRaises(GoogleSheetsError):
                 connector.start_connect(CLIENT_ID)
 
+    def test_token_endpoint_error_exposes_only_allowlisted_oauth_category(self):
+        class InvalidClientOpener:
+            def open(self, request, timeout=0):
+                raise HTTPError(
+                    request.full_url, 401, "Unauthorized", {},
+                    io.BytesIO(json.dumps({
+                        "error": "invalid_client",
+                        "error_description": "private provider detail must not escape",
+                    }).encode("utf-8")),
+                )
+
+        connector = GoogleSheetsConnector(FakeCredentialStore(), InvalidClientOpener())
+        with self.assertRaises(GoogleSheetsError) as raised:
+            connector._post_form(GOOGLE_TOKEN_ENDPOINT, {"client_id": CLIENT_ID}, 4096)
+        self.assertEqual(raised.exception.code, "google_oauth_invalid_client")
+        self.assertNotIn("private provider detail", str(raised.exception))
+        self.assertNotIn(CLIENT_ID, str(raised.exception))
+
+    def test_callback_page_does_not_claim_token_storage_is_complete(self):
+        connector = GoogleSheetsConnector(FakeCredentialStore(), FakeOpener(), callback_timeout=30)
+        result = connector.start_connect(CLIENT_ID)
+        query = parse_qs(urlsplit(result["authorization_url"]).query)
+        redirect_uri = query["redirect_uri"][0]
+        callback = redirect_uri + "/?code=authorization-code-fixture&state=" + query["state"][0]
+        with urlopen(callback, timeout=3) as response:
+            page = response.read().decode("utf-8")
+        self.assertIn("Ответ Google принят", page)
+        self.assertIn("проверяет разрешение и сохраняет доступ", page)
+        self.assertNotIn("Malenia получила ответ Google", page)
+
     def test_scope_expansion_is_rejected_before_token_storage(self):
         class ExpandedScopeOpener(FakeOpener):
             def open(self, request, timeout=0):
