@@ -794,3 +794,11 @@ Current limitations found while inspecting actual code:
 - Current Actions for `4edb759d`: Desktop `43395746349`, Python `43395746356`, Windows installer `43395746357` queued/pending at time of handoff. Do not claim green until all three complete on same SHA.
 - Important reality check: Browser extension currently polls a queued audit every minute and opens three configured URLs in background tabs. It performs generic table extraction and exact-form / narrowly labelled reactive search only. The current site reconciliation expects exact synthetic column names and currently cannot prove that those are the user's real DataLens/Asgard schemas. Asgard box-history adapter is not implemented; it deliberately withholds the "2 ШК Выдан" evidence. Do not label the full live workflow as working.
 - Next implementation task: obtain safe page capability snapshots from explicitly shared active Yandex tabs (origin, title, visible table headers, search controls, ARIA grid completeness) without persisting raw page text or cookies; expose a diagnostic panel that clearly reports each source as accessible / unsupported schema / login required. Then implement reviewed mappings for actual page structure before attempting per-order search. Preserve user sessions; no cookie extraction, credential scraping, or bypass.
+
+
+## 2026-11-13 — removed stale manual Sheets UI references
+
+- CI for `624fa735` confirmed Python tests passed but Desktop still failed: stale `spreadsheetId`/`range` references remained in a derived status label after removing the manual reader. The previous `4edb759d` CI failure is documented; do not report the build as fixed until new CI passes.
+- Removed the stale verification key/status logic and orphaned sheet preview state. Sources UI now reflects only the actual OAuth authorization state and does not imply that a manually selected range was verified.
+- Commit: `f7683b1a`.
+- User expectation remains: one-click, automatic investigation; no manual order IDs, spreadsheet ranges, Excel downloads, or edits to source tables.
