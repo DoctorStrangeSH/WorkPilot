@@ -224,13 +224,29 @@ navigated tab, or revoked permission, invalidates the selection.
 
 Confirmed tab IDs and sanitized locations are held in `chrome.storage.session`
 only; the mapping origin/path prefixes are stored in local extension storage.
-Session references disappear when the browser session ends. No page content is
-read by this flow, no duplicate tabs are opened, and no corporate records are
-changed. **The current audit engine is not yet wired to consume these selected
-tab references.** Any future reader must repeat the tab/URL/permission checks
-immediately before injecting a read into the selected tab; it must not trust a
-stored tab ID alone.
+Session references disappear when the browser session ends. The desktop-triggered
+audit now requires all three confirmed references, rechecks their current tab ID,
+HTTPS origin, exact path and granted host permission before the run, and repeats
+the tab/path/permission checks immediately around each DOM read. It reads only
+the structured visible table cells in these selected tabs; it does not extract
+or forward full page text, navigate, paginate, submit forms, or close the user's
+tabs. If a selected table exposes a next-page link, the selected-tab audit stops
+with an attention result rather than navigating the user's tab. Search-driven
+GET/reactive queries remain available only in the legacy isolated-background-tab
+runner and are deliberately disabled for selected tabs.
 
-Run `node --test tests/tab_discovery.test.cjs tests/browser_open_tab_discovery.test.cjs`
-to validate matching, duplicate selection, permission revocation, closed tabs,
-navigation changes and query/fragment sanitization.
+The audit engine sends the bounded table snapshots to the existing read-only
+reconciliation endpoint. No order edits, status changes or form submissions are
+implemented. If a tab is closed, navigated, loses permission, has an unsupported
+table schema or requires pagination, the source fails closed. Session-only
+selection expires after 30 minutes and is discarded on browser-session end.
+
+This integration is code- and test-verified, but compatibility with the user's
+actual private ИНВента, DataLens and Asgard pages is still unverified. The user
+must map the correct HTTPS origins/paths, grant host access through browser
+settings and keep the three source tabs open and logged in. No production-ready
+claim is made until tested against those authorized live sites.
+
+Run `node --test tests/tab_discovery.test.cjs tests/browser_open_tab_discovery.test.cjs tests/browser_automation.test.cjs`
+to validate matching, duplicate selection, revocation, stale tabs, in-place
+read-only extraction and fail-closed navigation handling.
