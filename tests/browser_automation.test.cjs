@@ -634,7 +634,7 @@ test("selected DataLens and Asgard tabs perform only labelled read-only cargo lo
     permissions:{async contains(){return true;}},
     scripting:{async executeScript({target,func,args}) {
       const tab=Object.values(records).find(x=>x.id===target.tabId);
-      const role=args[0];
+      const role=args?.[0];
       if(func.toString().includes("location.href")) {
         return [{frameId:0,documentId:"doc-"+target.tabId,result:{href:tab.url}}];
       }
