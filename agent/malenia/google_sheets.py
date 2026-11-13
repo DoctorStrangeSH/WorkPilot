@@ -605,5 +605,5 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
             "range": payload.get("range", range_a1.strip()),
             "majorDimension": payload.get("majorDimension", "ROWS"),
             "values": values,
-            "read_only": True,
+            "read_only": False,
         }
