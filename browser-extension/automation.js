@@ -232,20 +232,25 @@ var MaleniaAutomation = (() => {
         if (!Number.isInteger(tab.id)) throw new Error("invalid_tab");
         tabId = tab.id;
       }
-      if (selectedTab && searchKey !== null) throw new Error("unsupported_dynamic_search");
       if (searchKey !== null) {
         await waitLoaded(chromeApi, tabId);
         const current = await chromeApi.tabs.get(tabId);
         if (new URL(current.url || "").origin !== new URL(url).origin) {
           throw new Error("search_origin_mismatch");
         }
-        try {
-          await exactGetSearch(chromeApi, tabId, role, searchKey, new URL(url).origin);
-        } catch (error) {
-          if (!(error instanceof Error) || error.message !== "dynamic_search_ui") {
-            throw error;
-          }
+        if (selectedTab) {
+          // On an explicitly shared tab, never navigate or submit a form.
+          // Only a uniquely labelled, visible search-as-you-type control is allowed.
           await reactiveSearch(chromeApi, tabId, role, searchKey, new URL(url).origin);
+        } else {
+          try {
+            await exactGetSearch(chromeApi, tabId, role, searchKey, new URL(url).origin);
+          } catch (error) {
+            if (!(error instanceof Error) || error.message !== "dynamic_search_ui") {
+              throw error;
+            }
+            await reactiveSearch(chromeApi, tabId, role, searchKey, new URL(url).origin);
+          }
         }
       }
       const visited = new Set();
@@ -447,9 +452,9 @@ var MaleniaAutomation = (() => {
       await onProgress({phase: "reading", role, results: [...results]});
       try {
         const selectedTab = options.selectedTabs?.[role] || null;
-        const searchKeys = !selectedTab && role !== "inventory" && options.exactGetSearch ?
-          snapshots.inventory?.rows?.map(row =>
-            row[snapshots.inventory.columns.indexOf("cargo_place")]) : null;
+        const searchKeys = role !== "inventory" && options.exactGetSearch ?
+          [...new Set(snapshots.inventory?.rows?.map(row =>
+            row[snapshots.inventory.columns.indexOf("cargo_place")]) || [])] : null;
         if (!selectedTab && role !== "inventory" && options.exactGetSearch &&
             (!Array.isArray(searchKeys) || !searchKeys.length ||
              searchKeys.length > MAX_SEARCHES || new Set(searchKeys).size !== searchKeys.length ||
@@ -462,7 +467,7 @@ var MaleniaAutomation = (() => {
         for (const key of keys) {
           const selectedTab = options.selectedTabs?.[role] || null;
           const visitResult = await visit(chromeApi, role, targets[role], sendNative,
-            selectedTab ? null : key, selectedTab);
+            key, selectedTab);
           if (options.exactGetSearch && !visitResult.table) {
             throw new Error("unmapped_search_results");
           }
