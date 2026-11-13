@@ -32,6 +32,15 @@ class FakeGoogleSheets:
         self.calls.append(("read", spreadsheet_id, range_a1))
         return {"range": range_a1, "values": self.values, "read_only": True}
 
+    def read_active_sheet(self, spreadsheet_url, gid=None):
+        self.calls.append(("active", spreadsheet_url, gid))
+        return {"spreadsheet_id": "a" * 24, "spreadsheet_title": "ИНВента",
+            "sheet_title": "Текущие", "sheet_id": 123, "range": "Текущие!A:J",
+            "gid_selected": gid is not None, "read_only": False,
+            "values": [["Дата", "Id заказа", "main_partner_code_original", "Стоимость",
+                "Наименование", "Комментарий", "Тикет", "Статус", "Группировка заказов"],
+                ["2026-09-12", "LO-1", "P-1", 100, "Товар", "", "", "Найден", "Группа"]]}
+
     def write_values(self, spreadsheet_id, range_a1, values):
         self.calls.append(("write", spreadsheet_id, range_a1, values))
         self.values = values
@@ -123,6 +132,16 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(report["audit"]["summary"]["found"], 1)
         self.assertNotIn("cargo_place", json.dumps(report))
         self.assertEqual(set(report["audit"]), {"checked_at", "total", "summary", "read_only", "source"})
+
+    def test_active_inventa_analysis_uses_shared_google_sheet_url(self):
+        url = "https://docs.google.com/spreadsheets/d/" + "a" * 24 + "/edit?gid=123"
+        code, result = self.api("/v1/integrations/google-sheets/analyze-active",
+                                {"spreadsheet_url": url})
+        self.assertEqual(code, 200)
+        self.assertEqual(result["source"]["sheet_title"], "Текущие")
+        self.assertEqual(result["analysis"]["rows_analyzed"], 1)
+        self.assertTrue(result["read_only"])
+        self.assertEqual(self.google_sheets.calls[-1][0], "active")
 
     def test_google_sheet_edits_require_preview_then_one_time_approval(self):
         preview = {"spreadsheet_id": "a" * 24, "range": "Orders!A1:A1",
