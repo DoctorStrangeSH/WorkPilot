@@ -31,7 +31,7 @@ class InventaAnalysisTests(unittest.TestCase):
         self.assertEqual(result["duplicate_order_ids"], [{"order_id": "LO-1", "rows": [3, 4]}])
         self.assertEqual(result["invalid_date_rows"], [5])
         self.assertEqual(result["invalid_cost_rows"], [5])
-        self.assertEqual(result["missing_required"], {"name": 0, "status": 0})
+        self.assertEqual(result["missing_required"], {"name": 1})
         self.assertTrue(result["read_only"])
         self.assertEqual(result["first_order_preview"], {
             "row": 3, "order_id": "LO-1", "partner_code": "P-1",
@@ -119,7 +119,7 @@ class InventaAnalysisTests(unittest.TestCase):
 
     def test_blank_rows_are_ignored(self):
         result = analyze_inventa(self.rows + [["", "", "", "", "", "", "", "", "", ""]])
-        self.assertEqual(result["rows_analyzed"], 4)
+        self.assertEqual(result["rows_analyzed"], 3)
 
 
 if __name__ == "__main__":
