@@ -157,6 +157,37 @@ class NativeMessagingProtocolTests(unittest.TestCase):
             self.assertFalse(rejected["ok"])
             self.assertEqual(rejected["error"], "invalid_capability_snapshot")
 
+    def test_inspecting_google_sheet_auto_registers_only_safe_document_metadata(self):
+        page = {
+            "url": "https://docs.google.com/spreadsheets/d/" + "a" * 24 +
+                   "/edit?gid=123&authuser=private&token=secret",
+            "title": "ИНВента - Google Таблицы",
+            "table_headers": [], "tables": [], "search_labels": ["Поиск"],
+            "has_aria_grid": False, "virtualized": True, "login_required": False,
+        }
+        response = handle_message({"type": "inspect_capabilities", "page": page}, self.store)
+        self.assertTrue(response["ok"])
+        self.assertTrue(response["tab_registered"])
+        self.assertFalse(response["persisted"])
+        saved = self.store.list_browser_tabs()
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0]["url"], "https://docs.google.com/spreadsheets/d/" +
+                         "a" * 24 + "/edit?gid=123")
+        self.assertNotIn("private", json.dumps(saved))
+        self.assertNotIn("secret", json.dumps(saved))
+        self.assertEqual(saved[0]["title"], "ИНВента - Google Таблицы")
+
+    def test_google_sheet_metadata_registration_does_not_register_other_hosts(self):
+        page = {
+            "url": "https://example.com/spreadsheets/d/" + "a" * 24 + "/edit?gid=123",
+            "title": "Example", "table_headers": [], "tables": [], "search_labels": [],
+            "has_aria_grid": False, "virtualized": False, "login_required": False,
+        }
+        response = handle_message({"type": "inspect_capabilities", "page": page}, self.store)
+        self.assertTrue(response["ok"])
+        self.assertFalse(response["tab_registered"])
+        self.assertEqual(self.store.list_browser_tabs(), [])
+
     def test_reconcile_site_tables_remains_ephemeral(self):
         snapshots = {
             "inventory": {
