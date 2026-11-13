@@ -197,8 +197,6 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
   const [clientId,setClientId]=useState("");
   const [clientSecret,setClientSecret]=useState("");
   const [sheetsStatus,setSheetsStatus]=useState<GoogleSheetsStatus>({connected:false,status:"not_connected",error:null});
-  const [spreadsheetId,setSpreadsheetId]=useState("");
-  const [range,setRange]=useState("A1:Z100");
   const [sheetData,setSheetData]=useState<GoogleSheetsData|null>(null);
   const [verifiedKey,setVerifiedKey]=useState<string|null>(null);
   const [busy,setBusy]=useState(false);
@@ -243,27 +241,6 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
     }catch(error){setSheetError(String(error));}
     finally{setBusy(false);}
   };
-  const readSheet=async()=>{
-    setBusy(true);setSheetError("");setSheetNotice("");setSheetData(null);setVerifiedKey(null);
-    try{
-      const result=await invoke<GoogleSheetsData>("read_google_sheet",{
-        spreadsheetId:spreadsheetId.trim(),range:range.trim()
-      });
-      setSheetData(result);
-      setVerifiedKey(spreadsheetId.trim()+"|"+range.trim());
-      setSheetNotice("Диапазон прочитан. Никаких изменений в таблицу не внесено.");
-    }catch(error){
-      const message=String(error);
-      setSheetError(message);
-      if(message.includes("google_reauthorization_required")){
-        setSheetsStatus({connected:false,status:"reauthorization_required",error:"google_reauthorization_required"});
-        setVerifiedKey(null);
-        setSheetData(null);
-      }
-    }
-    finally{setBusy(false);}
-  };
-
   const analyzeActiveInventa=async()=>{
     setBusy(true);setSheetError("");setSheetNotice("");setInventaReport(null);
     const activeTab=tabs.find(tab=>/https:\/\/docs\.google\.com\/spreadsheets\/d\//.test(tab.url));
