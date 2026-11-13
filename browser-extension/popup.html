@@ -19,10 +19,10 @@
     <button id="share" type="button" disabled>Поделиться вкладкой</button>
     <button id="shareAll" class="secondary" type="button" disabled>Передать открытые вкладки</button>
     <button id="inspect" class="secondary" type="button" disabled>Проверить структуру активной вкладки</button>
-    <div class="automation"><strong>Диагностика рабочей вкладки</strong><p>Открой ИНВенту, DataLens или Asgard в Яндекс Браузере и проверь структуру активной страницы. Передаются только видимые заголовки таблиц и подписи полей поиска; содержимое заказов не сохраняется.</p><div id="auditStatus" class="status" role="status" aria-live="polite">Ожидает проверки активной вкладки.</div></div>
+    <div class="automation"><strong>Диагностика рабочей вкладки</strong><p>Открой любую рабочую страницу в Яндекс Браузере и проверь, какие элементы интерфейса доступны Malenia. Это диагностическая проверка, она не ограничена конкретными сайтами и не выполняет действий на странице.</p><div id="auditStatus" class="status" role="status" aria-live="polite">Ожидает проверки активной вкладки.</div></div>
     <section class="discovery">
       <strong>Найти уже открытые рабочие вкладки</strong>
-      <p>Укажи адреса страниц, которые сам считаешь ИНВентой, DataLens и Asgard. Маления проверит только текущие вкладки и уже выданные разрешения.</p>
+      <p>Найди уже открытые рабочие страницы. Для каждой новой системы доступ добавляется отдельно и только после твоего подтверждения.</p>
       <label for="mapInventory">ИНВента</label><input id="mapInventory" type="url" placeholder="https://example.com/orders">
       <label for="mapDatalens">DataLens</label><input id="mapDatalens" type="url" placeholder="https://analytics.example.com">
       <label for="mapAsgard">Asgard</label><input id="mapAsgard" type="url" placeholder="https://asgard.example.com">
