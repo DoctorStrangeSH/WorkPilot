@@ -20,10 +20,22 @@
     <button id="shareAll" class="secondary" type="button" disabled>Передать открытые вкладки</button>
     <button id="inspect" class="secondary" type="button" disabled>Проверить структуру активной вкладки</button>
     <div class="automation"><strong>Диагностика рабочей вкладки</strong><p>Открой ИНВенту, DataLens или Asgard в Яндекс Браузере и проверь структуру активной страницы. Передаются только видимые заголовки таблиц и подписи полей поиска; содержимое заказов не сохраняется.</p><div id="auditStatus" class="status" role="status" aria-live="polite">Ожидает проверки активной вкладки.</div></div>
+    <section class="discovery">
+      <strong>Найти уже открытые рабочие вкладки</strong>
+      <p>Укажи адреса страниц, которые сам считаешь ИНВентой, DataLens и Asgard. Маления проверит только текущие вкладки и уже выданные разрешения.</p>
+      <label for="mapInventory">ИНВента</label><input id="mapInventory" type="url" placeholder="https://example.com/orders">
+      <label for="mapDatalens">DataLens</label><input id="mapDatalens" type="url" placeholder="https://analytics.example.com">
+      <label for="mapAsgard">Asgard</label><input id="mapAsgard" type="url" placeholder="https://asgard.example.com">
+      <button id="discoverTabs" class="secondary" type="button">Найти вкладки</button>
+      <div id="discoveryResults" class="discovery-results" role="status" aria-live="polite">Пока не выполнялся поиск.</div>
+      <button id="confirmTabs" type="button" disabled>Подтвердить выбранные вкладки</button>
+      <div id="discoveryStatus" class="status" role="status" aria-live="polite">Никакие вкладки не выбраны.</div>
+    </section>
     <button id="retry" class="secondary" type="button" disabled>Повторить подключение</button>
     <p class="privacy">«Передать открытые вкладки» по вашему нажатию передаёт заголовки и адреса без параметров HTTP(S)-вкладок во всех окнах браузера (не содержимое страниц). «Проверить структуру активной вкладки» передаёт только видимые заголовки таблиц, подписи поисковых полей и структурные признаки страницы. Строки заказов, cookies, пароли и содержимое форм не передаются.</p>
   </main>
   <script src="automation.js"></script>
+  <script src="tab_discovery.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
