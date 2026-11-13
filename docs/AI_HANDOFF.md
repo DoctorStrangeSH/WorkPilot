@@ -820,3 +820,13 @@ Current limitations found while inspecting actual code:
 - Updated popup bridge tests for the structural-only payload; commit `c4ae8050`.
 - Remaining: the older `background.js`/ `automation.js` desktop audit queue still contains the prior manually configured three-URL traversal. Popup no longer exposes it, but backend queue and old automation code are not yet removed/replaced. Desktop UI has not yet been wired to display per-tab capability summaries; current popup shows diagnostic locally. No live DataLens/Asgard adapter exists yet. Do not claim end-to-end investigation is operational.
 - Next: run Actions for current head and fix any failures; wire sanitized capability summaries to desktop via native host/store endpoint (if desired), then implement per-site adapters only after user has explicitly inspected the actual pages. Do not persist order IDs or raw site content. Do not write to source sheets.
+
+
+## 2026-11-13 — follow-up: diagnostics handshake and CI test repair
+
+- Actions on `249d92a1`: Python passed; Desktop failed in two stale `navigation_ui.test.cjs` expectations. Current UI uses Russian source notice text and `sheetsStatus.status==="reauthorization_required"`; old test expected legacy phrases/flag. Updated assertions. Commit `2217299a`.
+- Added `inspect_capabilities` to the Native Messaging hello capability list so the popup can negotiate the structural diagnostics message explicitly. Commit `df539a42`.
+- Replaced stale popup privacy copy that still claimed raw visible text was sent; now accurately describes structural-only metadata. Commit `54ebc8fe`.
+- Added handshake coverage for `inspect_capabilities`. Commit `978dff56`.
+- Current latest Actions for `978dff56`: Python `43400332777` queued, Desktop `43400332754` in progress, Windows installer `43400332731` pending. Earlier SHA `54ebc8fe` also has runs; verify final SHA only before claiming CI green.
+- Capability snapshots currently return ephemerally to the popup and are not displayed in desktop UI or persisted. The active-tab check is manual and only inspects one active page. It is not yet auto-discovery across tabs and does not identify business roles reliably beyond a display heuristic.
