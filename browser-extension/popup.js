@@ -6,6 +6,8 @@ const shareAllButton = document.getElementById("shareAll");
 const retryButton = document.getElementById("retry");
 const inspectButton = document.getElementById("inspect");
 const auditStatus = document.getElementById("auditStatus");
+const inspectMappedTabsButton = document.getElementById("inspectMappedTabs");
+let hasConfirmedTabs = false;
 let busy = false;
 let connected = false;
 
@@ -18,6 +20,7 @@ function updateButtons() {
   shareButton.disabled = busy || !connected;
   shareAllButton.disabled = busy || !connected;
   inspectButton.disabled = busy || !connected;
+  inspectMappedTabsButton.disabled = busy || !hasConfirmedTabs;
   retryButton.disabled = busy;
   retryButton.textContent = connected ? "Проверить соединение" : "Повторить подключение";
 }
@@ -337,6 +340,141 @@ discoveryButton.addEventListener("click", async () => {
   }
 });
 
+async function confirmedTabHeaderSnapshot(role, entry) {
+  if (!entry || !Number.isSafeInteger(entry.tabId) || entry.tabId < 0 ||
+      typeof entry.origin !== "string" || typeof entry.path !== "string") {
+    throw new Error("invalid_selection");
+  }
+  const permission = await chrome.permissions.contains({origins:[entry.origin + "/*"]});
+  if (!permission) throw new Error("permissions_missing");
+  const current = await chrome.tabs.get(entry.tabId);
+  if (!current || typeof current.url !== "string") throw new Error("tab_closed");
+  const currentUrl = new URL(current.url);
+  if (currentUrl.protocol !== "https:" || currentUrl.origin !== entry.origin ||
+      currentUrl.pathname !== entry.path) throw new Error("selected_document_changed");
+  const identity = await chrome.scripting.executeScript({
+    target:{tabId:entry.tabId},
+    func:()=>({href:location.href})
+  });
+  const frame = identity?.[0];
+  let identityUrl;
+  try { identityUrl = new URL(frame?.result?.href || ""); } catch { identityUrl = null; }
+  if (!frame || frame.frameId !== 0 || typeof frame.documentId !== "string" ||
+      !frame.documentId || !identityUrl || identityUrl.origin !== entry.origin ||
+      identityUrl.pathname !== entry.path) throw new Error("selected_document_changed");
+  const inspected = await chrome.scripting.executeScript({
+    target:{tabId:entry.tabId},
+    func:(resourceRole)=>{
+      const normalize = values => values.map(value =>
+        (value || "").trim().replace(/\\s+/g," ").slice(0,120)
+      ).filter(Boolean).slice(0,20);
+      const tables = [];
+      for (const table of [...document.querySelectorAll("table")].slice(0,8)) {
+        const first = table.querySelector("tr");
+        if (!first) continue;
+        const headers = normalize([...first.querySelectorAll("th,[role='columnheader']")]
+          .map(cell=>cell.innerText));
+        if (headers.length) tables.push(headers);
+      }
+      if (!tables.length) {
+        for (const grid of [...document.querySelectorAll('[role="grid"],[role="table"]')].slice(0,8)) {
+          const headers = normalize([...grid.querySelectorAll('[role="columnheader"]')]
+            .map(cell=>cell.innerText));
+          if (headers.length) tables.push(headers);
+        }
+      }
+      return {origin:location.origin,href:location.href,tables};
+    },
+    args:[role]
+  });
+  const readFrame = inspected?.[0];
+  if (!readFrame || readFrame.frameId !== 0 || readFrame.documentId !== frame.documentId) {
+    throw new Error("selected_document_changed");
+  }
+  const after = await chrome.tabs.get(entry.tabId);
+  const afterIdentity = await chrome.scripting.executeScript({
+    target:{tabId:entry.tabId},func:()=>({href:location.href})
+  });
+  const afterFrame = afterIdentity?.[0];
+  let afterUrl;
+  try { afterUrl = new URL(afterFrame?.result?.href || ""); } catch { afterUrl = null; }
+  if (!after || typeof after.url !== "string" ||
+      new URL(after.url).origin !== entry.origin || new URL(after.url).pathname !== entry.path ||
+      !afterFrame || afterFrame.frameId !== 0 || afterFrame.documentId !== frame.documentId ||
+      !afterUrl || afterUrl.origin !== entry.origin || afterUrl.pathname !== entry.path ||
+      !await chrome.permissions.contains({origins:[entry.origin + "/*"]})) {
+    throw new Error("selected_document_changed");
+  }
+  const snapshot = readFrame.result;
+  if (!snapshot || snapshot.origin !== entry.origin || !Array.isArray(snapshot.tables)) {
+    throw new Error("invalid_header_snapshot");
+  }
+  return snapshot.tables;
+}
+
+inspectMappedTabsButton.addEventListener("click", async () => {
+  if (busy || !hasConfirmedTabs) return;
+  busy = true;
+  updateButtons();
+  discoverySetStatus("Читаем только заголовки таблиц выбранных вкладок. Строки заказов не читаются…");
+  try {
+    const stored = await chrome.storage.session.get("maleniaConfirmedOpenTabs");
+    const selection = stored?.maleniaConfirmedOpenTabs;
+    const roles = ["inventory","datalens","asgard"];
+    if (!selection?.browserSessionOnly || !Number.isFinite(selection.confirmedAt) ||
+        Date.now()-selection.confirmedAt>30*60*1000 ||
+        !selection.confirmed || Object.keys(selection.confirmed).sort().join(",")!==[...roles].sort().join(",")) {
+      hasConfirmedTabs=false;
+      throw new Error("selection_expired");
+    }
+    const results = [];
+    for (const role of roles) {
+      const tables = await confirmedTabHeaderSnapshot(role,selection.confirmed[role]);
+      results.push({role,tables});
+    }
+    discoveryResults.replaceChildren();
+    for (const result of results) {
+      const section=document.createElement("div");
+      section.className="discovery-role";
+      const heading=document.createElement("strong");
+      heading.textContent=({inventory:"ИНВента",datalens:"DataLens",asgard:"Asgard"})[result.role];
+      section.appendChild(heading);
+      if (!result.tables.length) {
+        const empty=document.createElement("div");
+        empty.textContent="Заголовки таблиц не найдены.";
+        section.appendChild(empty);
+      }
+      for (const [index,headers] of result.tables.entries()) {
+        const line=document.createElement("div");
+        line.textContent="Таблица "+(index+1)+": "+headers.join(" · ");
+        section.appendChild(line);
+      }
+      discoveryResults.appendChild(section);
+    }
+    discoverySetStatus("Диагностика завершена. Прочитаны только заголовки; строки, значения ячеек и полный текст страниц не читались.", "ok");
+  } catch (error) {
+    const safe = error?.message==="permissions_missing" ? "Разрешение сайта отозвано. Проверь настройки расширения." :
+      error?.message==="tab_closed" ? "Одна из выбранных вкладок закрыта. Найди и подтверди вкладки заново." :
+      error?.message==="selected_document_changed" ? "Одна из страниц изменилась во время проверки. Повтори поиск и подтверждение." :
+      "Выбор вкладок устарел или недоступен. Найди и подтверди три вкладки заново.";
+    discoverySetStatus(safe,"error");
+  } finally {
+    busy=false;
+    updateButtons();
+  }
+});
+
+(async()=>{
+  try {
+    const stored=await chrome.storage.session.get("maleniaConfirmedOpenTabs");
+    const selection=stored?.maleniaConfirmedOpenTabs;
+    hasConfirmedTabs=!!selection?.browserSessionOnly && Number.isFinite(selection.confirmedAt) &&
+      Date.now()-selection.confirmedAt<=30*60*1000 &&
+      selection.confirmed && ["inventory","datalens","asgard"].every(role=>selection.confirmed[role]);
+    updateButtons();
+  } catch { hasConfirmedTabs=false; updateButtons(); }
+})();
+
 confirmDiscoveryButton.addEventListener("click", async () => {
   if (busy || !discoveryMappings || !discoveryResult) return;
   busy = true;
@@ -375,6 +513,8 @@ confirmDiscoveryButton.addEventListener("click", async () => {
     await chrome.storage.session.set({
       maleniaConfirmedOpenTabs:{confirmed,confirmedAt:Date.now(),browserSessionOnly:true}
     });
+    hasConfirmedTabs=true;
+    updateButtons();
     discoverySetStatus("Три вкладки подтверждены. Страницы ещё не читались; перед будущим чтением Маления повторно проверит вкладки и разрешения.", "ok");
   } catch (error) {
     const safeMessage = typeof error?.message === "string" &&
