@@ -541,47 +541,9 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
                     raise GoogleSheetsError("invalid_google_sheets_values")
                 if isinstance(value, str) and (len(value) > 2000 or value.startswith("=")):
                     raise GoogleSheetsError("formula_or_oversized_value_not_allowed")
-        url = (f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/"
-               f"{quote(range_a1.strip(), safe='!:
-        """Read one explicitly selected A1 range. No mutation endpoints exist."""
-        if not isinstance(spreadsheet_id, str) or _SPREADSHEET_ID_RE.fullmatch(spreadsheet_id) is None:
-            raise GoogleSheetsError("invalid_spreadsheet_id")
-        if (
-            not isinstance(range_a1, str)
-            or not range_a1.strip()
-            or len(range_a1) > _MAX_RANGE_LENGTH
-            or any(ord(char) < 0x20 or ord(char) == 0x7F for char in range_a1)
-        ):
-            raise GoogleSheetsError("invalid_spreadsheet_range")
         encoded_range = quote(range_a1.strip(), safe="!:$'")
-        url = (
-            f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{encoded_range}"
-            "?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE"
-        )
-        token = self._get_access_token()
-        request = Request(url, headers={"Authorization": f"Bearer {token}", "Accept": "application/json"}, method="GET")
-        try:
-            payload = self._request_json(request, _MAX_SHEETS_RESPONSE_BYTES)
-        except GoogleSheetsError as error:
-            if error.status != 401:
-                raise
-            token = self._refresh_access_token()
-            retry = Request(url, headers={"Authorization": f"Bearer {token}", "Accept": "application/json"}, method="GET")
-            payload = self._request_json(retry, _MAX_SHEETS_RESPONSE_BYTES)
-
-        values = payload.get("values", [])
-        if not isinstance(values, list) or any(not isinstance(row, list) for row in values):
-            raise GoogleSheetsError("google_sheets_values_invalid")
-        cell_count = sum(len(row) for row in values)
-        if len(values) > 1000 or cell_count > _MAX_SHEETS_CELLS:
-            raise GoogleSheetsError("google_sheets_range_too_large")
-        return {
-            "range": payload.get("range", range_a1.strip()),
-            "majorDimension": payload.get("majorDimension", "ROWS"),
-            "values": values,
-            "read_only": False,
-        }
-)}?valueInputOption=RAW")
+        url = (f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/"
+               f"{encoded_range}?valueInputOption=RAW")
         body = json.dumps({"majorDimension": "ROWS", "values": values},
                           ensure_ascii=False).encode("utf-8")
         token = self._get_access_token()
