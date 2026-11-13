@@ -255,6 +255,9 @@ var MaleniaAutomation = (() => {
       let pages = 0;
       for (let index = 0; index < MAX_PAGES; index++) {
         await waitLoaded(chromeApi, tabId);
+        if (selectedTab && !await chromeApi.permissions.contains({
+          origins:[selectedTab.origin + "/*"]
+        })) throw new Error("permissions_missing");
         const current = await chromeApi.tabs.get(tabId);
         const finalUrl = new URL(current.url || "");
         if (finalUrl.origin !== new URL(url).origin || finalUrl.protocol !== "https:" ||
@@ -339,6 +342,14 @@ var MaleniaAutomation = (() => {
           },
           args: [role, !selectedTab]
         });
+        if (selectedTab) {
+          const afterRead = await chromeApi.tabs.get(tabId);
+          const afterUrl = new URL(afterRead.url || "");
+          if (afterUrl.origin !== selectedTab.origin || afterUrl.pathname !== selectedTab.path ||
+              !await chromeApi.permissions.contains({origins:[selectedTab.origin + "/*"]})) {
+            throw new Error("navigation_outside_allowed_origin");
+          }
+        }
         const snapshot = results?.[0]?.result;
         if (!snapshot || snapshot.origin !== finalUrl.origin ||
             typeof snapshot.text !== "string" || (!selectedTab && !snapshot.text.trim())) {
