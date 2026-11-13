@@ -4,7 +4,7 @@ import time
 import threading
 import unittest
 from urllib.error import HTTPError
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 from malenia.google_oauth import GOOGLE_SHEETS_READONLY_SCOPE, GOOGLE_TOKEN_ENDPOINT
@@ -368,7 +368,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         self.assertEqual(result["sheet_id"], 123)
         self.assertTrue(result["gid_selected"])
         values_request = [r for r in opener.requests if "/values/" in r.full_url][-1]
-        self.assertIn("'Текущие'!A:Z", values_request.full_url)
+        self.assertIn("'Текущие'!A:Z", unquote(values_request.full_url))
         self.assertEqual(values_request.get_method(), "GET")
 
     def test_read_active_sheet_rejects_conflicting_query_and_fragment_gids(self):
