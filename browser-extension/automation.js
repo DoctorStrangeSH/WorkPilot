@@ -455,7 +455,7 @@ var MaleniaAutomation = (() => {
         const searchKeys = role !== "inventory" && options.exactGetSearch ?
           [...new Set(snapshots.inventory?.rows?.map(row =>
             row[snapshots.inventory.columns.indexOf("cargo_place")]) || [])] : null;
-        if (!selectedTab && role !== "inventory" && options.exactGetSearch &&
+        if (role !== "inventory" && options.exactGetSearch &&
             (!Array.isArray(searchKeys) || !searchKeys.length ||
              searchKeys.length > MAX_SEARCHES || new Set(searchKeys).size !== searchKeys.length ||
              searchKeys.some(key => typeof key !== "string" ||
