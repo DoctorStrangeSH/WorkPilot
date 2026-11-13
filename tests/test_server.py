@@ -31,6 +31,10 @@ class FakeGoogleSheets:
         self.calls.append(("read", spreadsheet_id, range_a1))
         return {"range": range_a1, "values": [["fixture"]], "read_only": True}
 
+    def write_values(self, spreadsheet_id, range_a1, values):
+        self.calls.append(("write", spreadsheet_id, range_a1, values))
+        return {"updatedRange": range_a1, "updatedCells": sum(len(row) for row in values), "write_enabled": True}
+
     def disconnect(self):
         self.calls.append(("disconnect",))
         return {"connected": False, "status": "not_connected", "local_credentials_deleted": True}
@@ -117,6 +121,24 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(report["audit"]["summary"]["found"], 1)
         self.assertNotIn("cargo_place", json.dumps(report))
         self.assertEqual(set(report["audit"]), {"checked_at", "total", "summary", "read_only", "source"})
+
+    def test_google_sheet_edits_require_preview_then_one_time_approval(self):
+        preview = {"spreadsheet_id": "a" * 24, "range": "Orders!A1:A1",
+                   "values": [["approved value"]]}
+        code, proposal = self.api("/v1/integrations/google-sheets/edit-preview", preview)
+        self.assertEqual(code, 200)
+        self.assertTrue(proposal["requires_user_approval"])
+        self.assertFalse(proposal["write_performed"])
+        self.assertFalse(any(call[0] == "write" for call in self.google_sheets.calls))
+        code, result = self.api("/v1/integrations/google-sheets/edit-approve",
+                                {"approval_id": proposal["approval_id"]})
+        self.assertEqual(code, 200)
+        self.assertTrue(result["verified"])
+        self.assertEqual([call[0] for call in self.google_sheets.calls].count("write"), 1)
+        code, duplicate = self.api("/v1/integrations/google-sheets/edit-approve",
+                                   {"approval_id": proposal["approval_id"]})
+        self.assertEqual(code, 409)
+        self.assertEqual([call[0] for call in self.google_sheets.calls].count("write"), 1)
 
     def test_skill_suggestion_is_local_unsaved_and_authenticated(self):
         from unittest.mock import patch
