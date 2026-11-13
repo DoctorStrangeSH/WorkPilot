@@ -615,6 +615,65 @@ test("confirmed open tabs are read in place without creating, navigating, closin
   assert.deepEqual(sent.map(x=>x.type),["reconcile_site_tables"]);
 });
 
+test("selected DataLens and Asgard tabs perform only labelled read-only cargo lookups", async () => {
+  const api=runner();
+  const records={
+    inventory:{id:71,url:"https://inventory.example/orders",status:"complete"},
+    datalens:{id:72,url:"https://analytics.example/reports",status:"complete"},
+    asgard:{id:73,url:"https://asgard.example/flow",status:"complete"}
+  };
+  let reactiveSearches=0, created=0, updated=0, removed=0;
+  const chrome={
+    tabs:{
+      onUpdated:{addListener(){},removeListener(){}},
+      async get(id){return Object.values(records).find(x=>x.id===id);},
+      async create(){created++;throw Error("must not create tabs");},
+      async update(){updated++;throw Error("must not navigate shared tabs");},
+      async remove(){removed++;}
+    },
+    permissions:{async contains(){return true;}},
+    scripting:{async executeScript({target,func,args}) {
+      const tab=Object.values(records).find(x=>x.id===target.tabId);
+      const role=args[0];
+      if(func.toString().includes("location.href")) {
+        return [{frameId:0,documentId:"doc-"+target.tabId,result:{href:tab.url}}];
+      }
+      if(func.toString().includes("MutationObserver")) {
+        reactiveSearches++;
+        assert.equal(args[1],"TEST-ORDER-1");
+        return [{result:{origin:new URL(tab.url).origin,status:"updated"}}];
+      }
+      assert.equal(args[1],false,"shared page reads only structured tables, not page text");
+      const table=role==="inventory"
+        ? {columns:["cargo_place","inventory_date"],rows:[["TEST-ORDER-1","2026-09-12"]]}
+        : role==="datalens"
+          ? {columns:["main_partner_code_original","sc_id","result","scanned_at"],rows:[["TEST-ORDER-1","101366","OK","2026-09-14T10:00:00"]]}
+          : {columns:["cargo_place","status"],rows:[["TEST-ORDER-1","Принят на ФФ"]]};
+      return [{frameId:0,documentId:"doc-"+target.id,result:{
+        origin:new URL(tab.url).origin,text:"",table,next:null,incomplete:false
+      }}];
+    }}
+  };
+  const selectedTabs=Object.fromEntries(Object.entries(records).map(([role,tab])=>[
+    role,{tabId:tab.id,origin:new URL(tab.url).origin,path:new URL(tab.url).pathname}
+  ]));
+  const sent=[];
+  const result=await api.run(chrome,{
+    inventory:records.inventory.url,datalens:records.datalens.url,asgard:records.asgard.url
+  },async message=>{
+    sent.push(message);
+    if(message.type==="reconcile_site_tables")return {
+      ok:true,type:"site_tables_reconciled",read_only:true,write_enabled:false,
+      persisted:false,total:1,summary:{found:0,in_progress:1,manual_review:0}
+    };
+    throw Error("selected tab flow must not forward page text");
+  },async()=>{}, {selectedTabs,exactGetSearch:true});
+  assert.equal(result.phase,"reconciled");
+  assert.equal(reactiveSearches,2);
+  assert.equal(created,0);assert.equal(updated,0);assert.equal(removed,0);
+  assert.deepEqual(sent.map(x=>x.type),["reconcile_site_tables"]);
+});
+
 test("selected-tab audit rejects a document replacement between identity check and table read", async () => {
   const api=runner();
   const records={
