@@ -267,14 +267,14 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
 
   return <section className="page sources-page">
     <div className="page-head"><div><div className="eyebrow">РАБОЧИЕ ПОДКЛЮЧЕНИЯ</div><h1>Источники</h1><p>Каждый источник подключается отдельно, с минимальными разрешениями и понятным статусом.</p></div></div>
-    <div className="sources-notice"><ShieldCheck size={17}/><span>Google Sheets подключается отдельно с правами чтения и редактирования. Каждая запись требует отдельного подтверждения. ChatGPT не передаёт свои подключения Malenia.</span></div>
+    <div className="sources-notice"><ShieldCheck size={17}/><span>Google Sheets подключается отдельно только для чтения. Malenia использует данные ИНВенты для расследования заказов и не меняет исходную таблицу. ChatGPT не передаёт свои подключения Malenia.</span></div>
     {sheetError?<p className="alert error" role="alert">{sheetError}</p>:null}
     {sheetNotice?<p className="alert success" role="status">{sheetNotice}</p>:null}
     <div className="sources-grid">
       <article className="panel source-card google-source-card">
         <div className="source-card-top"><span className="source-icon sheets"><Database size={19}/></span><span className={"source-state "+(sheetVerified?"ready":"pending")}>{statusLabel}</span></div>
         <h2>Google Sheets · ИНВента</h2>
-        <p>Отдельная авторизация Malenia. Запрашивается Google Sheets scope чтения и записи. Он технически распространяется на таблицы аккаунта, доступные приложению. Malenia ограничивает рабочий сценарий выбранной ИНВентой; запись возможна только после просмотра точного diff и подтверждения.</p>
+        <p>Отдельная авторизация Malenia. Запрашивается только доступ на чтение Google Sheets. Исходные данные остаются нетронутыми; результат расследования хранится отдельно в Malenia.</p>
         {!connected?<p className="source-help">Сначала запустите локальный агент на главной странице.</p>:null}
         {!sheetsAuthorized?
           <div className="google-connect-form">
@@ -290,10 +290,10 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
           <>
           <div className="google-read-form">
             <div className="google-actions">
-              <button className="primary" disabled={busy} onClick={()=>void analyzeActiveInventa()}>{busy?"Анализируем…":"Найти ИНВенту и проанализировать"}</button>
+              <button className="primary" disabled={busy} onClick={()=>void analyzeActiveInventa()}>{busy?"Анализируем…":"Подключить ИНВенту для расследования"}</button>
               <button className="secondary" disabled={busy} onClick={()=>void disconnectSheets()}>Отключить Google</button>
             </div>
-            <small>Маления ищет Google Sheets во вкладках, которыми ты поделился через Browser Bridge. Если gid отсутствует, она определяет лист по заголовкам ИНВенты. Данные исходной таблицы не меняются при анализе.</small>
+            <small>Маления ищет Google Sheets во вкладках, которыми ты поделился через Browser Bridge. Если gid отсутствует, она определяет лист по заголовкам ИНВенты. Исходная таблица доступна только для чтения и не изменяется.</small>
           </div>
           {inventaReport?<div className="sheet-preview">
             <div className="sheet-preview-head"><b>{inventaReport.source.spreadsheet_title} · {inventaReport.source.sheet_title}</b><small>{inventaReport.analysis.rows_analyzed} строк</small></div>
