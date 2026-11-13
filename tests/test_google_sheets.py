@@ -287,7 +287,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         connector._access_expires_at = time.monotonic() + 3600
         result = connector.read_values(SPREADSHEET_ID, "Orders!A1:B2")
         self.assertEqual(result["values"][1], ["CP-001", "Найден"])
-        self.assertFalse(result["read_only"])
+        self.assertTrue(result["read_only"])
         sheets_request = next(r for r in opener.requests if r.full_url.startswith("https://sheets.googleapis.com/"))
         self.assertEqual(sheets_request.get_method(), "GET")
         self.assertIn("Bearer access-token-fixture", sheets_request.get_header("Authorization"))
