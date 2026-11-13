@@ -18,7 +18,7 @@ function popup(url = 'https://example.com/orders?secret=remove#private') {
     tabs: {async query() { queries++; return [{id: 7, title: 'x'.repeat(400), url}]; }},
     permissions: {async getAll() {return {origins: []};}},
     storage: {local: {async get() {return {};}, async set() {}}, session: {async set() {}, async get() {return {};}}},
-    scripting: {async executeScript() {return [{result:{title:'Orders',table_headers:['Order ID','Status'],search_labels:['Search'],has_aria_grid:true,virtualized:false,login_required:false}}];}}
+    scripting: {async executeScript() {return [{result:{title:'Orders',table_headers:['Order ID','Status'],tables:[{kind:'html-table',columns:['Order ID','Status'],visible_rows:3,declared_rows:3}],search_labels:['Search'],has_aria_grid:true,virtualized:false,login_required:false}}];}}
   };
   vm.runInNewContext(source, {document: {getElementById: id => nodes[id], createElement: () => ({addEventListener(){},setAttribute(){},appendChild(){}})}, chrome, URL, MaleniaTabDiscovery,
     crypto: {randomUUID: () => 'request-id'},
