@@ -125,7 +125,7 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
         def do_GET(self) -> None:
             parsed = urlsplit(self.path)
             if parsed.path == "/health":
-                self._send(200, {"status": "ok", "service": "malenia-agent", "version": "0.2.0"})
+                self._send(200, {"status": "ok", "service": "malenia-agent", "version": __version__})
                 return
             if not self._require_access():
                 return
