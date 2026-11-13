@@ -133,6 +133,7 @@ class NativeMessagingProtocolTests(unittest.TestCase):
         before_events = self.store.list_events()
         page = {"url": "https://example.com/orders?session=secret",
                 "title": "Orders", "table_headers": ["Cargo place", "Status"],
+                "tables": [{"kind": "html-table", "columns": ["Cargo place", "Status"], "visible_rows": 2, "declared_rows": 2}],
                 "search_labels": ["Search cargo place"], "has_aria_grid": True,
                 "virtualized": False, "login_required": False}
         result = handle_message({"type": "inspect_capabilities", "page": page}, self.store)
@@ -144,7 +145,8 @@ class NativeMessagingProtocolTests(unittest.TestCase):
         self.assertEqual(self.store.list_events(), before_events)
         invalid = [
             {**page, "raw_text": "private"},
-            {**page, "table_headers": ["x"] * 41},\n            {**page, "tables": [{"kind":"html-table","columns":["x"]*21,"visible_rows":0,"declared_rows":None}]},
+            {**page, "table_headers": ["x"] * 41},
+            {**page, "tables": [{"kind":"html-table","columns":["x"]*21,"visible_rows":0,"declared_rows":None}]},
             {**page, "search_labels": ["x"] * 31},
             {**page, "has_aria_grid": "yes"},
             {**page, "url": "file:///private"},
