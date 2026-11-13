@@ -248,6 +248,17 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
     }catch(error){setSheetError(String(error));}
     finally{setBusy(false);}
   };
+  const checkFirstOrder=async()=>{
+    const activeTab=tabs.find(tab=>/^https:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9_-]+(?:\/|$)/.test(tab.url));
+    if(!activeTab){setSheetError("Передай вкладку ИНВенты через Browser Bridge.");return;}
+    setBusy(true);setSheetError("");setSheetNotice("");
+    try{
+      await invoke("check_first_inventa_order",{spreadsheetUrl:activeTab.url});
+      setSheetNotice("Первый заказ передан Browser Bridge на проверку. Запусти Яндекс Браузер и открой раздел «Моя рабочая среда» для просмотра выполнения.");
+      onOpenBrowser();
+    }catch(error){setSheetError(String(error));}
+    finally{setBusy(false);}
+  };
 
   const sheetsAuthorized=sheetsStatus.status==="authorized"||sheetsStatus.connected;
   const statusLabel=sheetsAuthorized?"Подключён · доступ только для чтения":
@@ -298,6 +309,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
               <h3>Первый заказ для проверки</h3>
               <p><b>ID:</b> {inventaReport.analysis.first_order.order_id} · <b>Грузоместо:</b> {inventaReport.analysis.first_order.cargo_place} · <b>Дата ИНВенты:</b> {inventaReport.analysis.first_order.inventory_date} · <b>Строка:</b> {inventaReport.analysis.first_order.source_row}</p>
               <p>Проверяем не исходный статус, а дату листа. Следующий этап: найти грузоместо в DataLens по main_partner_code_original, проверить скан OK от СЦ 101366 строго после даты листа. Если такого скана нет — проверить Asgard. До получения доказательств статус заказа не определён.</p>
+              <button className="primary" disabled={busy||!connected} onClick={()=>void checkFirstOrder()}>{busy?"Отправляем…":"Проверить первый заказ"}</button>
             </div>:<p role="status">Не удалось безопасно выделить первый заказ: {inventaReport.analysis.first_order_blocker==="sheet_date_not_verified"?"дата листа или её год не определены однозначно":inventaReport.analysis.first_order_blocker==="cargo_column_not_mapped"?"нет подтверждённой колонки грузоместа":"нет однозначной строки с ID и грузоместом"}. Для проверки в DataLens требуется точное грузоместо и подтверждённая дата листа.</p>}
           </div>:null}
           </> }

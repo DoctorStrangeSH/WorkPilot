@@ -102,20 +102,31 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual(payload["job"]["status"], "pending")
         self.assertEqual(self.api("/v1/browser/audit-request", {})[0], 409)
-        self.assertEqual(self.api("/v1/browser/audit-job",
-                                  authenticated=False)[0], 401)
-        self.assertEqual(self.api("/v1/browser/audit-request", {},
-                                  authenticated=False)[0], 401)
-        self.assertEqual(self.api("/v1/browser/audit-request",
-                                  {"url": "https://example.com"})[0], 422)
+        self.assertEqual(self.api("/v1/browser/audit-job", authenticated=False)[0], 401)
+        self.assertEqual(self.api("/v1/browser/audit-request", {}, authenticated=False)[0], 401)
+        self.assertEqual(self.api("/v1/browser/audit-request", {"url": "https://example.com"})[0], 422)
         self.assertTrue(self.store.claim_browser_audit())
-        self.assertEqual(self.api("/v1/browser/audit-job")[1]["job"]["status"],
-                         "running")
-        self.assertTrue(self.store.finish_browser_audit(
-            payload["job"]["job_id"], True))
-        self.assertEqual(self.api("/v1/browser/audit-job")[1]["job"]["status"],
-                         "completed")
+        self.assertEqual(self.api("/v1/browser/audit-job")[1]["job"]["status"], "running")
+        self.assertTrue(self.store.finish_browser_audit(payload["job"]["job_id"], True))
+        self.assertEqual(self.api("/v1/browser/audit-job")[1]["job"]["status"], "completed")
         self.assertEqual(self.api("/v1/browser/audit-request", {})[0], 202)
+
+    def test_first_order_audit_reads_sheet_again_and_seeds_one_job(self):
+        self.google_sheets.read_active_sheet = lambda url, gid=None: {
+            "spreadsheet_id": "a" * 24, "sheet_title": "22.08.2026",
+            "values": [["Дата", "Id заказа", "Грузоместо", "Стоимость", "Статус"],
+                       ["2026-08-21", "ORDER-1", "BOX-1", 100, "Выдан"]]}
+        code, result = self.api("/v1/integrations/google-sheets/check-first-order",
+                                {"spreadsheet_url": "https://docs.google.com/spreadsheets/d/" + "a"*24})
+        self.assertEqual(code, 202)
+        self.assertTrue(result["read_only"])
+        self.assertNotIn("BOX-1", str(result))
+        claimed = self.store.claim_browser_audit()
+        self.assertEqual(claimed["inventory"]["rows"], [["BOX-1", "2026-08-22"]])
+        with self.store._session() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM browser_audit_seed").fetchone()[0], 0)
+        self.assertEqual(self.api("/v1/integrations/google-sheets/check-first-order",
+                                  {"spreadsheet_url": "https://docs.google.com/spreadsheets/d/" + "a"*24})[0], 409)
 
     def test_browser_audit_summary_requires_auth_and_contains_only_counts(self):
         code, initial = self.api("/v1/browser/audit-summary")

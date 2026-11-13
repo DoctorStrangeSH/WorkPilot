@@ -142,7 +142,8 @@ async function pollDesktopAudit() {
       };
       const result = await MaleniaAutomation.run(chrome,targets,
         message=>session.send(message),report,
-        {exactGetSearch:stored.maleniaExactGetSearch !== false});
+        {exactGetSearch:claimed.job.inventory ? true : stored.maleniaExactGetSearch !== false,
+         ...(claimed.job.inventory ? {seedInventory:claimed.job.inventory} : {})});
       succeeded = result.phase === "reconciled";
     } catch {
       await progress({phase:"needs_attention",results:[],error:"setup_or_connection"});

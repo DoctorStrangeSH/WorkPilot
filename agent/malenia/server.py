@@ -259,6 +259,37 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                     self._send(422, {"error": code})
                 return
 
+            if parsed.path == "/v1/integrations/google-sheets/check-first-order":
+                payload = self._read_json(4096)
+                if payload is None:
+                    return
+                if (set(payload) != {"spreadsheet_url"} or
+                        not isinstance(payload.get("spreadsheet_url"), str)):
+                    self._send(422, {"error": "invalid_google_sheets_active_url"})
+                    return
+                try:
+                    from .inventa import analyze_inventa
+                    source = sheets.read_active_sheet(payload["spreadsheet_url"])
+                    analysis = analyze_inventa(source["values"], source["sheet_title"])
+                    order = analysis["first_order"]
+                    if order is None:
+                        self._send(422, {"error": analysis["first_order_blocker"]})
+                        return
+                    job = store.request_browser_audit({
+                        "cargo_place": order["cargo_place"],
+                        "inventory_date": order["inventory_date"],
+                    })
+                    self._send(202, {"job": job, "source_row": order["source_row"],
+                                     "read_only": True, "write_enabled": False})
+                except SubmissionConflict:
+                    self._send(409, {"error": "browser_audit_already_active"})
+                except (GoogleSheetsError, ValueError) as error:
+                    code = error.code if isinstance(error, GoogleSheetsError) else str(error)
+                    self._send(422, {"error": code})
+                except sqlite3.Error:
+                    self._send(503, {"error": "audit_job_unavailable"})
+                return
+
             if parsed.path == "/v1/integrations/google-sheets/edit-preview":
                 payload = self._read_json(32 * 1024)
                 if payload is None:

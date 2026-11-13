@@ -94,6 +94,13 @@ class TaskStore:
                     updated_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS browser_audit_seed (
+                    id INTEGER PRIMARY KEY CHECK(id=1),
+                    job_id TEXT NOT NULL,
+                    cargo_place TEXT NOT NULL,
+                    inventory_date TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS browser_audit_summary (
                     id INTEGER PRIMARY KEY CHECK (id = 1),
                     checked_at TEXT NOT NULL,
@@ -282,6 +289,8 @@ class TaskStore:
                   OR (status='running' AND created_unix < ?))""",
             (_now(), now - 900, now - 1800),
         )
+        db.execute("DELETE FROM browser_audit_seed WHERE job_id NOT IN "
+                   "(SELECT job_id FROM browser_audit_job WHERE status='pending')")
 
     def latest_browser_audit_job(self) -> dict[str, Any] | None:
         with self._session() as db:
@@ -299,8 +308,21 @@ class TaskStore:
         result["attention_sources"] = result["attention_sources"] or 0
         return result
 
-    def request_browser_audit(self) -> dict[str, Any]:
+    def request_browser_audit(self, first_order: dict[str, str] | None = None) -> dict[str, Any]:
         """Single bounded browser audit requested through the authenticated desktop API."""
+        if first_order is not None:
+            import re
+            from datetime import date
+            cargo = first_order.get("cargo_place") if isinstance(first_order, dict) else None
+            cutoff = first_order.get("inventory_date") if isinstance(first_order, dict) else None
+            if (not isinstance(cargo, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", cargo)
+                    or not isinstance(cutoff, str) or len(cutoff) != 10):
+                raise ValueError("invalid_first_order_audit")
+            try:
+                if date.fromisoformat(cutoff).isoformat() != cutoff:
+                    raise ValueError("invalid_first_order_audit")
+            except ValueError as exc:
+                raise ValueError("invalid_first_order_audit") from exc
         with self._session() as db:
             db.execute("BEGIN IMMEDIATE")
             self._expire_browser_audit(db)
@@ -311,6 +333,7 @@ class TaskStore:
                 raise SubmissionConflict("browser_audit_already_active")
             now = _now()
             job_id = str(uuid.uuid4())
+            db.execute("DELETE FROM browser_audit_seed WHERE id=1")
             db.execute(
                 """INSERT INTO browser_audit_job
                    (id,job_id,status,created_at,created_unix,updated_at)
@@ -331,6 +354,10 @@ class TaskStore:
                    updated_at=excluded.updated_at""",
                 (job_id, now),
             )
+            if first_order is not None:
+                db.execute("INSERT INTO browser_audit_seed "
+                           "(id,job_id,cargo_place,inventory_date) VALUES (1,?,?,?)",
+                           (job_id, cargo, cutoff))
         return {"job_id": job_id, "status": "pending", "created_at": now,
                 "updated_at": now}
 
@@ -349,7 +376,14 @@ class TaskStore:
                 "UPDATE browser_audit_job SET status='running',updated_at=? WHERE id=1",
                 (_now(),),
             )
-        return {"job_id": row["job_id"], "status": "running"}
+            seed = db.execute("SELECT cargo_place,inventory_date FROM browser_audit_seed "
+                              "WHERE id=1 AND job_id=?", (row["job_id"],)).fetchone()
+            db.execute("DELETE FROM browser_audit_seed WHERE id=1")
+        result = {"job_id": row["job_id"], "status": "running"}
+        if seed:
+            result["inventory"] = {"columns": ["cargo_place", "inventory_date"],
+                                   "rows": [[seed["cargo_place"], seed["inventory_date"]]]}
+        return result
 
     def finish_browser_audit(self, job_id: str, succeeded: bool) -> bool:
         if (not isinstance(job_id, str) or len(job_id) != 36

@@ -49,6 +49,8 @@ test('Google Sheets onboarding is explicitly read-only and calls the native conn
   assert.doesNotMatch(app, /write_google_sheet|update_google_sheet/);
   assert.match(app, /Не найдена переданная вкладка Google Sheets/);
   assert.match(app, /inventa-first-order/);
+  assert.match(app, /Проверить первый заказ/);
+  assert.match(app, /check_first_inventa_order/);
   assert.doesNotMatch(app, /1zPgIA_Au6J8_NEAPsTZo1TLkfFJYUTYKxtIwUWRHS30/);
 });
 

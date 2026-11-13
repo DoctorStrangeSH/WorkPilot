@@ -419,8 +419,29 @@ var MaleniaAutomation = (() => {
     const targets = normalizeTargets(input);
     const results = [];
     const snapshots = {};
+    if (options.seedInventory !== undefined) {
+      const seed = options.seedInventory;
+      if (!seed || JSON.stringify(seed.columns) !== JSON.stringify(["cargo_place", "inventory_date"]) ||
+          !Array.isArray(seed.rows) || seed.rows.length !== 1 ||
+          !Array.isArray(seed.rows[0]) || seed.rows[0].length !== 2 ||
+          typeof seed.rows[0][0] !== "string" ||
+          !/^[A-Za-z0-9_.-]{1,128}$/.test(seed.rows[0][0]) ||
+          typeof seed.rows[0][1] !== "string" ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(seed.rows[0][1]) ||
+          !Number.isFinite(Date.parse(seed.rows[0][1])) ||
+          new Date(seed.rows[0][1]).toISOString().slice(0,10) !== seed.rows[0][1]) {
+        throw new Error("invalid_inventory_search_keys");
+      }
+      snapshots.inventory = {columns:["cargo_place","inventory_date"],
+        rows:[[seed.rows[0][0],seed.rows[0][1]]]};
+    }
     for (const role of ROLES) {
       await onProgress({phase: "reading", role, results: [...results]});
+      if (role === "inventory" && snapshots.inventory) {
+        results.push({role,status:"read",characters:0,pages:0});
+        await onProgress({phase:"reading",role,results:[...results]});
+        continue;
+      }
       try {
         const inventoryKeys = snapshots.inventory?.rows?.map(row =>
           row[snapshots.inventory.columns.indexOf("cargo_place")]);

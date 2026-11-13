@@ -541,6 +541,34 @@ test('Asgard search includes only cargo without a later successful scan at SC 10
   assert.equal(api.asgardSearchKeys(inventory,{columns:['code'],rows:[]}),null);
 });
 
+test('Google Sheets seeded first order visits DataLens without revisiting inventory or Asgard when found',async()=>{
+  const api=runner(),chrome=fakeBrowser();
+  chrome.tabs.update=async (id,{url})=>({id,url,status:'complete'});
+  chrome.scripting.executeScript=async ({args})=>{
+    const role=args[0];
+    if(args.length===2)return [{result:{origin:'https://analytics.example',
+      url:'https://analytics.example/search?main_partner_code_original=BOX-1'}}];
+    return [{result:{origin:'https://analytics.example',text:'Scanned table',next:null,
+      table:{columns:['main_partner_code_original','sc_id','result','scanned_at'],
+        rows:[['BOX-1','101366','OK','2026-08-23T08:00:00']]}}}];
+  };
+  const sent=[];
+  const result=await api.run(chrome,{
+    inventory:'https://inventory.example/orders',
+    datalens:'https://analytics.example/orders',asgard:'https://asgard.example/orders'
+  },async msg=>{
+    sent.push(msg);
+    if(msg.type==='reconcile_site_tables')return {ok:true,type:'site_tables_reconciled',
+      read_only:true,write_enabled:false,persisted:false,total:1,
+      summary:{found:1,in_progress:0,manual_review:0}};
+    return {ok:true,type:'page_inspected',persisted:false,characters:msg.page.text.length};
+  },async()=>{},{exactGetSearch:true,seedInventory:{
+    columns:['cargo_place','inventory_date'],rows:[['BOX-1','2026-08-22']]}});
+  assert.equal(result.phase,'reconciled');
+  assert.equal(chrome.stats.created,1);
+  assert.equal(sent.find(x=>x.type==='reconcile_site_tables').snapshots.inventory.rows[0][1],'2026-08-22');
+});
+
 test('unrelated result-table mutations do not count as successful reactive search',async()=>{
   const api=runner();
   let notify;
