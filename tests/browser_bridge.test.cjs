@@ -141,7 +141,9 @@ test('page inspection requires explicit user click and never reads on handshake'
   assert.equal(p.calls[1].message.type, 'inspect_capabilities');
   assert.equal(p.calls[1].message.page.url, 'https://example.com/orders');
   assert.deepEqual(Array.from(p.calls[1].message.page.table_headers), ['Order ID','Status']);
+  assert.equal(p.calls[1].message.page.tables[0].visible_rows, 3);
   assert.equal('text' in p.calls[1].message.page, false);
   await p.reply(1, {ok:true, type:'capabilities_inspected', persisted:false});
   assert.match(p.nodes.status.textContent, /Структурная диагностика завершена/);
+  assert.match(p.nodes.auditStatus.textContent, /Order ID · Status/);
 });
