@@ -17,7 +17,9 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 
 GOOGLE_AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
-GOOGLE_SHEETS_READONLY_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
+GOOGLE_SHEETS_READWRITE_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
+# Backwards-compatible symbol name; this integration now requests editor access.
+GOOGLE_SHEETS_READONLY_SCOPE = GOOGLE_SHEETS_READWRITE_SCOPE
 GOOGLE_CALLBACK_PATH = "/"
 
 _VERIFIER_RE = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
@@ -101,7 +103,7 @@ def build_authorization_url(
     state: str,
     verifier: str,
 ) -> str:
-    """Build an explicit offline, PKCE-S256 request for the single read-only scope."""
+    """Build an explicit offline, PKCE-S256 request for the single Sheets editor scope."""
     validate_client_id(client_id)
     validate_loopback_redirect_uri(redirect_uri)
     if not isinstance(state, str) or _STATE_RE.fullmatch(state) is None:
@@ -151,7 +153,7 @@ def parse_callback_target(target: str, expected_state: str) -> str:
 
 
 def validate_granted_scope(scope_value: str) -> None:
-    """Reject broader or missing scopes; only the exact read-only scope is accepted."""
+    """Reject broader or missing scopes; only the exact Sheets editor scope is accepted."""
     if not isinstance(scope_value, str):
         raise GoogleOAuthError("Google did not confirm the granted scope")
     granted = set(scope_value.split())
