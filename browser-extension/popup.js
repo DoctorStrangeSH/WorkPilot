@@ -180,10 +180,12 @@ inspectButton.addEventListener("click", async () => {
   busy = true;
   updateButtons();
   setStatus("Проверяем структуру активной вкладки…");
+  let inspectedPageUrl = "";
   try {
     const [tab] = await chrome.tabs.query({active:true,lastFocusedWindow:true});
     if (!tab || !Number.isInteger(tab.id) || typeof tab.url !== "string") throw new Error("tab");
     const page = new URL(tab.url);
+    inspectedPageUrl = page.href;
     if (!["http:","https:"].includes(page.protocol) || page.username || page.password) throw new Error("url");
     const results = await chrome.scripting.executeScript({target:{tabId:tab.id},func:() => {
       const visible = el => !!(el && (el.getClientRects().length || el.getBoundingClientRect().width));
@@ -218,7 +220,7 @@ inspectButton.addEventListener("click", async () => {
     const raw = typeof error?.message === "string" ? error.message : "";
     const reason = /Cannot access contents|cannot be scripted|host permission|permission/i.test(raw)
       ? "У расширения пока нет доступа к содержимому этой страницы. Разреши доступ к сайту в настройках расширения и повтори проверку."
-      : /chrome:\/\/|edge:\/\/|about:|chromewebstore|extensions/i.test(page?.href || "")
+      : /chrome:\/\/|edge:\/\/|about:|chromewebstore|extensions/i.test(inspectedPageUrl || "")
         ? "Эта служебная страница браузера недоступна для чтения расширением. Открой обычную рабочую страницу."
         : /tab|frame|document/i.test(raw)
           ? "Вкладка изменилась или закрылась во время проверки. Открой её снова и повтори."
