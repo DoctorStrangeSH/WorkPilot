@@ -399,12 +399,18 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
             except Exception:
                 pass
             error_code = None
+            error_description = ""
             try:
                 parsed_error = json.loads(raw_error.decode("utf-8"))
                 if isinstance(parsed_error, dict):
                     candidate = parsed_error.get("error")
                     if isinstance(candidate, str) and re.fullmatch(r"[a-z_]{1,64}", candidate):
                         error_code = candidate
+                    description = parsed_error.get("error_description")
+                    if isinstance(description, str):
+                        # Keep only a bounded diagnostic for classification. Never
+                        # return Google's raw description or request data to the UI.
+                        error_description = description[:512].lower()
             except (UnicodeDecodeError, json.JSONDecodeError):
                 pass
             if error_code == "invalid_grant":
@@ -413,8 +419,22 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
                 "invalid_client", "unauthorized_client", "invalid_request",
                 "redirect_uri_mismatch", "unsupported_grant_type", "invalid_scope",
             }:
-                # Keep Google's stable OAuth error category, never its raw body,
-                # description, request data, authorization code, or credentials.
+                # Google reports invalid_request for several different token
+                # exchange defects. Classify only known parameter names; never
+                # return its raw description, authorization code, or credentials.
+                diagnostic = {
+                    "code_verifier": "google_oauth_pkce_verifier_rejected",
+                    "redirect_uri": "google_oauth_token_redirect_uri_rejected",
+                    "client_id": "google_oauth_token_client_id_rejected",
+                    "client_secret": "google_oauth_token_client_secret_rejected",
+                    "authorization code": "google_oauth_authorization_code_rejected",
+                }
+                if error_code == "invalid_request":
+                    for marker, safe_code in diagnostic.items():
+                        if marker in error_description:
+                            raise GoogleSheetsError(safe_code, status) from error
+                    if "missing required parameter" in error_description:
+                        raise GoogleSheetsError("google_oauth_missing_required_parameter", status) from error
                 raise GoogleSheetsError("google_oauth_" + error_code, status) from error
             raise GoogleSheetsError("google_request_failed", status) from error
         except URLError as error:
