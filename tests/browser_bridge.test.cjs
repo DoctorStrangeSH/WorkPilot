@@ -22,7 +22,7 @@ function popup(url = 'https://example.com/orders?secret=remove#private', options
     storage: {local: {async get() {return {};}, async set() {}}, session: {async set() {}, async get() {return {};}}},
     scripting: {async executeScript() {if (pageErrorPending) {const error=pageErrorPending; pageErrorPending=null; throw new Error(error);} return [{result:{title:'Orders',table_headers:['Order ID','Status'],tables:[{kind:'html-table',columns:['Order ID','Status'],visible_rows:3,declared_rows:3}],search_labels:['Search'],has_aria_grid:true,virtualized:false,login_required:false}}];}}
   };
-  vm.runInNewContext(source, {document: {getElementById: id => nodes[id], createElement: () => ({addEventListener(){},setAttribute(){},appendChild(){}})}, chrome, URL, MaleniaTabDiscovery,
+  vm.runInNewContext(source, {document: {getElementById: id => nodes[id], createElement: () => ({addEventListener(){},setAttribute(){},appendChild(){}})}, chrome, URL, URLSearchParams, MaleniaTabDiscovery,
     crypto: {randomUUID: () => 'request-id'},
     setTimeout: callback => {timers.set(++sequence, callback); return sequence;},
     clearTimeout: id => timers.delete(id)});
@@ -163,6 +163,22 @@ test('page inspection requests only the active HTTPS origin when host access is 
     page:{tables:[]}});
   assert.match(p.nodes.status.textContent, /Структурная диагностика завершена/);
   assert.doesNotMatch(p.nodes.auditStatus.textContent, /session|private/);
+});
+
+test('active Google Sheets inspection forwards only spreadsheet path and active gid', async () => {
+  const id = 'a'.repeat(24);
+  const p = popup('https://docs.google.com/spreadsheets/d/' + id +
+    '/edit?authuser=private#gid=123&token=secret');
+  await p.reply(0, hello);
+  await p.click('inspect');
+  assert.equal(p.calls[1].message.type, 'inspect_capabilities');
+  assert.equal(p.calls[1].message.page.url,
+    'https://docs.google.com/spreadsheets/d/' + id + '/edit?gid=123');
+  assert.doesNotMatch(JSON.stringify(p.calls[1].message), /private|secret|token/);
+  await p.reply(1, {ok:true,type:'capabilities_inspected',persisted:false,
+    tab_registered:true,page:{tables:[]}});
+  assert.match(p.nodes.status.textContent, /Google Таблица обнаружена/);
+  assert.match(p.nodes.auditStatus.textContent, /автоматически обнаружена/);
 });
 
 test('page inspection explains denied exact-origin permission without exposing browser error', async () => {
