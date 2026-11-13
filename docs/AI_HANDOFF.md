@@ -842,3 +842,12 @@ The previous red runs were investigated from job logs and current branch source,
 4. The Windows smoke test also leaked the agent process if readiness/version assertions failed inside `start()`, leaving its frozen DLLs locked and causing TemporaryDirectory cleanup to raise WinError 5. Wrapped startup validation in exception-safe cleanup; process is terminated, waited, and killed only if graceful termination times out. Commit `2ffe07fafe072432bcfb42bffe665d169f2a6c11`.
 
 Latest fix commit at this note: `4f46fdd1d7c9dc77a4b26e3244f6ed8b14af87e4` (later than test changes? Check actual branch head before relying on this list). Actions have not yet been confirmed for the final branch head. Do not claim CI green until Python, Desktop, and Windows installer complete successfully on the same SHA.
+
+
+## 2026-11-13 — Google Sheets active-tab discovery
+- Google Sheets renders its grid outside ordinary HTML tables; Browser Bridge's `tables: 0` is expected and is not a reason to scrape canvas/hidden DOM.
+- The user showed the real ИНВента spreadsheet. The visible schema includes export date, order ID, `main_partner_code_original`, cost, name, comment, ticket, a blank-header status column, grouping, and VLOOKUP result.
+- Browser Bridge structure inspection now sends only the sanitized docs.google.com spreadsheet URL plus the active numeric `gid`. Native host stores only this tab metadata on the explicit structure-check click; all other query/fragment values are stripped.
+- Desktop SourcesPage can then find the discovered tab without the separate Share tab action and call Google Sheets API via existing OAuth PKCE + Windows Credential Manager with the exact readonly scope.
+- INVenta parser now recognizes `Дата выгрузки` and can infer the blank-header status column from repeated known status values. This is based on the user's screenshot; confirm against actual API data before trusting any output.
+- End-to-end DataLens/Asgard comparison is still not confirmed. Do not claim the first order is fully processed until the API read and both external lookups succeed on the user's live systems.
