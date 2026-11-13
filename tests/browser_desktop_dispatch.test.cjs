@@ -17,7 +17,7 @@ test('browser bridge polls local desktop queue without any remote permission',()
   assert.match(source,/periodInMinutes:1/);
   assert.match(source,/type:"claim_browser_audit"/);
   assert.match(source,/type:"finish_browser_audit"/);
-  assert.match(source,/chrome\.storage\.local\.get\(\["maleniaTargets", "maleniaExactGetSearch"\]\)/);
+  assert.match(source,/chrome\\.storage\\.session\\.get\\("maleniaConfirmedOpenTabs"\\)/);
   assert.match(source,/chrome\.permissions\.contains/);
   assert.match(source,/if \(running\) return;/);
   assert.match(source,/succeeded = result\.phase === "reconciled"/);
