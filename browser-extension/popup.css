@@ -55,3 +55,6 @@ button.secondary { margin-top: 8px; background: #243349; color: #d0dcf0; border:
 .discovery-candidate {width:100%;text-align:left;margin:4px 0;padding:8px;background:#1b2a3d;color:#cbd8eb;border:1px solid #405773;font-size:10px;overflow-wrap:anywhere;}
 .discovery-candidate[aria-pressed="true"] {border-color:#8daeff;background:#263b58;}
 .discovery .status {margin-top:8px;margin-bottom:0;}
+
+/* The first-order pilot uses the active shared sheet; the legacy three-role mapper is hidden. */
+.discovery { display: none !important; }
