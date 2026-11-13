@@ -118,7 +118,7 @@ class GoogleOAuthProtocolTests(unittest.TestCase):
         for scope in (
             "",
             None,
-            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
             GOOGLE_SHEETS_READONLY_SCOPE + " https://www.googleapis.com/auth/drive",
         ):
             with self.subTest(scope=scope), self.assertRaises(GoogleOAuthError):
@@ -150,7 +150,7 @@ class GoogleOAuthProtocolTests(unittest.TestCase):
         payload = {"access_token": "new-access-token", "token_type": "Bearer", "expires_in": 3600}
         self.assertEqual(validate_refresh_response(payload)["access_token"], "new-access-token")
         with self.assertRaises(GoogleOAuthError):
-            validate_refresh_response({**payload, "scope": "https://www.googleapis.com/auth/spreadsheets"})
+            validate_refresh_response({**payload, "scope": "https://www.googleapis.com/auth/drive"})
 
 
 if __name__ == "__main__":
