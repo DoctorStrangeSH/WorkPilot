@@ -266,9 +266,13 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                     self._send(422, {"error": "invalid_google_sheets_edit_preview"})
                     return
                 try:
-                    before = sheets.read_values(payload["spreadsheet_id"], payload["range"])
+                    before = sheets.read_values(payload["spreadsheet_id"], payload["range"], value_render_option="FORMULA")
                     proposed = payload["values"]
                     current = before.get("values", [])
+                    if any(isinstance(value, str) and value.startswith("=")
+                           for row in current for value in row):
+                        self._send(409, {"error": "formula_cells_are_protected"})
+                        return
                     if (not isinstance(proposed, list) or len(proposed) != len(current)
                             or any(not isinstance(row, list) for row in proposed)
                             or any(len(new) != len(old) for new, old in zip(proposed, current))):
@@ -297,7 +301,7 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                     self._send(409, {"error": "google_sheets_approval_expired_or_used"})
                     return
                 try:
-                    latest = sheets.read_values(proposal["spreadsheet_id"], proposal["range"])
+                    latest = sheets.read_values(proposal["spreadsheet_id"], proposal["range"], value_render_option="FORMULA")
                     if latest.get("values", []) != proposal["before"]:
                         self._send(409, {"error": "google_sheets_source_changed_since_preview"})
                         return
