@@ -291,10 +291,10 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
           <>
           <div className="google-read-form">
             <div className="google-actions">
-              <button className="primary" disabled={busy} onClick={()=>void analyzeActiveInventa()}>{busy?"Анализируем…":"Подключить ИНВенту для расследования"}</button>
+              <button className="primary" disabled={busy} onClick={()=>void analyzeActiveInventa()}>{busy?"Анализируем…":"Обработать первый заказ"}</button>
               <button className="secondary" disabled={busy} onClick={()=>void disconnectSheets()}>Отключить Google</button>
             </div>
-            <small>Маления ищет Google Sheets во вкладках, которыми ты поделился через Browser Bridge. Если gid отсутствует, она определяет лист по заголовкам ИНВенты. Исходная таблица доступна только для чтения и не изменяется.</small>
+            <small>Маления автоматически выберет последнюю переданную таблицу ИНВенты, распознает лист по заголовкам и покажет первый заказ для проверки. Исходная таблица доступна только для чтения и не изменяется.</small>
           </div>
           {inventaReport?<div className="sheet-preview">
             <div className="sheet-preview-head"><b>{inventaReport.source.spreadsheet_title} · {inventaReport.source.sheet_title}</b><small>{inventaReport.analysis.rows_analyzed} строк</small></div>
