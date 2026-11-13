@@ -214,10 +214,18 @@ inspectButton.addEventListener("click", async () => {
       ". Сырые данные не сохранялись.";
     auditStatus.className = "status ok";
     setStatus("Структурная диагностика завершена. Это ещё не проверка заказов.", "ok");
-  } catch {
-    auditStatus.textContent = "Не удалось проверить вкладку. Убедитесь, что активна обычная HTTP(S)-страница и расширению разрешён доступ.";
+  } catch (error) {
+    const raw = typeof error?.message === "string" ? error.message : "";
+    const reason = /Cannot access contents|cannot be scripted|host permission|permission/i.test(raw)
+      ? "У расширения пока нет доступа к содержимому этой страницы. Разреши доступ к сайту в настройках расширения и повтори проверку."
+      : /chrome:\/\/|edge:\/\/|about:|chromewebstore|extensions/i.test(page?.href || "")
+        ? "Эта служебная страница браузера недоступна для чтения расширением. Открой обычную рабочую страницу."
+        : /tab|frame|document/i.test(raw)
+          ? "Вкладка изменилась или закрылась во время проверки. Открой её снова и повтори."
+          : "Не удалось получить структуру страницы или подтвердить локальный ответ Malenia. Проверь подключение агента и доступ расширения к сайту.";
+    auditStatus.textContent = reason;
     auditStatus.className = "status error";
-    setStatus("Проверка структуры не выполнена.", "error");
+    setStatus("Проверка не завершена. Причина указана ниже.", "error");
   } finally { busy=false; updateButtons(); }
 });
 
