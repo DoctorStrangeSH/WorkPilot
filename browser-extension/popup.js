@@ -41,6 +41,10 @@ function diagnostic(error, sharing = false) {
     case "disconnected": return sharing
       ? "Соединение прервано. Проверьте в Malenia, сохранилась ли вкладка, затем повторите подключение."
       : "Хост завершил соединение. Проверьте установку и повторите подключение.";
+    case "site_permission_denied": return "Браузер не предоставил расширению доступ к этому сайту. Разрешите доступ к текущему сайту в настройках расширения и повторите проверку.";
+    case "page_access": return "Не удалось прочитать активную страницу. Проверьте, что это обычная HTTP(S)-вкладка, и разрешите Malenia доступ к сайту.";
+    case "host_rejected": return "Локальный агент отклонил диагностику структуры страницы. Проверьте, что Malenia обновлена вместе с расширением Browser Bridge.";
+    case "host_protocol": return "Локальный агент ответил в несовместимом формате. Обновите Malenia и повторите проверку.";
     default: return "Не удалось проверить ответ Browser Bridge. Проверьте установку и повторите подключение.";
   }
 }
@@ -88,7 +92,8 @@ async function connect() {
   setStatus("Проверяем соединение…");
   try {
     const response = await sendNativeMessage({ type: "hello" });
-    if (!response.ok || response.host !== HOST_NAME) throw bridgeError("protocol");
+    if (!response.ok || response.host !== HOST_NAME || !Array.isArray(response.capabilities) ||
+        !response.capabilities.includes("inspect_capabilities")) throw bridgeError("protocol");
     connected = true;
     setStatus("Malenia подключена. Можно поделиться текущей вкладкой.", "ok");
   } catch (error) {
@@ -181,13 +186,15 @@ inspectButton.addEventListener("click", async () => {
   updateButtons();
   setStatus("Проверяем структуру активной вкладки…");
   let inspectedPageUrl = "";
+  let stage = "tab_lookup";
   try {
     const [tab] = await chrome.tabs.query({active:true,lastFocusedWindow:true});
     if (!tab || !Number.isInteger(tab.id) || typeof tab.url !== "string") throw new Error("tab");
     const page = new URL(tab.url);
     inspectedPageUrl = page.href;
     if (!["http:","https:"].includes(page.protocol) || page.username || page.password) throw new Error("url");
-    const results = await chrome.scripting.executeScript({target:{tabId:tab.id},func:() => {
+    stage = "page_access";
+    const readStructure = () => chrome.scripting.executeScript({target:{tabId:tab.id},func:() => {
       const visible = el => !!(el && (el.getClientRects().length || el.getBoundingClientRect().width));
       const clean = value => String(value || "").replace(/\s+/g," ").trim().slice(0,120);
       const headers = Array.from(document.querySelectorAll("table thead th, [role=columnheader]"))
@@ -219,12 +226,34 @@ inspectButton.addEventListener("click", async () => {
         virtualized:!!document.querySelector('[aria-rowcount], [data-virtualized="true"], .ag-virtual-list-viewport'),
         login_required:/sign in|log in|войти|авторизац|вход в аккаунт/.test(body)};
     }});
+    let results;
+    try {
+      results = await readStructure();
+    } catch (error) {
+      const message = typeof error?.message === "string" ? error.message : "";
+      if (!/cannot access contents|cannot be scripted|host permission|permission/i.test(message)) {
+        throw bridgeError("page_access");
+      }
+      stage = "site_permission";
+      let granted = false;
+      try { granted = await chrome.permissions.request({origins:[page.origin + "/*"]}); }
+      catch { granted = false; }
+      if (!granted) throw bridgeError("site_permission_denied");
+      stage = "page_access";
+      try { results = await readStructure(); }
+      catch { throw bridgeError("page_access"); }
+    }
     const summary = results?.[0]?.result;
     if (!summary || typeof summary !== "object") throw new Error("snapshot");
+    stage = "host_response";
     const response = await sendNativeMessage({type:"inspect_capabilities",request_id:crypto.randomUUID(),
       page:{url:page.origin+page.pathname,...summary}});
-    if (!response?.ok || response.type!=="capabilities_inspected" || response.persisted!==false)
-      throw bridgeError("protocol");
+    if (!response?.ok) {
+      if (response.error === "invalid_capability_snapshot") throw bridgeError("host_rejected");
+      throw bridgeError("host_protocol");
+    }
+    if (response.type!=="capabilities_inspected" || response.persisted!==false ||
+        !response.page || !Array.isArray(response.page.tables)) throw bridgeError("host_protocol");
     const role = /inventa|инвент/i.test(page.hostname+" "+summary.title) ? "ИНВента" :
       /datalens|data.?lens/i.test(page.hostname+" "+summary.title) ? "DataLens" :
       /asgard|асгард/i.test(page.hostname+" "+summary.title) ? "Asgard" : "Неизвестный ресурс";
@@ -240,16 +269,17 @@ inspectButton.addEventListener("click", async () => {
     setStatus("Структурная диагностика завершена. Это ещё не проверка заказов.", "ok");
   } catch (error) {
     const raw = typeof error?.message === "string" ? error.message : "";
-    const reason = /Cannot access contents|cannot be scripted|host permission|permission/i.test(raw)
-      ? "У расширения пока нет доступа к содержимому этой страницы. Разреши доступ к сайту в настройках расширения и повтори проверку."
-      : /chrome:\/\/|edge:\/\/|about:|chromewebstore|extensions/i.test(inspectedPageUrl || "")
+    const reason = error?.bridgeCode ? diagnostic(error) :
+      stage === "tab_lookup" ? "Не удалось определить активную вкладку. Переключись на обычную рабочую HTTP(S)-страницу." :
+      stage === "page_access" ? "Браузер не разрешил чтение страницы. Проверь доступ Malenia к текущему сайту." :
+      stage === "site_permission" ? "Не удалось получить разрешение на чтение этого сайта." :
+      stage === "host_response" ? "Локальный агент не подтвердил структурный ответ. Проверь обновление и соединение Browser Bridge." :
+      /chrome:\/\/|edge:\/\/|about:|chromewebstore|extensions/i.test(inspectedPageUrl || "")
         ? "Эта служебная страница браузера недоступна для чтения расширением. Открой обычную рабочую страницу."
-        : /tab|frame|document/i.test(raw)
-          ? "Вкладка изменилась или закрылась во время проверки. Открой её снова и повтори."
-          : "Не удалось получить структуру страницы или подтвердить локальный ответ Malenia. Проверь подключение агента и доступ расширения к сайту.";
+        : "Проверка остановлена на этапе "+stage+". Повтори подключение и проверь доступ расширения.";
     auditStatus.textContent = reason;
     auditStatus.className = "status error";
-    setStatus("Проверка не завершена. Причина указана ниже.", "error");
+    setStatus("Проверка не завершена ("+stage+"). Причина указана ниже.", "error");
   } finally { busy=false; updateButtons(); }
 });
 
