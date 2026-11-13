@@ -218,12 +218,21 @@ var MaleniaAutomation = (() => {
     }
   }
 
-  async function visit(chromeApi, role, url, sendNative, searchKey = null) {
+  async function visit(chromeApi, role, url, sendNative, searchKey = null, selectedTab = null) {
     let tabId;
+    const ownsTab = !selectedTab;
     try {
-      const tab = await chromeApi.tabs.create({url, active: false});
-      if (!Number.isInteger(tab.id)) throw new Error("invalid_tab");
-      tabId = tab.id;
+      if (selectedTab) {
+        if (!Number.isSafeInteger(selectedTab.tabId) || selectedTab.tabId < 0 ||
+            selectedTab.origin !== new URL(url).origin ||
+            selectedTab.path !== new URL(url).pathname) throw new Error("unexpected_document");
+        tabId = selectedTab.tabId;
+      } else {
+        const tab = await chromeApi.tabs.create({url, active: false});
+        if (!Number.isInteger(tab.id)) throw new Error("invalid_tab");
+        tabId = tab.id;
+      }
+      if (selectedTab && searchKey !== null) throw new Error("unsupported_dynamic_search");
       if (searchKey !== null) {
         await waitLoaded(chromeApi, tabId);
         const current = await chromeApi.tabs.get(tabId);
@@ -249,7 +258,10 @@ var MaleniaAutomation = (() => {
         const current = await chromeApi.tabs.get(tabId);
         const finalUrl = new URL(current.url || "");
         if (finalUrl.origin !== new URL(url).origin || finalUrl.protocol !== "https:" ||
-            finalUrl.username || finalUrl.password) throw new Error("navigation_outside_allowed_origin");
+            finalUrl.username || finalUrl.password ||
+            (selectedTab && finalUrl.pathname !== new URL(url).pathname)) {
+          throw new Error("navigation_outside_allowed_origin");
+        }
         const currentKey = finalUrl.href;
         if (visited.has(currentKey)) throw new Error("pagination_cycle");
         visited.add(currentKey);
@@ -257,7 +269,8 @@ var MaleniaAutomation = (() => {
           target: {tabId},
           func: (resourceRole) => {
             // Only visible table text, not input values/cookies.
-            const text = document.body ? document.body.innerText : "";
+            const text = resourceRole === "inventory" || resourceRole === "datalens" ||
+              resourceRole === "asgard" ? (document.body ? document.body.innerText : "") : "";
             const required = {
               inventory: ["cargo_place", "inventory_date"],
               datalens: ["main_partner_code_original", "sc_id", "result", "scanned_at"],
@@ -333,14 +346,16 @@ var MaleniaAutomation = (() => {
           throw new Error("unexpected_document");
         }
         if (snapshot.incomplete) throw new Error("virtualized_or_incomplete_grid");
-        const text = snapshot.text;
-        const response = await sendNative({
-          type: "inspect_active_page",
-          page: {url: finalUrl.origin + finalUrl.pathname, text},
-        });
-        if (!response || !response.ok || response.type !== "page_inspected" ||
-            response.persisted !== false || response.characters !== text.length) {
-          throw new Error("native_host_rejected");
+        const text = selectedTab ? "" : snapshot.text;
+        if (!selectedTab) {
+          const response = await sendNative({
+            type: "inspect_active_page",
+            page: {url: finalUrl.origin + finalUrl.pathname, text},
+          });
+          if (!response || !response.ok || response.type !== "page_inspected" ||
+              response.persisted !== false || response.characters !== text.length) {
+            throw new Error("native_host_rejected");
+          }
         }
         pages++;
         characters += text.length;
@@ -363,6 +378,8 @@ var MaleniaAutomation = (() => {
         if (!snapshot.next) {
           return {role, status: "read", characters, pages, table: combinedTable};
         }
+        // User-selected tabs are never navigated, paginated, or searched by the audit.
+        if (selectedTab) throw new Error("unmapped_paginated_table");
         // A pagination signal without the expected table must never produce a partial audit.
         if (!combinedTable || !snapshot.table) throw new Error("unmapped_paginated_table");
         const next = nextPage(finalUrl.href, snapshot.next);
@@ -372,7 +389,7 @@ var MaleniaAutomation = (() => {
       }
       throw new Error("pagination_limit");
     } finally {
-      if (tabId !== undefined) {
+      if (ownsTab && tabId !== undefined) {
         try { await chromeApi.tabs.remove(tabId); } catch { /* Tab already closed. */ }
       }
     }
@@ -385,10 +402,11 @@ var MaleniaAutomation = (() => {
     for (const role of ROLES) {
       await onProgress({phase: "reading", role, results: [...results]});
       try {
-        const searchKeys = role !== "inventory" && options.exactGetSearch ?
+        const selectedTab = options.selectedTabs?.[role] || null;
+        const searchKeys = !selectedTab && role !== "inventory" && options.exactGetSearch ?
           snapshots.inventory?.rows?.map(row =>
             row[snapshots.inventory.columns.indexOf("cargo_place")]) : null;
-        if (role !== "inventory" && options.exactGetSearch &&
+        if (!selectedTab && role !== "inventory" && options.exactGetSearch &&
             (!Array.isArray(searchKeys) || !searchKeys.length ||
              searchKeys.length > MAX_SEARCHES || new Set(searchKeys).size !== searchKeys.length ||
              searchKeys.some(key => typeof key !== "string" ||
@@ -398,7 +416,9 @@ var MaleniaAutomation = (() => {
         const keys = searchKeys || [null];
         let table = null, characters = 0, pages = 0;
         for (const key of keys) {
-          const visitResult = await visit(chromeApi, role, targets[role], sendNative, key);
+          const selectedTab = options.selectedTabs?.[role] || null;
+          const visitResult = await visit(chromeApi, role, targets[role], sendNative,
+            selectedTab ? null : key, selectedTab);
           if (options.exactGetSearch && !visitResult.table) {
             throw new Error("unmapped_search_results");
           }
