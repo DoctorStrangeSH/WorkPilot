@@ -830,3 +830,15 @@ Current limitations found while inspecting actual code:
 - Added handshake coverage for `inspect_capabilities`. Commit `978dff56`.
 - Current latest Actions for `978dff56`: Python `43400332777` queued, Desktop `43400332754` in progress, Windows installer `43400332731` pending. Earlier SHA `54ebc8fe` also has runs; verify final SHA only before claiming CI green.
 - Capability snapshots currently return ephemerally to the popup and are not displayed in desktop UI or persisted. The active-tab check is manual and only inspects one active page. It is not yet auto-discovery across tabs and does not identify business roles reliably beyond a display heuristic.
+
+
+## 2026-11-13 — verified root-cause fixes for red CI (pending Actions confirmation)
+
+The previous red runs were investigated from job logs and current branch source, then corrected without disabling checks:
+
+1. Python Native Messaging protocol test expected the old hello capability list and omitted the newly implemented `inspect_capabilities`. Updated the exact expected list. Commit `de68dc4443e2b38a364c1050e685740cc3c23373`.
+2. Desktop navigation tests contained stale assumptions about the Browser Bridge privacy copy and asserted an obsolete manual Google Sheets `read_google_sheet` UI command. Updated assertions to match the actual current UI: the browser page explicitly describes manual tab sharing and the three configured domains; Google Sheets uses the OAuth connect/status/disconnect Tauri commands. Read-only/no-write assertions remain. Commits `b7ec61a3061aea6e4d94e6da06e791b49b5ed08f`, `ebc63d45a57efd2103825cffe10dbacc7016859a`.
+3. Windows installer smoke test exposed a production version mismatch: desktop package and Tauri bundle are `0.6.1`, but the packaged agent reported hard-coded `0.6.0` from `/v1/runtime` and `0.2.0` from `/health`. Unified agent `__version__` to `0.6.1` and made both endpoints report that shared value. Commits `ebc9a3aa9ce53815f70907599ae79f4003820828`, `a4c08278a5092fbd49c4ec53fea9fa35de5306ad`, `4f46fdd1d7c9dc77a4b26e3244f6ed8b14af87e4`. Updated runtime/health expectations in `tests/test_server.py`, commit `a3a60b87dc21f5c1d4ab46eef2acfc8a268d4710`.
+4. The Windows smoke test also leaked the agent process if readiness/version assertions failed inside `start()`, leaving its frozen DLLs locked and causing TemporaryDirectory cleanup to raise WinError 5. Wrapped startup validation in exception-safe cleanup; process is terminated, waited, and killed only if graceful termination times out. Commit `2ffe07fafe072432bcfb42bffe665d169f2a6c11`.
+
+Latest fix commit at this note: `4f46fdd1d7c9dc77a4b26e3244f6ed8b14af87e4` (later than test changes? Check actual branch head before relying on this list). Actions have not yet been confirmed for the final branch head. Do not claim CI green until Python, Desktop, and Windows installer complete successfully on the same SHA.
