@@ -123,6 +123,11 @@ class NativeMessagingProtocolTests(unittest.TestCase):
             self.assertFalse(handle_message({"type": "inspect_active_page", **payload},
                                             self.store)["ok"])
 
+    def test_hello_advertises_structural_capability_inspection(self):
+        response = handle_message({"type": "hello"}, self.store)
+        self.assertTrue(response["ok"])
+        self.assertIn("inspect_capabilities", response["capabilities"])
+
     def test_capability_snapshot_is_bounded_and_ephemeral(self):
         before_tabs = self.store.list_browser_tabs()
         before_events = self.store.list_events()
