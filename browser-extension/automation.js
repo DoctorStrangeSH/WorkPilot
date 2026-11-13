@@ -267,10 +267,9 @@ var MaleniaAutomation = (() => {
         visited.add(currentKey);
         const results = await chromeApi.scripting.executeScript({
           target: {tabId},
-          func: (resourceRole) => {
-            // Only visible table text, not input values/cookies.
-            const text = resourceRole === "inventory" || resourceRole === "datalens" ||
-              resourceRole === "asgard" ? (document.body ? document.body.innerText : "") : "";
+          func: (resourceRole, includeText) => {
+            // User-selected mode extracts structured table cells only.
+            const text = includeText && document.body ? document.body.innerText : "";
             const required = {
               inventory: ["cargo_place", "inventory_date"],
               datalens: ["main_partner_code_original", "sc_id", "result", "scanned_at"],
@@ -338,11 +337,11 @@ var MaleniaAutomation = (() => {
               next: nextAnchor ? nextAnchor.href : null
             };
           },
-          args: [role]
+          args: [role, !selectedTab]
         });
         const snapshot = results?.[0]?.result;
         if (!snapshot || snapshot.origin !== finalUrl.origin ||
-            typeof snapshot.text !== "string" || !snapshot.text.trim()) {
+            typeof snapshot.text !== "string" || (!selectedTab && !snapshot.text.trim())) {
           throw new Error("unexpected_document");
         }
         if (snapshot.incomplete) throw new Error("virtualized_or_incomplete_grid");
