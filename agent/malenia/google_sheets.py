@@ -520,7 +520,7 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
         values = self.read_values(spreadsheet_id, f"'{escaped_title}'!A:Z")
         return {"spreadsheet_id": spreadsheet_id, "spreadsheet_title": metadata.get("properties", {}).get("title", ""),
                 "sheet_title": title, "sheet_id": sheet_id, "range": values["range"],
-                "values": values["values"], "read_only": False,
+                "values": values["values"], "read_only": True,
                 "source": "explicit_browser_tab", "gid_selected": selected_gid is not None}
 
     def write_values(self, spreadsheet_id: str, range_a1: str, values: list[list[Any]]) -> dict[str, Any]:
