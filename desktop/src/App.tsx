@@ -241,11 +241,13 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
     try{
       const sheetTabs=tabs.filter(tab=>/^https:\/\/docs\.google\.com\/spreadsheets\/d\/[A-Za-z0-9_-]{10,256}\/edit\/?$/.test(tab.url));
       const namedInventa=sheetTabs.filter(tab=>/inventa|инвент/i.test(tab.title));
-      const activeTab=namedInventa.length===1?namedInventa[0]:(namedInventa.length===0&&sheetTabs.length===1?sheetTabs[0]:null);
+      // Prefer the most recently shared named sheet when multiple copies are open.
+      const candidates=namedInventa.length?namedInventa:sheetTabs;
+      const activeTab=[...candidates].sort((a,b)=>
+        Date.parse(b.shared_at||"")-Date.parse(a.shared_at||"")
+      )[0]||null;
       if(!activeTab){
-        throw new Error(sheetTabs.length===0
-          ?"Сначала открой ИНВенту в Яндекс Браузере и передай её вкладку через Browser Bridge."
-          :"Нашлось несколько таблиц Google Sheets. Оставь переданной одну ИНВенту или назови её вкладку «ИНВента».");
+        throw new Error("Открой таблицу ИНВенты в Яндекс Браузере и нажми «Поделиться вкладкой» в расширении Malenia.");
       }
       const result=await invoke<any>("analyze_active_inventa",{spreadsheetUrl:activeTab.url});
       setInventaReport(result);
@@ -296,6 +298,13 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
           </div>
           {inventaReport?<div className="sheet-preview">
             <div className="sheet-preview-head"><b>{inventaReport.source.spreadsheet_title} · {inventaReport.source.sheet_title}</b><small>{inventaReport.analysis.rows_analyzed} строк</small></div>
+            {inventaReport.analysis.first_order_preview?<div className="order-first-preview" data-testid="inventa-first-order">
+              <b>Первый заказ · строка {inventaReport.analysis.first_order_preview.row}</b>
+              <p><b>ID:</b> {inventaReport.analysis.first_order_preview.order_id||"не указан"} · <b>Грузоместо:</b> {inventaReport.analysis.first_order_preview.partner_code||"не указано"}</p>
+              <p><b>Дата:</b> {inventaReport.analysis.first_order_preview.date||"не указана"} · <b>Стоимость:</b> {inventaReport.analysis.first_order_preview.cost||"не указана"}</p>
+              <p><b>Статус в ИНВенте:</b> {inventaReport.analysis.first_order_preview.status||"не указан"} · <b>Тикет:</b> {inventaReport.analysis.first_order_preview.ticket||"не указан"}</p>
+              <p><b>Проверка:</b> {inventaReport.analysis.first_order_cross_check?.verified?"подтверждён":"нужны внешние источники — DataLens и Asgard"}. Это предварительный разбор строки, не подтверждение статуса.</p>
+            </div>:<p>Не удалось выделить запись заказа для первого теста.</p>}
             <div className="sources-notice"><b>Статусы</b> {Object.entries(inventaReport.analysis.status_counts).map(([k,v])=>k+": "+v).join(" · ")}</div>
             <p><b>Дубли ID:</b> {inventaReport.analysis.duplicate_order_ids.length} · <b>Ошибочные даты:</b> {inventaReport.analysis.invalid_date_rows.length} · <b>Ошибочные суммы:</b> {inventaReport.analysis.invalid_cost_rows.length} · <b>Без тикета:</b> {inventaReport.analysis.missing_ticket_rows.length}</p>
             <p><b>Не заполнено:</b> {Object.entries(inventaReport.analysis.missing_required).map(([k,v])=>k+": "+v).join(" · ")||"нет"}</p>
