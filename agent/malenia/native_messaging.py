@@ -15,7 +15,7 @@ import struct
 import sys
 from pathlib import Path
 from typing import Any, BinaryIO
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 from .config import data_directory
 from .store import TaskStore
@@ -95,8 +95,17 @@ def _clean_tab_url(value: Any) -> str:
         parsed.port
     except ValueError as error:
         raise ValueError("tab URL has an invalid port") from error
-    # Query strings and fragments may contain private or session-like data.
-    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path or "/", "", ""))
+    # Keep only the non-secret active worksheet gid for Google Sheets. Every
+    # other query parameter and every fragment is discarded.
+    safe_query = ""
+    if parsed.scheme == "https" and parsed.hostname == "docs.google.com" and re.fullmatch(
+        r"/spreadsheets/d/[A-Za-z0-9_-]{10,256}/edit/?", parsed.path
+    ):
+        query = parse_qs(parsed.query, keep_blank_values=True)
+        gids = query.get("gid", [])
+        if len(gids) == 1 and re.fullmatch(r"\d{1,16}", gids[0]):
+            safe_query = urlencode({"gid": gids[0]})
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path or "/", safe_query, ""))
 
 
 def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
@@ -195,12 +204,25 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
                 raise ValueError("invalid capability fields")
         except (ValueError, TypeError, KeyError):
             return {**response, "ok": False, "error": "invalid_capability_snapshot"}
+        # Opening the extension and pressing the structure-check button is an
+        # explicit user action. For Google Sheets, remember only the sanitized
+        # document URL/title so the desktop can start the API read without a
+        # second "Share tab" action. No grid values or browser session data are saved.
+        registered_sheet = False
+        parsed_url = urlsplit(url)
+        if (parsed_url.hostname == "docs.google.com" and
+                re.fullmatch(r"/spreadsheets/d/[A-Za-z0-9_-]{10,256}/edit/?", parsed_url.path)):
+            try:
+                store.record_browser_tab(url, title or "Google Sheets")
+                registered_sheet = True
+            except sqlite3.Error:
+                return {**response, "ok": False, "error": "local_storage_unavailable"}
         return {**response, "ok": True, "type": "capabilities_inspected",
                 "page": {"url": url, "title": title, "table_headers": headers,
                          "tables": page["tables"], "search_labels": labels, "has_aria_grid": page["has_aria_grid"],
                          "virtualized": page["virtualized"],
                          "login_required": page["login_required"]},
-                "persisted": False}
+                "persisted": False, "tab_registered": registered_sheet}
 
     if message_type == "inspect_active_page":
         # Validate a user-initiated rendered-text snapshot without retaining it.
