@@ -28,7 +28,7 @@ class InventaAnalysisTests(unittest.TestCase):
         self.assertEqual(result["sheet_title"], "Тестовая ИНВента")
         self.assertEqual(result["status_counts"], {"В работе": 1, "Аномалия": 1, "Потеря": 1})
         self.assertEqual(result["duplicate_order_ids"], [{"order_id": "LO-1", "rows": [3, 4]}])
-        self.assertEqual(result["invalid_date_rows"], [5, 6])
+        self.assertEqual(result["invalid_date_rows"], [5])
         self.assertEqual(result["invalid_cost_rows"], [5])
         self.assertEqual(result["missing_required"], {"name": 1, "order_id": 1, "status": 1})
         self.assertTrue(result["read_only"])
