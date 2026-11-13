@@ -166,7 +166,7 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
     if message_type == "inspect_capabilities":
         # Accept only bounded structural metadata, never raw page text or credentials.
         page = payload.get("page")
-        required = {"url", "title", "table_headers", "search_labels",
+        required = {"url", "title", "table_headers", "tables", "search_labels",
                     "has_aria_grid", "virtualized", "login_required"}
         if not isinstance(page, dict) or set(page) != required:
             return {**response, "ok": False, "error": "invalid_capability_snapshot"}
@@ -197,7 +197,7 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
             return {**response, "ok": False, "error": "invalid_capability_snapshot"}
         return {**response, "ok": True, "type": "capabilities_inspected",
                 "page": {"url": url, "title": title, "table_headers": headers,
-                         "search_labels": labels, "has_aria_grid": page["has_aria_grid"],
+                         "tables": page["tables"], "search_labels": labels, "has_aria_grid": page["has_aria_grid"],
                          "virtualized": page["virtualized"],
                          "login_required": page["login_required"]},
                 "persisted": False}
