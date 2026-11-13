@@ -37,7 +37,7 @@
 - RAM/CPU, очередь задач, создание и отмена.
 - Локальный токен остаётся в Rust-процессе и не передаётся frontend.
 - Windows NSIS installer собирается через GitHub Actions; Python Agent и Native Messaging host упаковываются PyInstaller `onedir`.
-- Browser Bridge preview: ручная передача только активной вкладки через MV3 extension + Native Messaging; URL сохраняется без query и fragment.
+- Browser Bridge: явная проверка активной вкладки через MV3 extension + Native Messaging; для Google Sheets автоматически сохраняются только ID документа и активный gid (без прочих query/fragment), после чего desktop читает лист через Google Sheets API в режиме readonly.
 
 Установщик с новым Browser Bridge требует успешного завершения текущего Windows workflow и проверки артефакта. 2026-11-12: пользователь подтвердил работу ручной передачи вкладки через Browser Bridge на своём компьютере.
 
