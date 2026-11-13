@@ -1,8 +1,8 @@
-"""Read-only Google Sheets connector for the local Malenia agent.
+"""Google Sheets editor connector for the local Malenia agent.
 
 The connector uses an installed-app OAuth flow with PKCE and a one-use loopback
 callback. Refresh tokens are stored only in Windows Credential Manager.
-Only GET requests to the Sheets values API are implemented.
+Reads are available directly; writes are bounded literal-value operations behind an approval API gate.
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ class _ConnectAttempt:
 
 
 class GoogleSheetsConnector:
-    """Local OAuth and read-only Sheets API client; no write methods exist."""
+    """Local OAuth and bounded Google Sheets API client."""
 
     def __init__(
         self,
@@ -514,7 +514,7 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
             "range": payload.get("range", range_a1.strip()),
             "majorDimension": payload.get("majorDimension", "ROWS"),
             "values": values,
-            "read_only": True,
+            "read_only": False,
         }
 )}?valueInputOption=RAW")
         body = json.dumps({"majorDimension": "ROWS", "values": values},
