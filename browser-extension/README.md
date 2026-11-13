@@ -279,3 +279,15 @@ The first acceptance test is deliberately limited to one read-only order preview
 5. Malenia selects the most recently shared tab titled ИНВента, detects a worksheet from its header row, and displays the first non-empty order row with its source row number and missing fields.
 
 This is a first-stage order intake/validation, not yet a verified cross-system reconciliation. The DataLens/Asgard checks remain explicitly unverified until their live, authorized adapters are connected. No spreadsheet cells are changed, no order status is written, and no ticket is created. A row with missing evidence must remain marked for review rather than being reported as completed.
+
+
+## DataLens / Asgard schema discovery (read-only)
+
+Before relying on the order adapters, inspect the actual authenticated pages in Yandex Browser. On each page (DataLens first, then Asgard), open the Malenia Browser Bridge popup and press **Проверить структуру активной вкладки**. The diagnostic now reports up to 12 visible HTML tables/ARIA grids, their visible column headers, visible row counts, and declared ARIA row counts. It does not read cell values, search inputs, order identifiers, cookies, or credentials, and the structural snapshot is not persisted. Use these real headers to validate or add an explicit adapter mapping; do not infer field meanings from position or translate unknown labels automatically.
+
+The current order audit adapter still expects these exact normalized source columns:
+- Inventory browser table: `cargo_place`, `inventory_date`
+- DataLens: `main_partner_code_original`, `sc_id`, `result`, `scanned_at`
+- Asgard: `cargo_place`, `status` (for transit-history outcomes, the dedicated box/history evidence is still not supplied by the generic table reader)
+
+A page can be structurally diagnosed without being a supported order adapter. If its headers differ, the audit must report the source as unsupported/manual review until a reviewed mapping and tests are added. The Google Sheets API reader for ИНВента is separate from the Browser Bridge's HTML-table reader; the complete Google Sheets → DataLens → Asgard pipeline is not yet wired into a single investigation job.
