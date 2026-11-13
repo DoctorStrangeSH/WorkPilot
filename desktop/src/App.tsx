@@ -345,8 +345,9 @@ function SourcesPage({tabs,connected,agentBusy,onStartAgent,onOpenBrowser}:{tabs
             <div className="sheet-preview-head"><b>{inventaReport.source.spreadsheet_title} · {inventaReport.source.sheet_title}</b><small>{inventaReport.analysis.rows_analyzed} строк</small></div>
             {inventaReport.analysis.first_order_preview?<div className="order-first-preview" data-testid="inventa-first-order">
               <b>Первый заказ · строка {inventaReport.analysis.first_order_preview.row}</b>
-              <p><b>ID:</b> {inventaReport.analysis.first_order_preview.order_id||"не указан"} · <b>Грузоместо:</b> {inventaReport.analysis.first_order_preview.partner_code||"не указано"}</p>
-              <p><b>Дата:</b> {inventaReport.analysis.first_order_preview.date||"не указана"} · <b>Стоимость:</b> {inventaReport.analysis.first_order_preview.cost||"не указана"}</p>
+              <p><b>ID заказа:</b> {inventaReport.analysis.first_order_preview.order_id||"не указан"} · <b>Грузоместо:</b> {inventaReport.analysis.first_order_preview.partner_code||"не указано"}</p>
+              <p><b>Товар:</b> {inventaReport.analysis.first_order_preview.name||"не распознан"} </p>
+              <p><b>Дата выгрузки:</b> {inventaReport.analysis.first_order_preview.date||"не указана"} · <b>Стоимость:</b> {inventaReport.analysis.first_order_preview.cost||"не указана"}</p>
               <p><b>Статус в ИНВенте:</b> {inventaReport.analysis.first_order_preview.status||"не указан"} · <b>Тикет:</b> {inventaReport.analysis.first_order_preview.ticket||"не указан"}</p>
               <p><b>Проверка:</b> {inventaReport.analysis.first_order_cross_check?.verified?"подтверждён":"нужны внешние источники — DataLens и Asgard"}. Это предварительный разбор строки, не подтверждение статуса.</p>
             </div>:<p>Не удалось выделить запись заказа для первого теста.</p>}
