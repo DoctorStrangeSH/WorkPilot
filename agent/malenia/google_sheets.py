@@ -459,7 +459,7 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
         return self._refresh_access_token()
 
     def read_active_sheet(self, spreadsheet_url: str, gid: str | None = None) -> dict[str, Any]:
-        """Resolve an explicitly shared Google Sheets tab and read its used grid."""
+        """Resolve the active Google Sheets worksheet from its document URL and gid, then read its grid."""
         from urllib.parse import parse_qs, urlsplit
         try:
             parsed = urlsplit(spreadsheet_url)
@@ -530,7 +530,7 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
         return {"spreadsheet_id": spreadsheet_id, "spreadsheet_title": metadata.get("properties", {}).get("title", ""),
                 "sheet_title": title, "sheet_id": sheet_id, "range": values["range"],
                 "values": values["values"], "read_only": True,
-                "source": "explicit_browser_tab", "gid_selected": selected_gid is not None}
+                "source": "active_browser_tab", "gid_selected": selected_gid is not None}
 
     def write_values(self, spreadsheet_id: str, range_a1: str, values: list[list[Any]]) -> dict[str, Any]:
         """Write literal values to an exact range; callers must enforce approval."""
