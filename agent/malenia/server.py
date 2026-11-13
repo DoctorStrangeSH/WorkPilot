@@ -7,6 +7,7 @@ import json
 import re
 import sqlite3
 import socket
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -46,6 +47,7 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
     ai_client.knowledge = knowledge
     ai_client.skills = skills
     sheets = google_sheets if google_sheets is not None else GoogleSheetsConnector()
+    pending_sheet_edits: dict[str, dict] = {}
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "MaleniaAgent/0.2"
@@ -237,6 +239,60 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                 return
 
             if parsed.path in {
+            if parsed.path == "/v1/integrations/google-sheets/edit-preview":
+                payload = self._read_json(32 * 1024)
+                if payload is None:
+                    return
+                if set(payload) != {"spreadsheet_id", "range", "values"}:
+                    self._send(422, {"error": "invalid_google_sheets_edit_preview"})
+                    return
+                try:
+                    before = sheets.read_values(payload["spreadsheet_id"], payload["range"])
+                    proposed = payload["values"]
+                    current = before.get("values", [])
+                    if (not isinstance(proposed, list) or len(proposed) != len(current)
+                            or any(not isinstance(row, list) for row in proposed)
+                            or any(len(new) != len(old) for new, old in zip(proposed, current))):
+                        self._send(422, {"error": "edit_shape_must_match_current_range"})
+                        return
+                    approval_id = str(uuid.uuid4())
+                    pending_sheet_edits[approval_id] = {"spreadsheet_id": payload["spreadsheet_id"],
+                        "range": payload["range"], "before": current, "after": proposed}
+                    self._send(200, {"approval_id": approval_id, "range": payload["range"],
+                        "before": current, "after": proposed, "requires_user_approval": True,
+                        "write_performed": False})
+                except (GoogleSheetsError, TypeError, KeyError) as error:
+                    code = error.code if isinstance(error, GoogleSheetsError) else "invalid_google_sheets_edit_preview"
+                    self._send(422, {"error": code})
+                return
+
+            if parsed.path == "/v1/integrations/google-sheets/edit-approve":
+                payload = self._read_json(4096)
+                if payload is None:
+                    return
+                if set(payload) != {"approval_id"} or not isinstance(payload["approval_id"], str):
+                    self._send(422, {"error": "invalid_google_sheets_approval"})
+                    return
+                proposal = pending_sheet_edits.pop(payload["approval_id"], None)
+                if proposal is None:
+                    self._send(409, {"error": "google_sheets_approval_expired_or_used"})
+                    return
+                try:
+                    latest = sheets.read_values(proposal["spreadsheet_id"], proposal["range"])
+                    if latest.get("values", []) != proposal["before"]:
+                        self._send(409, {"error": "google_sheets_source_changed_since_preview"})
+                        return
+                    written = sheets.write_values(proposal["spreadsheet_id"], proposal["range"], proposal["after"])
+                    verified = sheets.read_values(proposal["spreadsheet_id"], proposal["range"])
+                    if verified.get("values", []) != proposal["after"]:
+                        self._send(502, {"error": "google_sheets_write_verification_failed"})
+                        return
+                    self._send(200, {"updated": True, "range": proposal["range"],
+                        "updated_cells": written.get("updatedCells", 0), "verified": True})
+                except GoogleSheetsError as error:
+                    self._send(502, {"error": error.code})
+                return
+
                 "/v1/integrations/google-sheets/connect",
                 "/v1/integrations/google-sheets/disconnect",
                 "/v1/integrations/google-sheets/read",
