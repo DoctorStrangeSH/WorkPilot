@@ -575,8 +575,12 @@ test("confirmed open tabs are read in place without creating, navigating, closin
     permissions:{async contains({origins}){stats.permissionChecks++;return origins.every(x=>[
       "https://inventory.example/*","https://analytics.example/*","https://asgard.example/*"
     ].includes(x));}},
-    scripting:{async executeScript({target,args}) {
+    scripting:{async executeScript({target,args,func}) {
       stats.executed++;
+      if (func.toString().includes("location.href")) {
+        const tab = byId[target.tabId];
+        return [{frameId:0,documentId:"doc-"+target.tabId,result:{href:tab.url}}];
+      }
       const role=args[0];
       const expected={
         inventory:{columns:["cargo_place","inventory_date"],rows:[["TEST-001","2026-09-12"]]},
@@ -585,7 +589,7 @@ test("confirmed open tabs are read in place without creating, navigating, closin
       }[role];
       assert.equal(args[1],false,"selected-tab mode must not request full page text");
       assert.equal(target.tabId,records[role].id);
-      return [{result:{origin:new URL(records[role].url).origin,text:"",table:expected,next:null,incomplete:false}}];
+      return [{frameId:0,documentId:"doc-"+target.tabId,result:{origin:new URL(records[role].url).origin,text:"",table:expected,next:null,incomplete:false}}];
     }}
   };
   const selectedTabs=Object.fromEntries(Object.entries(records).map(([role,tab])=>[
@@ -606,9 +610,56 @@ test("confirmed open tabs are read in place without creating, navigating, closin
   assert.equal(stats.created,0);
   assert.equal(stats.updated,0);
   assert.equal(stats.removed,0);
-  assert.equal(stats.executed,3);
+  assert.equal(stats.executed,9);
   assert.ok(stats.permissionChecks>=6);
   assert.deepEqual(sent.map(x=>x.type),["reconcile_site_tables"]);
+});
+
+test("selected-tab audit rejects a document replacement between identity check and table read", async () => {
+  const api=runner();
+  const records={
+    inventory:{id:31,url:"https://inventory.example/orders"},
+    datalens:{id:32,url:"https://analytics.example/reports"},
+    asgard:{id:33,url:"https://asgard.example/history"}
+  };
+  const chrome={
+    tabs:{
+      onUpdated:{addListener(){},removeListener(){}},
+      async get(id){return records.inventory.id===id?records.inventory:
+        records.datalens.id===id?records.datalens:records.asgard;}
+    },
+    permissions:{async contains(){return true;}},
+    scripting:{async executeScript({target,func,args}) {
+      if(func.toString().includes("location.href")) {
+        return [{frameId:0,documentId:"doc-stable",result:{href:
+          Object.values(records).find(x=>x.id===target.tabId).url}}];
+      }
+      if(args[0]==="inventory") {
+        return [{frameId:0,documentId:"doc-replaced",result:{
+          origin:"https://inventory.example",text:"",
+          table:{columns:["cargo_place","inventory_date"],rows:[["TEST-1","2026-09-12"]]},
+          next:null,incomplete:false
+        }}];
+      }
+      return [{frameId:0,documentId:"doc-stable",result:{
+        origin:new URL(Object.values(records).find(x=>x.id===target.tabId).url).origin,
+        text:"",table:{columns:[],rows:[]},next:null,incomplete:false
+      }}];
+    }}
+  };
+  const selectedTabs=Object.fromEntries(Object.entries(records).map(([role,tab])=>[
+    role,{tabId:tab.id,origin:new URL(tab.url).origin,path:new URL(tab.url).pathname}
+  ]));
+  let reconciled=false;
+  const result=await api.run(chrome,{
+    inventory:records.inventory.url,datalens:records.datalens.url,asgard:records.asgard.url
+  },async message=>{
+    if(message.type==="reconcile_site_tables") reconciled=true;
+    return {};
+  },async()=>{}, {selectedTabs,exactGetSearch:false});
+  assert.equal(result.phase,"needs_attention");
+  assert.equal(result.results[0].status,"needs_attention");
+  assert.equal(reconciled,false);
 });
 
 test("confirmed open tab path change fails closed before DOM read", async () => {
