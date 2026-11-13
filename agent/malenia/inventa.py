@@ -25,8 +25,12 @@ REQUIRED = ("order_id", "date", "cost", "status")
 ANOMALY_WORDS = ("аномал", "потер", "ошиб", "не найден", "проблем")
 
 
+def _blank(value: Any) -> bool:
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
 def _norm(value: Any) -> str:
-    return re.sub(r"\s+", " ", str(value or "").strip().casefold().replace("ё", "е"))
+    return re.sub(r"\s+", " ", ("" if value is None else str(value)).strip().casefold().replace("ё", "е"))
 
 
 def detect_header(rows: list[list[Any]], scan_rows: int = 12) -> tuple[int, dict[str, int]]:
@@ -97,11 +101,11 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
         return row[index] if index is not None and index < len(row) else None
 
     for offset, row in enumerate(data, start=header_index + 2):
-        if not any(str(value or "").strip() for value in row):
+        if all(_blank(value) for value in row):
             continue
-        order_id = str(cell(row, "order_id") or "").strip()
-        status = str(cell(row, "status") or "").strip()
-        group = str(cell(row, "group") or "").strip()
+        order_id = ("" if _blank(cell(row, "order_id")) else str(cell(row, "order_id"))).strip()
+        status = ("" if _blank(cell(row, "status")) else str(cell(row, "status"))).strip()
+        group = ("" if _blank(cell(row, "group")) else str(cell(row, "group"))).strip()
         if order_id:
             ids[order_id].append(offset)
         else:
@@ -112,15 +116,15 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
             statuses[status] += 1
             if any(word in _norm(status) for word in ANOMALY_WORDS):
                 anomaly_rows.append(offset)
-        if not str(cell(row, "date") or "").strip() or not _date_ok(cell(row, "date")):
+        if _blank(cell(row, "date")) or not _date_ok(cell(row, "date")):
             invalid_dates.append(offset)
-        if not str(cell(row, "cost") or "").strip():
+        if _blank(cell(row, "cost")):
             missing["cost"] += 1
         elif not _number_ok(cell(row, "cost")):
             invalid_costs.append(offset)
-        if not str(cell(row, "name") or "").strip():
+        if _blank(cell(row, "name")):
             missing["name"] += 1
-        if not str(cell(row, "ticket") or "").strip():
+        if _blank(cell(row, "ticket")):
             no_ticket.append(offset)
         if group:
             groups[group] += 1
