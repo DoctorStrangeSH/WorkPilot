@@ -762,3 +762,24 @@ Implemented in `feat/desktop-shell`:
 - Some early commits in this sequence temporarily broke Python syntax due to misplaced insertion; those were corrected. Latest observed head `d754a467` Actions Python run `43389208217` and Desktop run `43389208450` were still running at last check. Windows installer run for earlier head `bd6d540e` was cancelled after a newer push; latest head needs its own successful installer validation. Do not claim CI green until fresh head succeeds.
 - Important remaining work: add UI to review and approve proposed changes (exact sheet/tab/row/column/old/new/reason), implement audit history and expiry/size bounds on pending approval tokens, protect formula/validation cells by reading userEnteredValue before writes, auto-detect active tab `gid` through Browser Bridge (current shared-tab sanitization may strip query parameters; fallback tab scan currently chooses recognized header among up to 20 tabs and may not equal the browser's active tab), improve auto-range to avoid irrelevant columns, verify analysis with real sheet after user OAuth setup, update stale README/docs that still call this read-only, and run full Windows installer on current final commit.
 - No Google OAuth has been completed in the user's local Malenia by this code. Existing app still requires their Google OAuth Desktop Client ID setup in Settings/Источники. Do not imply the ChatGPT Google Drive connector grants Malenia access. Do not ask user to paste secrets in chat.
+
+
+## 2026-11-13 — Corrected Asgard decision rules (user clarification)
+
+The user reiterated that Malenia's job is to investigate orders across INVenta → DataLens → Asgard, not to "fix errors" in the source spreadsheet. Never write back to INVenta/DataLens/Asgard as part of the investigation. Produce an evidence-backed classification/report only.
+
+Corrected `agent/malenia/order_check.py`:
+- Asgard primary status `Выдан` now maps to proposed result `Выдан` (previous code incorrectly mapped it to `В работе`).
+- Explicit pair `statuses == ["В работе", "В работе"]` maps to `В работе`; incomplete/other pairs remain manual review.
+- Existing rule for `В пути` plus extended history containing `Выдан` remains a `В работе` outcome with comment `2 ШК Выдан`.
+- Added regression tests in `tests/test_order_check.py` for issued, both statuses in progress, and an unconfirmed pair.
+- Updated `docs/ORDER_CHECKING.md` with the corrected user-confirmed rules.
+- Commits: `cf88d1c61c4f9e0cb514dfc79a7d5909dd44c53e` (rule fix), `44a86298421fb0a13c385d61499b1ee055222de7` (tests), `326626a71474cf38417a52f35676befe3d9e0bcf` (docs).
+
+Current limitations found while inspecting actual code:
+- `browser-extension/automation.js` is still a generic read-only site traversal. It opens three configured URLs in inactive tabs, expects exact HTML table headers (`cargo_place/inventory_date`, `main_partner_code_original/sc_id/result/scanned_at`, `cargo_place/status`), searches exact GET/standalone search input names, and cannot reliably parse the user's actual Google Sheets UI or arbitrary DataLens/Asgard SPAs. It does not yet implement a full live order-by-order investigation for the user's real pages.
+- `docs/ORDER_CHECKING.md` confirms DataLens/Asgard adapters do not yet exist. Existing `order_batch.py` is a manually supplied snapshot dry-run, not connected to live resources.
+- `browser_channel.py` explicitly says its signed lifecycle channel is a protocol prototype and no real transport is wired.
+- The browser bridge's README explicitly says three-site traversal does not yet correlate live order IDs or update statuses. Do not overstate runtime readiness.
+- Latest Actions triggered by head `44a86298`: Python `43394803417`, Desktop `43394803312`, Windows installer `43394803408` were queued/pending at last check; earlier head runs were in progress. Verify these before reporting.
+- Next high-value work: bridge actual INVenta source using Google Sheets API (the local Malenia OAuth connection must be set up separately; ChatGPT connector auth is not shared); add explicit row/column mapping for the known sheet header; determine the real DataLens search schema and Asgard reverse-flow/box-history UI from authorized live browser pages, not guessed selectors; build adapter contract + fixtures; integrate per-order orchestration and evidence records. User wants no manual spreadsheet ID/range and no Excel downloads. For browser sites, use the user's already open/authorized Yandex tabs or explicit shared tabs, never scrape cookies or bypass authentication.
