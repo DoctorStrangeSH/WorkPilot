@@ -6,7 +6,7 @@ const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '../browser-extension/popup.js'), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function popup(url = 'https://example.com/orders?secret=remove#private') {
-  const nodes = Object.fromEntries(['status', 'share', 'shareAll', 'retry', 'inspect', 'audit', 'auditStatus', 'inventory', 'datalens', 'asgard'].map(id => [id, {
+  const nodes = Object.fromEntries(['status', 'share', 'shareAll', 'retry', 'inspect', 'auditStatus'].map(id => [id, {
     disabled: true, textContent: '', className: '', handlers: {},
     addEventListener(type, callback) { this.handlers[type] = callback; }
   }]));
@@ -15,7 +15,7 @@ function popup(url = 'https://example.com/orders?secret=remove#private') {
   const chrome = {
     runtime: {lastError: null, sendNativeMessage(host, message, callback) { calls.push({host, message, callback}); }},
     tabs: {async query() { queries++; return [{id: 7, title: 'x'.repeat(400), url}]; }},
-    scripting: {async executeScript() {return [{result:'Тестовая строка заказов'}];}}
+    scripting: {async executeScript() {return [{result:{title:'Orders',table_headers:['Order ID','Status'],search_labels:['Search'],has_aria_grid:true,virtualized:false,login_required:false}}];}}
   };
   vm.runInNewContext(source, {document: {getElementById: id => nodes[id]}, chrome, URL,
     crypto: {randomUUID: () => 'request-id'},
@@ -135,9 +135,10 @@ test('page inspection requires explicit user click and never reads on handshake'
   assert.equal(p.queries, 0);
   await p.click('inspect');
   assert.equal(p.queries, 1);
-  assert.equal(p.calls[1].message.type, 'inspect_active_page');
+  assert.equal(p.calls[1].message.type, 'inspect_capabilities');
   assert.equal(p.calls[1].message.page.url, 'https://example.com/orders');
-  assert.equal(p.calls[1].message.page.text, 'Тестовая строка заказов');
-  await p.reply(1, {ok:true, type:'page_inspected', characters:23, persisted:false});
-  assert.match(p.nodes.status.textContent, /Автоматическая сверка заказов пока не подключена/);
+  assert.deepEqual(Array.from(p.calls[1].message.page.table_headers), ['Order ID','Status']);
+  assert.equal('text' in p.calls[1].message.page, false);
+  await p.reply(1, {ok:true, type:'capabilities_inspected', persisted:false});
+  assert.match(p.nodes.status.textContent, /Структурная диагностика завершена/);
 });
