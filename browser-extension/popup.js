@@ -218,3 +218,184 @@ inspectButton.addEventListener("click", async () => {
   } finally { busy=false; updateButtons(); }
 });
 
+
+/* Explicit, user-mapped discovery of tabs already open in this browser.
+ * Selection is a session snapshot only; consumers must revalidate tabId + URL
+ * and current host permission immediately before any future page read.
+ */
+const discoveryRoles = [
+  {key:"inventory",label:"ИНВента",input:"mapInventory"},
+  {key:"datalens",label:"DataLens",input:"mapDatalens"},
+  {key:"asgard",label:"Asgard",input:"mapAsgard"}
+];
+const discoveryButton = document.getElementById("discoverTabs");
+const confirmDiscoveryButton = document.getElementById("confirmTabs");
+const discoveryResults = document.getElementById("discoveryResults");
+const discoveryStatus = document.getElementById("discoveryStatus");
+let discoveryMappings = null;
+let discoveryResult = null;
+const discoverySelections = {};
+
+function discoveryMappingFromInput(value) {
+  let url;
+  try { url = new URL(value.trim()); } catch { throw new Error("Укажи полный HTTPS-адрес ресурса."); }
+  if (url.protocol !== "https:" || !url.hostname || url.username || url.password || url.port) {
+    throw new Error("Разрешены только HTTPS-адреса без логина, пароля и нестандартного порта.");
+  }
+  return {origin:url.origin,pathPrefix:url.pathname || "/"};
+}
+
+function discoverySetStatus(message, kind="") {
+  discoveryStatus.textContent = message;
+  discoveryStatus.className = "status" + (kind ? " " + kind : "");
+}
+
+function discoveryRefreshConfirm() {
+  confirmDiscoveryButton.disabled = !discoveryRoles.every(role =>
+    discoverySelections[role.key] && discoveryResult?.roles?.[role.key]?.candidates
+      ?.some(candidate => candidate.tabId === discoverySelections[role.key].tabId)
+  );
+}
+
+function renderDiscoveryResults(result, permissionOrigins) {
+  discoveryResults.replaceChildren();
+  for (const role of discoveryRoles) {
+    const state = result.roles[role.key];
+    const section = document.createElement("div");
+    section.className = "discovery-role";
+    const heading = document.createElement("strong");
+    heading.textContent = role.label + ": " + (
+      state.state === "not_found" ? "не найдена" :
+      state.state === "unique" ? "найдена одна вкладка" : "найдено несколько вкладок"
+    );
+    section.appendChild(heading);
+    if (!permissionOrigins.includes(discoveryMappings[role.key].origin + "/*")) {
+      const note = document.createElement("div");
+      note.textContent = "Нет разрешения сайта. Разреши доступ к этому домену в настройках расширения и повтори поиск.";
+      section.appendChild(note);
+    }
+    for (const candidate of state.candidates) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "discovery-candidate";
+      button.setAttribute("aria-pressed", String(
+        discoverySelections[role.key]?.tabId === candidate.tabId
+      ));
+      button.textContent = (candidate.active ? "● Активная · " : "") +
+        (candidate.title || "Без заголовка") + " · " + candidate.sanitizedUrl;
+      button.addEventListener("click", () => {
+        discoverySelections[role.key] = candidate;
+        renderDiscoveryResults(discoveryResult, permissionOrigins);
+        discoveryRefreshConfirm();
+        discoverySetStatus("Выбор " + role.label + " отмечен. Подтверди все три ресурса.", "");
+      });
+      section.appendChild(button);
+    }
+    discoveryResults.appendChild(section);
+  }
+  discoveryRefreshConfirm();
+}
+
+discoveryButton.addEventListener("click", async () => {
+  if (busy) return;
+  busy = true;
+  updateButtons();
+  discoveryButton.disabled = true;
+  discoverySetStatus("Проверяем текущие вкладки и разрешения…");
+  try {
+    const raw = {};
+    for (const role of discoveryRoles) {
+      raw[role.key] = discoveryMappingFromInput(
+        document.getElementById(role.input).value
+      );
+    }
+    discoveryMappings = MaleniaTabDiscovery.normalizeMapping(raw);
+    const [tabs, permissionState] = await Promise.all([
+      chrome.tabs.query({}),
+      chrome.permissions.getAll()
+    ]);
+    const grantedOrigins = Array.isArray(permissionState?.origins)
+      ? permissionState.origins : [];
+    discoveryResult = MaleniaTabDiscovery.discover(tabs, discoveryMappings, grantedOrigins);
+    for (const role of discoveryRoles) delete discoverySelections[role.key];
+    renderDiscoveryResults(discoveryResult, grantedOrigins);
+    const found = discoveryRoles.filter(role =>
+      discoveryResult.roles[role.key].candidates.length > 0
+    ).length;
+    discoverySetStatus("Найдено ресурсов: " + found + " из 3. Ни одна вкладка не читалась.", 
+      found === 3 ? "ok" : "error");
+  } catch (error) {
+    discoveryResult = null;
+    discoveryMappings = null;
+    discoveryResults.textContent = error.message === "invalid_mappings"
+      ? "Не удалось проверить адреса ресурсов." : error.message;
+    discoverySetStatus("Поиск не выполнен. Проверь HTTPS-адреса и повтори попытку.", "error");
+  } finally {
+    busy = false;
+    discoveryButton.disabled = false;
+    updateButtons();
+  }
+});
+
+confirmDiscoveryButton.addEventListener("click", async () => {
+  if (busy || !discoveryMappings || !discoveryResult) return;
+  busy = true;
+  updateButtons();
+  confirmDiscoveryButton.disabled = true;
+  try {
+    const confirmed = {};
+    const permissionState = await chrome.permissions.getAll();
+    const grantedOrigins = Array.isArray(permissionState?.origins)
+      ? permissionState.origins : [];
+    for (const role of discoveryRoles) {
+      const selected = discoverySelections[role.key];
+      if (!selected || !grantedOrigins.includes(discoveryMappings[role.key].origin + "/*")) {
+        throw new Error("Разрешение отозвано или ресурс не выбран. Выполни поиск заново.");
+      }
+      const current = await chrome.tabs.get(selected.tabId);
+      if (!current || typeof current.url !== "string") {
+        throw new Error("Одна из вкладок закрыта. Выполни поиск заново.");
+      }
+      const fresh = MaleniaTabDiscovery.discover(
+        [current], discoveryMappings, grantedOrigins
+      ).roles[role.key];
+      if (fresh.state !== "unique" || fresh.candidates[0].tabId !== selected.tabId ||
+          fresh.candidates[0].origin !== selected.origin ||
+          fresh.candidates[0].path !== selected.path) {
+        throw new Error("Одна из вкладок изменилась после поиска. Выполни поиск заново.");
+      }
+      confirmed[role.key] = {
+        tabId:selected.tabId,
+        origin:selected.origin,
+        path:selected.path,
+        sanitizedUrl:selected.sanitizedUrl
+      };
+    }
+    await chrome.storage.local.set({maleniaUserResourceMappings:discoveryMappings});
+    await chrome.storage.session.set({
+      maleniaConfirmedOpenTabs:{confirmed,confirmedAt:Date.now(),browserSessionOnly:true}
+    });
+    discoverySetStatus("Три вкладки подтверждены. Страницы ещё не читались; перед будущим чтением Маления повторно проверит вкладки и разрешения.", "ok");
+  } catch (error) {
+    discoverySetStatus(error.message || "Не удалось подтвердить вкладки. Повтори поиск.", "error");
+    discoveryRefreshConfirm();
+  } finally {
+    busy = false;
+    updateButtons();
+  }
+});
+
+(async () => {
+  try {
+    const stored = await chrome.storage.local.get("maleniaUserResourceMappings");
+    const saved = stored?.maleniaUserResourceMappings;
+    if (!saved) return;
+    const checked = MaleniaTabDiscovery.normalizeMapping(saved);
+    for (const role of discoveryRoles) {
+      const input = document.getElementById(role.input);
+      input.value = checked[role.key].origin + checked[role.key].pathPrefix;
+    }
+  } catch {
+    discoverySetStatus("Сохранённые адреса некорректны. Введи адреса ресурсов заново.", "error");
+  }
+})();
