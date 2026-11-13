@@ -7,6 +7,10 @@ const app = fs.readFileSync(path.resolve(__dirname, '../desktop/src/App.tsx'), '
 
 test('assistant is a first-class workspace destination', () => {
   assert.match(app, /label="Ассистент" active=\{page==="ai"\}/);
+  assert.match(app, /useState<Page>\("ai"\)/);
+  assert.match(app, /label="Моя рабочая среда" active=\{page==="browser"\}/);
+  assert.doesNotMatch(app, /<Nav[^\n]*label="Проверка заказа"/);
+  assert.doesNotMatch(app, /<Nav[^\n]*label="Список заказов"/);
   assert.match(app, /Открыть ассистента/);
   assert.doesNotMatch(app, /<Nav icon=\{<FileSearch\/>\} label="Поиск"/);
 });
@@ -24,7 +28,7 @@ test('the navigation groups work, knowledge, safety and system areas', () => {
 
 
 test('sources page shows truthful connection state and no fake connect actions', () => {
-  assert.match(app, /label="Источники" active=\{page==="sources"\}/);
+  assert.doesNotMatch(app, /<Nav[^\n]*label="Источники"/);
   assert.match(app, /Google Sheets · ИНВента/);
   assert.match(app, /ChatGPT не передаёт свои подключения Malenia/);
   assert.match(app, /Malenia пока не читает статусы или историю коробок/);
@@ -55,7 +59,7 @@ test('expired Google refresh tokens return the user to a safe reauthorization fl
 
 
 test('offline order-checking skill is reachable and has no write actions', () => {
-  assert.match(app, /label="Проверка заказа" active=\{page==="orders"\}/);
+  assert.doesNotMatch(app, /<Nav[^\n]*label="Проверка заказа"/);
   assert.match(app, /<OrderCheckPage connected=\{connected\}\/>/);
   const order = fs.readFileSync(path.resolve(__dirname, '../desktop/src/OrderCheckPage.tsx'), 'utf8');
   assert.match(order, /invoke<Preview>\("preview_order"/);
@@ -69,7 +73,7 @@ test('offline order-checking skill is reachable and has no write actions', () =>
 
 
 test('bulk Excel preview preserves source read-only and escapes formulas', () => {
-  assert.match(app, /label="Список заказов" active=\{page==="order_batch"\}/);
+  assert.doesNotMatch(app, /<Nav[^\n]*label="Список заказов"/);
   assert.match(app, /<OrderBatchPage connected=\{connected\}\/>/);
   const bulk = fs.readFileSync(path.resolve(__dirname, '../desktop/src/OrderBatchPage.tsx'), 'utf8');
   assert.match(bulk, /invoke<BatchResponse>\("preview_order_batch"/);
