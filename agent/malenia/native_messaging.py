@@ -112,7 +112,7 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
             "type": "hello",
             "host": HOST_NAME,
             "version": "0.1.0",
-            "capabilities": ["share_active_tab", "inspect_active_page", "reconcile_site_tables",
+            "capabilities": ["share_active_tab", "inspect_active_page", "inspect_capabilities", "reconcile_site_tables",
                              "claim_browser_audit", "finish_browser_audit",
                              "update_browser_audit_progress"],
         }
