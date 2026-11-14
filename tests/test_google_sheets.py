@@ -7,7 +7,7 @@ from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import Request, urlopen
 
-from malenia.google_oauth import GOOGLE_SHEETS_READONLY_SCOPE, GOOGLE_TOKEN_ENDPOINT
+from malenia.google_oauth import GOOGLE_SHEETS_SCOPE, GOOGLE_TOKEN_ENDPOINT
 from malenia.google_sheets import GoogleSheetsConnector, GoogleSheetsError
 
 
@@ -63,7 +63,7 @@ class FakeOpener:
                     "refresh_token": "refresh-token-fixture",
                     "token_type": "Bearer",
                     "expires_in": 3600,
-                    "scope": GOOGLE_SHEETS_READONLY_SCOPE,
+                    "scope": GOOGLE_SHEETS_SCOPE,
                 })
             if form.get("grant_type") == ["refresh_token"]:
                 return FakeResponse({
@@ -104,7 +104,7 @@ class BlockingTokenOpener(FakeOpener):
                     "refresh_token": "refresh-token-fixture",
                     "token_type": "Bearer",
                     "expires_in": 3600,
-                    "scope": GOOGLE_SHEETS_READONLY_SCOPE,
+                    "scope": GOOGLE_SHEETS_SCOPE,
                 })
         return super().open(request, timeout)
 
@@ -136,6 +136,14 @@ class UnauthorizedOnceOpener(FakeOpener):
 
 
 class GoogleSheetsConnectorTests(unittest.TestCase):
+    def test_legacy_readonly_grant_is_not_reused_as_editor_authorization(self):
+        store = FakeCredentialStore({"google-sheets-refresh-token": "legacy-readonly",
+                                     "google-sheets-client-id": CLIENT_ID})
+        connector = GoogleSheetsConnector(credential_store=store, opener=FakeOpener())
+        self.assertEqual(connector.status()["status"], "not_connected")
+        store.set("google-sheets-editor-refresh-token", "editor-grant")
+        self.assertEqual(connector.status()["status"], "authorized")
+
     def test_oauth_callback_stores_tokens_only_in_credential_store(self):
         store = FakeCredentialStore()
         opener = FakeOpener()
@@ -156,7 +164,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
             status = connector.status()
 
         self.assertEqual(status, {"connected": False, "status": "authorized", "error": None, "client_id": CLIENT_ID})
-        self.assertEqual(store.get("google-sheets-refresh-token"), "refresh-token-fixture")
+        self.assertEqual(store.get("google-sheets-editor-refresh-token"), "refresh-token-fixture")
         self.assertEqual(store.get("google-sheets-client-id"), CLIENT_ID)
         self.assertIsNone(store.get("google-sheets-client-secret"))
         self.assertNotIn("refresh_token", result)
@@ -202,7 +210,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         with self.assertRaises(HTTPError):
             urlopen(invalid_callback, timeout=3)
         self.assertEqual(connector.status()["status"], "authorizing")
-        self.assertIsNone(store.get("google-sheets-refresh-token"))
+        self.assertIsNone(store.get("google-sheets-editor-refresh-token"))
 
         valid_callback = redirect_uri + "/?code=good-code&state=" + query["state"][0]
         with urlopen(valid_callback, timeout=3) as response:
@@ -242,7 +250,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         while connector.status()["status"] == "authorizing" and time.monotonic() < deadline:
             time.sleep(0.02)
         self.assertEqual(connector.status()["status"], "authorized")
-        self.assertEqual(store.get("google-sheets-refresh-token"), "refresh-token-fixture")
+        self.assertEqual(store.get("google-sheets-editor-refresh-token"), "refresh-token-fixture")
 
     def test_disconnect_during_token_exchange_cannot_resurrect_credentials(self):
         store = FakeCredentialStore()
@@ -274,11 +282,11 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         with urlopen(denied, timeout=3) as response:
             self.assertEqual(response.status, 200)
         self.assertEqual(connector.status()["status"], "denied")
-        self.assertIsNone(store.get("google-sheets-refresh-token"))
+        self.assertIsNone(store.get("google-sheets-editor-refresh-token"))
 
     def test_read_values_uses_get_and_returns_bounded_rows(self):
         store = FakeCredentialStore({
-            "google-sheets-refresh-token": "refresh-token-fixture",
+            "google-sheets-editor-refresh-token": "refresh-token-fixture",
             "google-sheets-client-id": CLIENT_ID,
         })
         opener = FakeOpener()
@@ -295,7 +303,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
 
     def test_read_active_sheet_extracts_document_and_tab_from_url(self):
         store = FakeCredentialStore({
-            "google-sheets-refresh-token": "refresh-token-fixture",
+            "google-sheets-editor-refresh-token": "refresh-token-fixture",
             "google-sheets-client-id": CLIENT_ID,
         })
         opener = FakeOpener()
@@ -317,7 +325,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
 
     def test_write_values_uses_literal_put_and_rejects_formulas(self):
         store = FakeCredentialStore({
-            "google-sheets-refresh-token": "refresh-token-fixture",
+            "google-sheets-editor-refresh-token": "refresh-token-fixture",
             "google-sheets-client-id": CLIENT_ID,
         })
         opener = FakeOpener()
@@ -335,7 +343,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
 
     def test_read_values_refreshes_after_unauthorized_response(self):
         store = FakeCredentialStore({
-            "google-sheets-refresh-token": "refresh-token-fixture",
+            "google-sheets-editor-refresh-token": "refresh-token-fixture",
             "google-sheets-client-id": CLIENT_ID,
         })
         opener = UnauthorizedOnceOpener()
@@ -355,7 +363,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
 
     def test_invalid_spreadsheet_or_range_fails_before_network(self):
         store = FakeCredentialStore({
-            "google-sheets-refresh-token": "refresh-token-fixture",
+            "google-sheets-editor-refresh-token": "refresh-token-fixture",
             "google-sheets-client-id": CLIENT_ID,
         })
         opener = FakeOpener()
@@ -374,7 +382,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
 
     def test_invalid_grant_requires_reauthorization_and_preserves_client_id(self):
         store = FakeCredentialStore({
-            "google-sheets-refresh-token": "refresh-token-fixture",
+            "google-sheets-editor-refresh-token": "refresh-token-fixture",
             "google-sheets-client-id": CLIENT_ID,
             "google-sheets-client-secret": "client-secret-fixture",
         })
@@ -391,18 +399,18 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
                 "client_id": CLIENT_ID,
             },
         )
-        self.assertEqual(store.get("google-sheets-refresh-token"), "refresh-token-fixture")
+        self.assertEqual(store.get("google-sheets-editor-refresh-token"), "refresh-token-fixture")
 
     def test_disconnect_deletes_local_credentials(self):
         store = FakeCredentialStore({
-            "google-sheets-refresh-token": "refresh-token-fixture",
+            "google-sheets-editor-refresh-token": "refresh-token-fixture",
             "google-sheets-client-id": CLIENT_ID,
             "google-sheets-client-secret": "client-secret-fixture",
         })
         connector = GoogleSheetsConnector(store, FakeOpener())
         result = connector.disconnect()
         self.assertFalse(result["connected"])
-        self.assertIsNone(store.get("google-sheets-refresh-token"))
+        self.assertIsNone(store.get("google-sheets-editor-refresh-token"))
         self.assertIsNone(store.get("google-sheets-client-id"))
         self.assertIsNone(store.get("google-sheets-client-secret"))
 
@@ -421,7 +429,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
                         "refresh_token": "refresh-token-fixture",
                         "token_type": "Bearer",
                         "expires_in": 3600,
-                        "scope": GOOGLE_SHEETS_READONLY_SCOPE + " https://www.googleapis.com/auth/drive",
+                        "scope": GOOGLE_SHEETS_SCOPE + " https://www.googleapis.com/auth/drive",
                     })
                 return super().open(request, timeout)
 
@@ -437,7 +445,7 @@ class GoogleSheetsConnectorTests(unittest.TestCase):
         while connector.status()["status"] == "authorizing" and time.monotonic() < deadline:
             time.sleep(0.02)
         self.assertEqual(connector.status()["status"], "error")
-        self.assertIsNone(store.get("google-sheets-refresh-token"))
+        self.assertIsNone(store.get("google-sheets-editor-refresh-token"))
 
 
 if __name__ == "__main__":
