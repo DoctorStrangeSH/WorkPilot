@@ -4,6 +4,8 @@ from __future__ import annotations
 import ctypes
 from ctypes import wintypes
 import os
+import json
+from urllib.request import urlopen
 import subprocess
 import sys
 import tempfile
@@ -11,11 +13,13 @@ import time
 from pathlib import Path
 
 
-def visible_window(process_id: int) -> bool:
+def visible_window(process_id: int, close: bool = False) -> bool:
     user32 = ctypes.WinDLL('user32', use_last_error=True)
     callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
     user32.GetWindowThreadProcessId.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.DWORD))
     user32.IsWindowVisible.argtypes = (wintypes.HWND,)
+    user32.PostMessageW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+    user32.PostMessageW.restype = wintypes.BOOL
     user32.GetWindowTextW.argtypes = (wintypes.HWND, wintypes.LPWSTR, ctypes.c_int)
     user32.EnumWindows.argtypes = (callback_type, wintypes.LPARAM)
     found = False
@@ -30,6 +34,8 @@ def visible_window(process_id: int) -> bool:
             user32.GetWindowTextW(window, title, 256)
             if 'Malenia' in title.value:
                 found = True
+                if close:
+                    user32.PostMessageW(window, 0x0010, 0, 0)
         return True
 
     user32.EnumWindows(visit, 0)
@@ -38,7 +44,7 @@ def visible_window(process_id: int) -> bool:
 
 def stop_owned(process: subprocess.Popen) -> None:
     if process.poll() is None:
-        process.terminate()
+        visible_window(process.pid, close=True)
     try:
         process.wait(timeout=10)
     except subprocess.TimeoutExpired:
@@ -73,11 +79,32 @@ def main() -> int:
                 raise RuntimeError('Second desktop launch did not exit successfully')
             if first.poll() is not None or not visible_window(first.pid):
                 raise RuntimeError('Original Malenia window was not retained')
+            for _ in range(150):
+                try:
+                    with urlopen('http://127.0.0.1:8765/health', timeout=1) as response:
+                        health = json.load(response)
+                    if health.get('service') == 'malenia-agent':
+                        break
+                except OSError:
+                    pass
+                time.sleep(0.1)
+            else:
+                raise RuntimeError('Desktop did not automatically start its bundled agent')
+            visible_window(first.pid, close=True)
+            first.wait(timeout=15)
+            for _ in range(50):
+                try:
+                    urlopen('http://127.0.0.1:8765/health', timeout=1).close()
+                except OSError:
+                    break
+                time.sleep(0.1)
+            else:
+                raise RuntimeError('Agent remained running after closing the desktop window')
         finally:
             if second is not None:
                 stop_owned(second)
             stop_owned(first)
-    print('PASS: second Malenia desktop launch exits and retains the original visible window.')
+    print('PASS: single desktop instance, automatic agent start, and agent stops on window close.')
     return 0
 
 
