@@ -304,7 +304,8 @@ var MaleniaAutomation = (() => {
             for (const element of document.querySelectorAll("table")) {
               const rows = [...element.querySelectorAll("tr")];
               const header = rows[0] ?
-                [...rows[0].querySelectorAll("th")].map(c => c.innerText.trim()) : [];
+                [...rows[0].querySelectorAll("th")].map(c => resourceRole === "datalens" && c.innerText.trim() === "place_external_id" ?
+                  "main_partner_code_original" : c.innerText.trim()) : [];
               if (!required.every(name => header.includes(name)) || header.length > 20) continue;
               if (rows.length > 101 || header.some(c => c.length > 256)) continue;
               const entries = [];
@@ -312,7 +313,12 @@ var MaleniaAutomation = (() => {
               for (const row of rows.slice(1)) {
                 const cells = [...row.querySelectorAll("td")];
                 if (cells.length !== header.length) { malformed = true; break; }
-                entries.push(cells.map(cell => cell.innerText.trim().slice(0, 256)));
+                entries.push(cells.map((cell, i) => {
+                  const value = cell.innerText.trim().slice(0, 256);
+                  const name = header[i];
+                  return resourceRole !== "datalens" ? value : name === "sc_id" ?
+                    value.replace(/\s+/g, "") : name === "scanned_at" ? value.replace(/\//g, "-") : value;
+                }));
               }
               if (malformed) continue;
               table = {columns: header, rows: entries};
@@ -326,7 +332,8 @@ var MaleniaAutomation = (() => {
                 const rows = [...grid.querySelectorAll('[role="row"]')];
                 const head = rows[0] ?
                   [...rows[0].querySelectorAll('[role="columnheader"]')]
-                    .map(cell => cell.innerText.trim()) : [];
+                    .map(cell => resourceRole === "datalens" && cell.innerText.trim() === "place_external_id" ?
+                      "main_partner_code_original" : cell.innerText.trim()) : [];
                 if (!required.every(name => head.includes(name)) || head.length > 20) continue;
                 const declared = grid.getAttribute("aria-rowcount");
                 const count = declared === null ? null : Number(declared);
@@ -344,7 +351,12 @@ var MaleniaAutomation = (() => {
                 for (const row of bodyRows) {
                   const cells = [...row.querySelectorAll('[role="gridcell"],[role="cell"]')];
                   if (cells.length !== head.length) { malformed = true; break; }
-                  entries.push(cells.map(cell => cell.innerText.trim().slice(0, 256)));
+                  entries.push(cells.map((cell, i) => {
+                  const value = cell.innerText.trim().slice(0, 256);
+                  const name = head[i];
+                  return resourceRole !== "datalens" ? value : name === "sc_id" ?
+                    value.replace(/\s+/g, "") : name === "scanned_at" ? value.replace(/\//g, "-") : value;
+                }));
                 }
                 if (malformed || head.some(c => c.length > 256)) {
                   incomplete = true; break;
