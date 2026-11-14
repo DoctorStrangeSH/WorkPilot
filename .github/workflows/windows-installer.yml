@@ -2,7 +2,7 @@ name: Windows installer
 
 on:
   push:
-    branches: ["feat/desktop-shell"]
+    branches: ["main", "feat/desktop-shell"]
     paths:
       - "agent/**"
       - "browser-extension/**"
