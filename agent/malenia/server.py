@@ -274,7 +274,8 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                     self._send(422, {"error": code})
                 return
 
-            if parsed.path == "/v1/integrations/google-sheets/check-first-order":
+            if parsed.path in {"/v1/integrations/google-sheets/check-first-order",
+                               "/v1/integrations/google-sheets/check-order-batch"}:
                 payload = self._read_json(4096)
                 if payload is None:
                     return
@@ -285,17 +286,33 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                 try:
                     from .inventa import analyze_inventa
                     source = sheets.read_active_sheet(payload["spreadsheet_url"])
-                    analysis = analyze_inventa(source["values"], source["sheet_title"])
-                    order = analysis["first_order"]
-                    if order is None:
-                        self._send(422, {"error": analysis["first_order_blocker"]})
-                        return
-                    job = store.request_browser_audit({
-                        "cargo_place": order["cargo_place"],
-                        "inventory_date": order["inventory_date"],
-                    })
-                    self._send(202, {"job": job, "source_row": order["source_row"],
-                                     "read_only": True, "write_enabled": False})
+                    is_batch = parsed.path.endswith("check-order-batch")
+                    analysis = analyze_inventa(source["values"], source["sheet_title"],
+                                              audit_batch_limit=20 if is_batch else 0)
+                    if is_batch:
+                        selected = analysis["audit_candidates"]
+                        if not selected:
+                            self._send(422, {"error": analysis["first_order_blocker"] or
+                                             "no_safe_audit_candidates"})
+                            return
+                        job = store.request_browser_audit(batch=[
+                            {"cargo_place": item["cargo_place"],
+                             "inventory_date": item["inventory_date"]} for item in selected])
+                        self._send(202, {"job": job, "queued_orders": len(selected),
+                                         "eligible_orders": analysis["eligible_audit_candidates"],
+                                         "remaining_orders": analysis["eligible_audit_candidates"] - len(selected),
+                                         "read_only": True, "write_enabled": False})
+                    else:
+                        order = analysis["first_order"]
+                        if order is None:
+                            self._send(422, {"error": analysis["first_order_blocker"]})
+                            return
+                        job = store.request_browser_audit({
+                            "cargo_place": order["cargo_place"],
+                            "inventory_date": order["inventory_date"],
+                        })
+                        self._send(202, {"job": job, "source_row": order["source_row"],
+                                         "read_only": True, "write_enabled": False})
                 except SubmissionConflict:
                     self._send(409, {"error": "browser_audit_already_active"})
                 except (GoogleSheetsError, ValueError) as error:

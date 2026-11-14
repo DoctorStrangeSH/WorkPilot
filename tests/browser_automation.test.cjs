@@ -569,6 +569,23 @@ test('Google Sheets seeded first order visits DataLens without revisiting invent
   assert.equal(sent.find(x=>x.type==='reconcile_site_tables').snapshots.inventory.rows[0][1],'2026-08-22');
 });
 
+test('seeded browser batches reject duplicate and oversized cargo sets before visiting sites',async()=>{
+  const api=runner(),chrome=fakeBrowser();
+  const targets={inventory:'https://inventory.example/orders',
+    datalens:'https://analytics.example/orders',asgard:'https://asgard.example/orders'};
+  const invalid=[
+    [['BOX-1','2026-08-22'],['BOX-1','2026-08-23']],
+    Array.from({length:21},(_,i)=>[`BOX-${i}`,'2026-08-22']),
+    [['BOX-1','invalid-date']]
+  ];
+  for(const rows of invalid){
+    await assert.rejects(api.run(chrome,targets,async()=>({}),async()=>{},
+      {seedInventory:{columns:['cargo_place','inventory_date'],rows}}),
+      /invalid_inventory_search_keys/);
+  }
+  assert.equal(chrome.stats.created,0);
+});
+
 test('unrelated result-table mutations do not count as successful reactive search',async()=>{
   const api=runner();
   let notify;

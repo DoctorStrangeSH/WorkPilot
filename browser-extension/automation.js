@@ -422,18 +422,18 @@ var MaleniaAutomation = (() => {
     if (options.seedInventory !== undefined) {
       const seed = options.seedInventory;
       if (!seed || JSON.stringify(seed.columns) !== JSON.stringify(["cargo_place", "inventory_date"]) ||
-          !Array.isArray(seed.rows) || seed.rows.length !== 1 ||
-          !Array.isArray(seed.rows[0]) || seed.rows[0].length !== 2 ||
-          typeof seed.rows[0][0] !== "string" ||
-          !/^[A-Za-z0-9_.-]{1,128}$/.test(seed.rows[0][0]) ||
-          typeof seed.rows[0][1] !== "string" ||
-          !/^\d{4}-\d{2}-\d{2}$/.test(seed.rows[0][1]) ||
-          !Number.isFinite(Date.parse(seed.rows[0][1])) ||
-          new Date(seed.rows[0][1]).toISOString().slice(0,10) !== seed.rows[0][1]) {
+          !Array.isArray(seed.rows) || seed.rows.length < 1 ||
+          seed.rows.length > MAX_SEARCHES ||
+          seed.rows.some(row => !Array.isArray(row) || row.length !== 2 ||
+            typeof row[0] !== "string" || !/^[A-Za-z0-9_.-]{1,128}$/.test(row[0]) ||
+            typeof row[1] !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(row[1]) ||
+            !Number.isFinite(Date.parse(row[1])) ||
+            new Date(row[1]).toISOString().slice(0,10) !== row[1]) ||
+          new Set(seed.rows.map(row => row[0])).size !== seed.rows.length) {
         throw new Error("invalid_inventory_search_keys");
       }
       snapshots.inventory = {columns:["cargo_place","inventory_date"],
-        rows:[[seed.rows[0][0],seed.rows[0][1]]]};
+        rows:seed.rows.map(row => [...row])};
     }
     for (const role of ROLES) {
       await onProgress({phase: "reading", role, results: [...results]});

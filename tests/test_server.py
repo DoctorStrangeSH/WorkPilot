@@ -128,6 +128,29 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(self.api("/v1/integrations/google-sheets/check-first-order",
                                   {"spreadsheet_url": "https://docs.google.com/spreadsheets/d/" + "a"*24})[0], 409)
 
+    def test_order_batch_audit_seeds_bounded_unique_orders_from_sheet(self):
+        header = ["Дата", "Id заказа", "Грузоместо", "Стоимость", "Статус"]
+        values = [header] + [["2026-08-22", f"ORDER-{i}", f"BOX-{i}", 100, "Найден"]
+                             for i in range(24)]
+        values.append(["2026-08-22", "DUP", "BOX-2", 100, "Найден"])
+        self.google_sheets.read_active_sheet = lambda url, gid=None: {
+            "spreadsheet_id": "a" * 24, "sheet_title": "22.08.2026", "values": values}
+        path = "/v1/integrations/google-sheets/check-order-batch"
+        payload = {"spreadsheet_url": "https://docs.google.com/spreadsheets/d/" + "a"*24}
+        self.assertEqual(self.api(path, payload, authenticated=False)[0], 401)
+        code, response = self.api(path, payload)
+        self.assertEqual(code, 202)
+        self.assertEqual(response["queued_orders"], 20)
+        self.assertEqual(response["eligible_orders"], 23)
+        self.assertEqual(response["remaining_orders"], 3)
+        self.assertNotIn("BOX-1", str(response))
+        claimed = self.store.claim_browser_audit()
+        self.assertEqual(len(claimed["inventory"]["rows"]), 20)
+        self.assertEqual(claimed["inventory"]["rows"][0], ["BOX-0", "2026-08-22"])
+        self.assertNotIn(["BOX-2", "2026-08-22"], claimed["inventory"]["rows"])
+        with self.store._session() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM browser_audit_seed_items").fetchone()[0], 0)
+
     def test_browser_audit_summary_requires_auth_and_contains_only_counts(self):
         code, initial = self.api("/v1/browser/audit-summary")
         self.assertEqual(code, 200)

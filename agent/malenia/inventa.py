@@ -130,7 +130,8 @@ def _inventory_day_from_title(title: str, rows: list[list[Any]], date_col: int |
         return None
 
 
-def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, Any]:
+def analyze_inventa(rows: list[list[Any]], sheet_title: str = "", *,
+                   audit_batch_limit: int = 0) -> dict[str, Any]:
     """Summarize an auto-read sheet; never invent statuses or repair source cells."""
     if not isinstance(rows, list) or len(rows) > 10000:
         raise ValueError("inventa_row_limit")
@@ -191,11 +192,12 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
         records.append({"row": offset, "order_id": order_id, "status": status})
 
     cargo_counts = Counter(item["cargo_place"] for item in candidates)
-    first_order = next((item for item in candidates if len(ids[item["order_id"]]) == 1
-                        and cargo_counts[item["cargo_place"]] == 1), None)
+    unique_candidates = [item for item in candidates if len(ids[item["order_id"]]) == 1
+                         and cargo_counts[item["cargo_place"]] == 1]
+    first_order = next(iter(unique_candidates), None)
     duplicates = [{"order_id": key, "rows": positions}
                   for key, positions in ids.items() if len(positions) > 1]
-    return {
+    report = {
         "sheet_title": str(sheet_title)[:200],
         "sheet_inventory_date": sheet_inventory_date,
         "header_row": header_index + 1,
@@ -216,3 +218,13 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "") -> dict[str, A
         "read_only": True,
         "source_rows_are_evidence_not_edits": True,
     }
+    # Explicitly opt in: the normal report must not include bulk cargo identifiers.
+    # The local agent uses this transient list only to seed a bounded browser job.
+    if audit_batch_limit:
+        if not 1 <= audit_batch_limit <= 20:
+            raise ValueError("invalid_audit_batch_limit")
+        safe_candidates = [item for item in unique_candidates
+                           if re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", item["cargo_place"])]
+        report["audit_candidates"] = safe_candidates[:audit_batch_limit]
+        report["eligible_audit_candidates"] = len(safe_candidates)
+    return report

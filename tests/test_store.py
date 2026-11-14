@@ -76,6 +76,24 @@ class TaskStoreTests(unittest.TestCase):
         self.assertFalse(self.store.finish_browser_audit(second["job_id"], True))
         self.assertEqual(self.store.latest_browser_audit_job()["status"], "expired")
 
+    def test_browser_batch_is_bounded_unique_and_seed_is_one_time(self):
+        rows = [{"cargo_place": f"BOX-{i}", "inventory_date": "2026-08-22"}
+                for i in range(20)]
+        with self.assertRaises(ValueError):
+            self.store.request_browser_audit(batch=rows + [rows[0]])
+        with self.assertRaises(ValueError):
+            self.store.request_browser_audit(batch=[rows[0], rows[0]])
+        with self.assertRaises(ValueError):
+            self.store.request_browser_audit(batch=[{"cargo_place": "bad value",
+                                                     "inventory_date": "2026-08-22"}])
+        self.store.request_browser_audit(batch=rows)
+        claimed = self.store.claim_browser_audit()
+        self.assertEqual(claimed["inventory"]["rows"],
+                         [[row["cargo_place"], row["inventory_date"]] for row in rows])
+        self.assertIsNone(self.store.claim_browser_audit())
+        with self.store._session() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM browser_audit_seed_items").fetchone()[0], 0)
+
     def test_browser_audit_progress_is_coarse_monotone_and_job_bound(self):
         pending = self.store.request_browser_audit()
         job_id = pending["job_id"]

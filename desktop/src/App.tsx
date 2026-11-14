@@ -264,7 +264,18 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
     setBusy(true);setSheetError("");setSheetNotice("");
     try{
       await invoke("check_first_inventa_order",{spreadsheetUrl:activeTab.url});
-      setSheetNotice("Задача проверки создана. В этой версии исполнитель ещё не выполняет поиск в DataLens и Asgard автоматически; создание задачи не означает, что заказ проверен.");
+      setSheetNotice("Проверка поставлена в очередь. Browser Bridge попробует найти подтверждения в DataLens и Asgard; создание задачи ещё не означает, что данные сайтов прочитаны и заказ проверен.");
+      onOpenBrowser();
+    }catch(error){setSheetError(String(error));}
+    finally{setBusy(false);}
+  };
+  const checkOrderBatch=async()=>{
+    const activeTab=tabs.find(tab=>/^https:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9_-]+(?:\/|$)/.test(tab.url));
+    if(!activeTab){setSheetError("Передай вкладку ИНВенты через Browser Bridge.");return;}
+    setBusy(true);setSheetError("");setSheetNotice("");
+    try{
+      const result=await invoke<{queued_orders:number;remaining_orders:number}>("check_inventa_order_batch",{spreadsheetUrl:activeTab.url});
+      setSheetNotice(`В проверку передано ${result.queued_orders} заказов (не более 20 за запуск). Осталось вне этой партии: ${result.remaining_orders}. Проверка DataLens/Asgard ещё не подтверждена: ожидаем результат Browser Bridge.`);
       onOpenBrowser();
     }catch(error){setSheetError(String(error));}
     finally{setBusy(false);}
@@ -320,6 +331,8 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
               <p><b>ID:</b> {inventaReport.analysis.first_order.order_id} · <b>Грузоместо:</b> {inventaReport.analysis.first_order.cargo_place} · <b>Дата ИНВенты:</b> {inventaReport.analysis.first_order.inventory_date} · <b>Строка:</b> {inventaReport.analysis.first_order.source_row}</p>
               <p>Проверяем не исходный статус, а дату листа. Следующий этап: найти грузоместо в DataLens по main_partner_code_original, проверить скан OK от СЦ 101366 строго после даты листа. Если такого скана нет — проверить Asgard. До получения доказательств статус заказа не определён.</p>
               <button className="primary" disabled={busy||!connected} onClick={()=>void checkFirstOrder()}>{busy?"Отправляем…":"Проверить первый заказ"}</button>
+              <button className="secondary" disabled={busy||!connected} onClick={()=>void checkOrderBatch()}>{busy?"Отправляем…":"Проверить до 20 заказов"}</button>
+              <small>Проверка партии использует только однозначные грузоместа и дату листа. Дальнейшие партии пока не запускаются автоматически; исходная таблица не изменяется.</small>
             </div>:<p role="status">Не удалось безопасно выделить первый заказ: {inventaReport.analysis.first_order_blocker==="sheet_date_not_verified"?"дата листа или её год не определены однозначно":inventaReport.analysis.first_order_blocker==="cargo_column_not_mapped"?"нет подтверждённой колонки грузоместа":"нет однозначной строки с ID и грузоместом"}. Для проверки в DataLens требуется точное грузоместо и подтверждённая дата листа.</p>}
           </div>:null}
           </> }

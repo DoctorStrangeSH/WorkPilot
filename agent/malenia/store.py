@@ -101,6 +101,15 @@ class TaskStore:
                     inventory_date TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS browser_audit_seed_items (
+                    job_id TEXT NOT NULL,
+                    position INTEGER NOT NULL,
+                    cargo_place TEXT NOT NULL,
+                    inventory_date TEXT NOT NULL,
+                    PRIMARY KEY(job_id, position),
+                    UNIQUE(job_id, cargo_place)
+                );
+
                 CREATE TABLE IF NOT EXISTS browser_audit_summary (
                     id INTEGER PRIMARY KEY CHECK (id = 1),
                     checked_at TEXT NOT NULL,
@@ -307,6 +316,8 @@ class TaskStore:
         )
         db.execute("DELETE FROM browser_audit_seed WHERE job_id NOT IN "
                    "(SELECT job_id FROM browser_audit_job WHERE status='pending')")
+        db.execute("DELETE FROM browser_audit_seed_items WHERE job_id NOT IN "
+                   "(SELECT job_id FROM browser_audit_job WHERE status='pending')")
 
     def latest_browser_audit_job(self) -> dict[str, Any] | None:
         with self._session() as db:
@@ -324,21 +335,29 @@ class TaskStore:
         result["attention_sources"] = result["attention_sources"] or 0
         return result
 
-    def request_browser_audit(self, first_order: dict[str, str] | None = None) -> dict[str, Any]:
+    def request_browser_audit(self, first_order: dict[str, str] | None = None,
+                              batch: list[dict[str, str]] | None = None) -> dict[str, Any]:
         """Single bounded browser audit requested through the authenticated desktop API."""
-        if first_order is not None:
+        if first_order is not None and batch is not None:
+            raise ValueError("invalid_audit_batch")
+        selected = batch if batch is not None else ([first_order] if first_order is not None else [])
+        if batch is not None and not 1 <= len(batch) <= 20:
+            raise ValueError("invalid_audit_batch")
+        seen = set()
+        for order in selected:
             import re
             from datetime import date
-            cargo = first_order.get("cargo_place") if isinstance(first_order, dict) else None
-            cutoff = first_order.get("inventory_date") if isinstance(first_order, dict) else None
+            cargo = order.get("cargo_place") if isinstance(order, dict) else None
+            cutoff = order.get("inventory_date") if isinstance(order, dict) else None
             if (not isinstance(cargo, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", cargo)
-                    or not isinstance(cutoff, str) or len(cutoff) != 10):
-                raise ValueError("invalid_first_order_audit")
+                    or cargo in seen or not isinstance(cutoff, str) or len(cutoff) != 10):
+                raise ValueError("invalid_audit_batch")
+            seen.add(cargo)
             try:
                 if date.fromisoformat(cutoff).isoformat() != cutoff:
-                    raise ValueError("invalid_first_order_audit")
+                    raise ValueError("invalid_audit_batch")
             except ValueError as exc:
-                raise ValueError("invalid_first_order_audit") from exc
+                raise ValueError("invalid_audit_batch") from exc
         with self._session() as db:
             db.execute("BEGIN IMMEDIATE")
             self._expire_browser_audit(db)
@@ -350,6 +369,7 @@ class TaskStore:
             now = _now()
             job_id = str(uuid.uuid4())
             db.execute("DELETE FROM browser_audit_seed WHERE id=1")
+            db.execute("DELETE FROM browser_audit_seed_items")
             db.execute(
                 """INSERT INTO browser_audit_job
                    (id,job_id,status,created_at,created_unix,updated_at)
@@ -373,7 +393,13 @@ class TaskStore:
             if first_order is not None:
                 db.execute("INSERT INTO browser_audit_seed "
                            "(id,job_id,cargo_place,inventory_date) VALUES (1,?,?,?)",
-                           (job_id, cargo, cutoff))
+                           (job_id, first_order["cargo_place"], first_order["inventory_date"]))
+            elif batch is not None:
+                db.executemany(
+                    "INSERT INTO browser_audit_seed_items "
+                    "(job_id,position,cargo_place,inventory_date) VALUES (?,?,?,?)",
+                    [(job_id, position, item["cargo_place"], item["inventory_date"])
+                     for position, item in enumerate(batch)])
         return {"job_id": job_id, "status": "pending", "created_at": now,
                 "updated_at": now}
 
@@ -394,9 +420,16 @@ class TaskStore:
             )
             seed = db.execute("SELECT cargo_place,inventory_date FROM browser_audit_seed "
                               "WHERE id=1 AND job_id=?", (row["job_id"],)).fetchone()
+            items = db.execute("SELECT cargo_place,inventory_date FROM browser_audit_seed_items "
+                               "WHERE job_id=? ORDER BY position", (row["job_id"],)).fetchall()
             db.execute("DELETE FROM browser_audit_seed WHERE id=1")
+            db.execute("DELETE FROM browser_audit_seed_items WHERE job_id=?", (row["job_id"],))
         result = {"job_id": row["job_id"], "status": "running"}
-        if seed:
+        if items:
+            result["inventory"] = {"columns": ["cargo_place", "inventory_date"],
+                                   "rows": [[item["cargo_place"], item["inventory_date"]]
+                                            for item in items]}
+        elif seed:
             result["inventory"] = {"columns": ["cargo_place", "inventory_date"],
                                    "rows": [[seed["cargo_place"], seed["inventory_date"]]]}
         return result

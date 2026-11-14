@@ -143,6 +143,15 @@ test('shared browser tabs can be removed locally only after confirmation',()=>{
   assert.match(native,/v1\/browser\/tabs\/\{tab_id\}/);
 });
 
+test('Google Sheets can queue a read-only bounded batch without claiming completion',()=>{
+  assert.match(app,/invoke<\{queued_orders:number;remaining_orders:number\}>\("check_inventa_order_batch"/);
+  assert.match(app,/Проверить до 20 заказов/);
+  assert.match(app,/Дальнейшие партии пока не запускаются автоматически/);
+  const native=fs.readFileSync(path.resolve(__dirname,'../desktop/src-tauri/src/main.rs'),'utf8');
+  assert.match(native,/async fn check_inventa_order_batch\(/);
+  assert.match(native,/\/v1\/integrations\/google-sheets\/check-order-batch/);
+});
+
 test('skills are a first-class reviewed workspace not an inventory-only workflow',()=>{
   assert.match(app,/label="Навыки" active=\{page==="skills"\}/);
   assert.match(app,/<SkillsPage connected=\{connected\}\/>/);
