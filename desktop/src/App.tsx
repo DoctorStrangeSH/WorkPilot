@@ -155,7 +155,7 @@ function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];a
     job?.status==="failed"?"Проверка завершилась с ошибкой":
     job?.status==="expired"?"Расширение не ответило вовремя":"Задачи пока нет";
   return <section className="page">
-    <div className="page-head"><div><div className="eyebrow">BROWSER BRIDGE · PREVIEW</div><h1>Браузер</h1><p>Browser Bridge: ручная передача вкладки и автоматическое чтение трёх разрешённых HTTPS-страниц.</p></div><span className="browser-state"><i className={connected?"":"idle"}/>{connected?"Агент подключён":"Сначала запустите агента"}</span></div>
+    <div className="page-head"><div><div className="eyebrow">BROWSER BRIDGE · PREVIEW</div><h1>Браузер</h1><p>Browser Bridge: ручная передача любых HTTPS-вкладок. Автоматическая сверка ИНВенты пока использует три специализированные роли: ИНВента, DataLens и Asgard.</p></div><span className="browser-state"><i className={connected?"":"idle"}/>{connected?"Агент подключён":"Сначала запустите агента"}</span></div>
     <div className="browser-safety"><div><ShieldCheck size={19}/></div><section><b>Приватность по умолчанию</b><p>Расширение не читает cookies, пароли и историю браузера. Для разрешённого поиска оно может вводить грузоместо только в строго распознанное поле. Отдельная команда может считать ограниченный видимый текст страницы, а автоматический обход — последовательно прочитать три явно разрешённых домена. Тексты не сохраняются. Экспериментальный поиск и сверка выполняются по разрешённым страницам, но на реальных корпоративных сайтах ещё не проверены. Изменение статусов не подключено.</p></section></div>
     <div className="panel browser-panel" data-testid="browser-audit-runner">
       <div className="panel-head"><div><h3>Проверить заказы автоматически</h3><p>Только чтение. Расширение использует ранее настроенные сайты и разрешения.</p></div>
@@ -181,9 +181,9 @@ function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];a
         <span>Ручная проверка: <b>{audit.summary.manual_review}</b></span>
         <span>Обработано: <b>{audit.total}</b></span>
         <small>Последний результат: {new Date(audit.checked_at).toLocaleString("ru-RU")} · только предложения, не изменения статусов</small>
-      </div> : <p className="note">Пока нет завершённой сверки. Запустите автоматический обход через расширение Browser Bridge. Здесь появятся только суммарные результаты.</p>}
+      </div> : <p className="note">Пока нет завершённой сверки. Передача вкладки сама по себе не запускает проверку заказа. Для неё нужны три специализированных источника и подтверждённые результаты чтения.</p>}
     </div>
-    <div className="panel browser-panel"><div className="panel-head"><div><h3>Вкладки, которыми вы поделились</h3><p>Последние 20 локальных записей</p></div><span className="live">{tabs.length} SHARED</span></div>
+    <div className="panel browser-panel"><div className="panel-head"><div><h3>Вкладки, которыми вы поделились</h3><p>Последние 20 вкладок, которыми ты поделился. Это не ограничение количества вкладок или сайтов.</p></div><span className="live">{tabs.length} SHARED</span></div>
       {tabs.length?<div className="browser-tab-list">{tabs.map(tab=><article className="browser-tab" key={tab.id}><span className="browser-tab-icon"><Globe2 size={16}/></span><div className="browser-tab-copy"><b>{tab.title}</b><a href={tab.url} target="_blank" rel="noreferrer">{tab.url}</a><small>Передано вручную · {time(tab.shared_at)}</small></div></article>)}</div>:<Empty title="Пока нет переданных вкладок" text="Установите Malenia Browser Bridge, затем откройте нужную страницу и нажмите кнопку расширения «Поделиться вкладкой»."/>}
     </div>
     <div className="note"><CircleHelp size={15}/>Native Messaging работает только после регистрации расширения и хоста. Поддержка проверяется на установленной версии Яндекс Браузера; автоматический доступ к вкладкам не включён.</div>
