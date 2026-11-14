@@ -38,14 +38,14 @@ test('sources page is reachable and shows truthful connection state', () => {
 });
 
 
-test('Google Sheets onboarding is explicitly read-only and calls the native connector', () => {
+test('Google Sheets onboarding explains editor access and calls the native connector', () => {
   assert.match(app, /Google OAuth Desktop Client ID/);
-  assert.match(app, /Google Sheets подключается отдельно только для чтения/);
+  assert.match(app, /Google Sheets подключается отдельно для чтения и редактирования/);
   assert.match(app, /connect_google_sheets/);
   assert.match(app, /get_google_sheets_status/);
   assert.doesNotMatch(app, /invoke[^\n]*read_google_sheet/);
   assert.match(app, /disconnect_google_sheets/);
-  assert.match(app, /Исходные данные остаются нетронутыми/);
+  assert.match(app, /После обновления подключи Google заново/);
   assert.doesNotMatch(app, /write_google_sheet|update_google_sheet/);
   assert.match(app, /Не найдена переданная вкладка Google Sheets/);
   assert.match(app, /inventa-first-order/);
