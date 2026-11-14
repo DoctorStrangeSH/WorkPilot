@@ -3,7 +3,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from malenia.google_oauth import (
     GOOGLE_AUTHORIZATION_ENDPOINT,
-    GOOGLE_SHEETS_READONLY_SCOPE,
+    GOOGLE_SHEETS_SCOPE,
     GoogleOAuthError,
     build_authorization_url,
     create_oauth_state,
@@ -50,14 +50,14 @@ class GoogleOAuthProtocolTests(unittest.TestCase):
             "/?code=abc123&state=" + state, state
         ), "abc123")
 
-    def test_authorization_url_requests_only_sheets_readonly_with_pkce(self):
+    def test_authorization_url_requests_sheets_editor_with_pkce(self):
         url = build_authorization_url(CLIENT_ID, REDIRECT, STATE, VERIFIER)
         self.assertTrue(url.startswith(GOOGLE_AUTHORIZATION_ENDPOINT + "?"))
         query = parse_qs(urlsplit(url).query)
         self.assertEqual(query["client_id"], [CLIENT_ID])
         self.assertEqual(query["redirect_uri"], [REDIRECT])
         self.assertEqual(query["response_type"], ["code"])
-        self.assertEqual(query["scope"], [GOOGLE_SHEETS_READONLY_SCOPE])
+        self.assertEqual(query["scope"], [GOOGLE_SHEETS_SCOPE])
         self.assertEqual(query["access_type"], ["offline"])
         self.assertEqual(query["prompt"], ["consent"])
         self.assertEqual(query["state"], [STATE])
@@ -113,13 +113,14 @@ class GoogleOAuthProtocolTests(unittest.TestCase):
                 "/?error=access_denied&state=" + STATE, STATE
             )
 
-    def test_only_the_exact_read_only_scope_is_accepted(self):
-        validate_granted_scope(GOOGLE_SHEETS_READONLY_SCOPE)
+    def test_only_the_exact_editor_scope_is_accepted(self):
+        validate_granted_scope(GOOGLE_SHEETS_SCOPE)
         for scope in (
             "",
             None,
             "https://www.googleapis.com/auth/drive",
-            GOOGLE_SHEETS_READONLY_SCOPE + " https://www.googleapis.com/auth/drive",
+            "https://www.googleapis.com/auth/spreadsheets.readonly",
+            GOOGLE_SHEETS_SCOPE + " https://www.googleapis.com/auth/drive",
         ):
             with self.subTest(scope=scope), self.assertRaises(GoogleOAuthError):
                 validate_granted_scope(scope)
@@ -130,17 +131,17 @@ class GoogleOAuthProtocolTests(unittest.TestCase):
             "refresh_token": "refresh-token-fixture",
             "token_type": "Bearer",
             "expires_in": 3600,
-            "scope": GOOGLE_SHEETS_READONLY_SCOPE,
+            "scope": GOOGLE_SHEETS_SCOPE,
         }
         result = validate_token_response(payload)
         self.assertEqual(result["refresh_token"], "refresh-token-fixture")
-        self.assertEqual(result["scope"], GOOGLE_SHEETS_READONLY_SCOPE)
+        self.assertEqual(result["scope"], GOOGLE_SHEETS_SCOPE)
         for patch in (
             {"refresh_token": None},
             {"token_type": "MAC"},
             {"expires_in": True},
             {"expires_in": 10},
-            {"scope": GOOGLE_SHEETS_READONLY_SCOPE + " https://www.googleapis.com/auth/drive"},
+            {"scope": GOOGLE_SHEETS_SCOPE + " https://www.googleapis.com/auth/drive"},
             {"access_token": "bad\nheader"},
         ):
             with self.subTest(patch=patch), self.assertRaises(GoogleOAuthError):
