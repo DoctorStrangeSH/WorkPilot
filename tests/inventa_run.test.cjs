@@ -11,14 +11,16 @@ const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function harness(){
   const timers=new Map();let seq=0,offset=0,requests=0,status='pending',latest;
   const exports={};vm.runInNewContext(source,{exports,setTimeout:fn=>{timers.set(++seq,fn);return seq;},clearTimeout:id=>timers.delete(id)});
-  const states=[];
-  const invoke=async command=>{
+  const states=[],calls=[];
+  const invoke=async (command,args)=>{
+    calls.push({command,args});
+    if(command==='reset_inventa_order_batch'){offset=0;latest=null;return {reset:true};}
     if(command==='get_dashboard')return {browser_audit_job:latest?{...latest,status}:null};
     requests++;const start=offset;latest={job_id:'job-'+requests,status:'pending'};status='pending';
     return {job:latest,batch_start:start,queued_orders:Math.min(20,45-start),eligible_orders:45,remaining_orders:Math.max(0,45-start-20)};
   };
   const runner=new exports.InventaRun(invoke,state=>states.push(state));
-  return {runner,states,get requests(){return requests;},
+  return {runner,states,calls,get requests(){return requests;},
     setStatus(value){status=value;if(value==='completed')offset=Math.min(45,offset+20);},
     replaceJob(){latest={job_id:'some-other-job'};},
     async tick(){const [id,fn]=timers.entries().next().value||[];assert.ok(fn,'poll is scheduled');timers.delete(id);fn();await flush();},
@@ -52,4 +54,18 @@ test('duplicate clicks and switching sheets cannot enqueue concurrent jobs',asyn
   const h=harness();await h.runner.start('SHEET');await h.runner.start('SHEET');
   h.runner.pause();await h.runner.start('OTHER');assert.equal(h.requests,1);assert.equal(h.runner.state.source,'SHEET');
   h.runner.dispose();assert.equal(h.timerCount,0);
+});
+
+ test('chosen inventory date follows every batch and explicit restart resets saved position',async()=>{
+  const h=harness();await h.runner.start('SHEET','2026-09-26');
+  h.setStatus('completed');await h.tick();
+  const requests=h.calls.filter(c=>c.command==='check_inventa_order_batch');
+  assert.equal(requests.length,2);
+  assert.ok(requests.every(c=>c.args.inventoryDate==='2026-09-26'));
+  h.runner.pause();h.setStatus('completed');await h.tick();
+  await h.runner.restart('SHEET','2026-08-29');
+  assert.equal(h.runner.state.processed,0);
+  assert.ok(h.calls.some(c=>c.command==='reset_inventa_order_batch'));
+  assert.equal(h.calls.at(-1).args.inventoryDate,'2026-08-29');
+  h.runner.dispose();
 });
