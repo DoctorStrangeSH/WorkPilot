@@ -17,7 +17,7 @@ function popup(url = 'https://example.com/orders?secret=remove#private') {
     tabs: {async query() { queries++; return [{id: 7, title: 'x'.repeat(400), url}]; }},
     scripting: {async executeScript() {return [{result:{title:'Orders',table_headers:['Order ID','Status'],search_labels:['Search'],has_aria_grid:true,virtualized:false,login_required:false}}];}}
   };
-  vm.runInNewContext(source, {document: {getElementById: id => nodes[id]}, chrome, URL,
+  vm.runInNewContext(source, {document: {getElementById: id => nodes[id]}, chrome, URL, URLSearchParams,
     crypto: {randomUUID: () => 'request-id'},
     setTimeout: callback => {timers.set(++sequence, callback); return sequence;},
     clearTimeout: id => timers.delete(id)});
@@ -32,6 +32,23 @@ function popup(url = 'https://example.com/orders?secret=remove#private') {
   };
 }
 const hello = {ok: true, host: 'com.malenia.browser'};
+
+test('sharing Sheets preserves the selected worksheet but strips other parameters',async()=>{
+  for (const action of ['share','shareAll']) {
+    const p = popup('https://docs.google.com/spreadsheets/d/example123/edit?token=secret#gid=42');
+    await p.reply(0,hello);
+    await p.click(action);
+    assert.equal(p.calls[1].message.tab.url,'https://docs.google.com/spreadsheets/d/example123/edit?gid=42');
+  }
+  for (const url of [
+    'https://docs.google.com.evil/spreadsheets/d/example123/edit#gid=42',
+    'https://docs.google.com/spreadsheets/d/example123/edit?gid=1#gid=2',
+    'https://docs.google.com/spreadsheets/d/example123/edit#gid=secret'
+  ]) {
+    const p = popup(url); await p.reply(0,hello); await p.click('share');
+    assert.doesNotMatch(p.calls[1].message.tab.url,/[?#]/);
+  }
+});
 
 test('hello and manual reconnect never read or share a tab', async () => {
   const p = popup();
