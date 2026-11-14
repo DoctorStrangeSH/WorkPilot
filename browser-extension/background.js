@@ -104,6 +104,9 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
 const DESKTOP_AUDIT_ALARM = "malenia-desktop-audit-check";
 async function pollDesktopAudit() {
   if (running) return;
+  // Reserve the worker before the first await: alarms and popup requests can
+  // arrive while permissions or the native host handshake are still pending.
+  running = true;
   let session;
   try {
     const stored = await chrome.storage.local.get(["maleniaTargets", "maleniaExactGetSearch"]);
@@ -120,7 +123,6 @@ async function pollDesktopAudit() {
     const claimed = await session.send({type:"claim_browser_audit"});
     const jobId = claimed?.job?.job_id;
     if (!claimed?.ok || !claimed.job || typeof jobId !== "string") return;
-    running = true;
     let succeeded = false;
     try {
       await progress({phase:"starting",results:[]});
@@ -151,10 +153,12 @@ async function pollDesktopAudit() {
       // Never retry an unacknowledged claim automatically. The store expires it.
       try { await session.send({type:"finish_browser_audit",job_id:jobId,succeeded}); }
       catch { /* Extension may have disconnected. */ }
-      running = false;
     }
   } catch { /* Host unavailable, no permissions, or extension restarting. */ }
-  finally { session?.close(); }
+  finally {
+    try { session?.close(); }
+    finally { running = false; }
+  }
 }
 function enableDesktopAuditPolling() {
   chrome.alarms.create(DESKTOP_AUDIT_ALARM,{periodInMinutes:1});
