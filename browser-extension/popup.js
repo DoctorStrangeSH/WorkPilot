@@ -102,7 +102,14 @@ function sanitizedTab(tab) {
   let page;
   try { page = new URL(tab.url); } catch { return null; }
   if (!["http:", "https:"].includes(page.protocol) || page.username || page.password) return null;
-  return {title: typeof tab.title === "string" ? tab.title.slice(0, 300) : "", url: page.origin + page.pathname};
+  let suffix = "";
+  // Preserve only the numeric worksheet identity, never arbitrary parameters.
+  if (page.origin === "https://docs.google.com" &&
+      /^\/spreadsheets\/d\/[A-Za-z0-9_-]+\/edit\/?$/.test(page.pathname)) {
+    const gids = [...page.searchParams.getAll("gid"), ...new URLSearchParams(page.hash.slice(1)).getAll("gid")];
+    if (gids.length && gids.every(gid => /^\d{1,16}$/.test(gid) && gid === gids[0])) suffix = "?gid=" + gids[0];
+  }
+  return {title: typeof tab.title === "string" ? tab.title.slice(0, 300) : "", url: page.origin + page.pathname + suffix};
 }
 shareAllButton.addEventListener("click", async () => {
   if (busy || !connected) return;
@@ -150,7 +157,7 @@ shareButton.addEventListener("click", async () => {
     const response = await sendNativeMessage({
       type: "share_active_tab",
       request_id: crypto.randomUUID(),
-      tab: { title: typeof tab.title === "string" ? tab.title.slice(0, 300) : "", url: page.origin + page.pathname }
+      tab: sanitizedTab(tab)
     });
     if (!response.ok) throw bridgeError("protocol");
     setStatus("Вкладка передана в Malenia.", "ok");
