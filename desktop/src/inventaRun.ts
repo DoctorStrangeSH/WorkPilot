@@ -7,20 +7,32 @@ type Batch = {job:Job;queued_orders:number;eligible_orders:number;batch_start:nu
 type Invoke = <T>(command:string,args?:Record<string,unknown>)=>Promise<T>;
 export class InventaRun {
   state:RunState={phase:"idle",processed:0,total:0,source:"",message:"Выбери лист и начни разбор."};
+  private inventoryDate:string|undefined;
   private active=false;
   private requesting=false;
   private job: {id:string;end:number;remaining:number}|null=null;
   private timer:ReturnType<typeof setTimeout>|undefined;
   constructor(private invoke:Invoke,private changed:(state:RunState)=>void,private delay=2000){}
   private update(patch:Partial<RunState>){this.state={...this.state,...patch};this.changed({...this.state});}
-  async start(source:string){
+  async start(source:string, inventoryDate?:string){
     if(this.active||this.requesting)return;
-    if(this.job && source!==this.state.source)return;
+    if(this.job && (source!==this.state.source||inventoryDate!==this.inventoryDate))return;
     this.active=true;
-    if(source!==this.state.source)this.update({processed:0,total:0});
+    if(source!==this.state.source||inventoryDate!==this.inventoryDate)this.update({processed:0,total:0});
+    this.inventoryDate=inventoryDate;
     this.update({source,message:"Читаю лист и готовлю очередь…"});
     if(this.job){this.update({phase:"waiting"});return;}
     await this.next();
+  }
+  async restart(source:string, inventoryDate?:string){
+    if(this.active||this.requesting||this.job)return;
+    this.requesting=true;
+    try{
+      await this.invoke("reset_inventa_order_batch",{spreadsheetUrl:source});
+      this.update({processed:0,total:0});
+    }catch(error){this.fail(String(error));return;}
+    finally{this.requesting=false;}
+    await this.start(source,inventoryDate);
   }
   pause(){
     this.active=false;
@@ -34,7 +46,7 @@ export class InventaRun {
     this.requesting=true;
     this.update({phase:"waiting"});
     try{
-      const batch=await this.invoke<Batch>("check_inventa_order_batch",{spreadsheetUrl:this.state.source});
+      const batch=await this.invoke<Batch>("check_inventa_order_batch",{spreadsheetUrl:this.state.source,inventoryDate:this.inventoryDate||null});
       if(!batch.job?.job_id||batch.queued_orders<1)throw Error("Некорректный ответ очереди");
       // A changed/reordered sheet must not silently restart an ongoing run.
       if(this.state.processed>batch.batch_start && this.state.source){
@@ -47,7 +59,7 @@ export class InventaRun {
       this.schedule();
     }catch(error){
       if(String(error).includes("inventa_batch_complete")){
-        this.active=false;this.update({phase:"completed",processed:this.state.total,message:"Все доступные для проверки строки пройдены."});
+        this.active=false;this.update({phase:"completed",processed:this.state.total,message:"Этот список уже проходил сверку. Нажми «Начать заново», чтобы проверить его повторно."});
       }else this.fail(String(error));
     }finally{this.requesting=false;}
   }
