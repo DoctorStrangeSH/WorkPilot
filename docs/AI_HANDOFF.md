@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 30178)
-Total output lines: 894
+Warning: truncated output (original token count: 30621)
+Total output lines: 903
 
 ## CI update — 2026-11-12 — Excel batch checks
 
@@ -583,19 +583,7 @@ Implemented in PR #2 branch `feat/desktop-shell`:
 - `browser-extension/background.js`: MV3 service worker task runs independent of popup using persistent Native Messaging `connectNative` port for task lifetime; one outstanding request at a time, request IDs matched, five-second response deadline. It stores only sanitized role/progress/character-count metadata in `chrome.storage.session`. Port is closed after run; no autonomous task runs on startup.
 - Popup version 1.3.0 exposes three resource HTTPS URL fields and one-button automatic read-only audit, after Chrome's exact-origin permission prompt. Sanitized resource URL paths are retained in extension local storage for the next run. No credentials or page text are saved.
 - Native host already supports `inspect_active_page`, validates bounded text, reports characters and `persisted: false`, but does **not** forward text to the local AI agent or correlate orders. Thus the current result is a 3-site read success/failure summary, not an actual business workflow output.
-- Desktop Browser/Sources privacy messages corrected for new opt-in rendered-text reading. `browser-extension/README.md` explains capability and setup. `tests/browser_automation.test.cjs` tests URL restrictions, sequential traversal, cleanup, redirect block, host failure. CI desktop-chec…178 tokens truncated…er-visible job progress and report in the DESKTOP app, and separately permitted status edits. Do not invent source selectors, rely on screenshots from unrelated pages, or claim unattended business-data edits.
-- No site-write capability; no credentials/cookies/history/form-value extraction, MFA/CAPTCHA bypass, persistent browser session scraping, or unreviewed automatic record changes. Do not widen permissions without explicit approved task scope.
-- PR #2 remains draft; main unchanged. Latest installed binaries may predate `inspect_active_page`; new installer plus unpacked extension reload required to test this on the user's machine.
-
-
-## 2026-11-12 — First ephemeral site-table reconciliation bridge
-
-Continued PR #2 `feat/desktop-shell`. The user insists on autonomous order-checking rather than Excel paste or manual per-page clicks.
-
-New implementation:
-- `agent/malenia/site_reconciliation.py` parses bounded structured HTML table rows passed by the extension, requiring exact column names. It joins inventory cargo-place/date to DataLens exact cargo key + SC ID 101366 + result OK, and falls back to Asgard accepted/issued states using existing `preview_batch` + `evaluate_order`. Returns **only aggregate counts**, with read_only=true and write_enabled=false; no data persistence. Duplicate inventory/Asgard identities fail closed. Status `В пути` remains manual, because visible generic table text is not verified extended box history.
-- `agent/malenia/native_messaging.py` supports `reconcile_site_tables`: validates snapshots using the new module, returns `site_tables_reconciled` summary or a generic mapping error, never exports cargo identifiers or source text in its response.
-- `browser-extension/automation.js` now attempts strict-header HTML table extraction for the three configured pages, sends a single ephemeral reconciliation request after all three pages are read, and stores only outcome counts in extension session progress. It does not search/paginate the remote apps or read inputs. No page text or cargo code is saved. The popup shows explicit distinction between `reconciled` and merely `read_only`.
+- Desktop Browser/Sources privacy messages corrected for new opt-in rendered-text reading. `browser-extension/README.md` explains capability and setup. `tests/browser_automation.test.cjs` tests URL restrictions, sequential traversal, cleanup, redirect block, host failure. CI desktop-chec…621 tokens truncated…able extraction for the three configured pages, sends a single ephemeral reconciliation request after all three pages are read, and stores only outcome counts in extension session progress. It does not search/paginate the remote apps or read inputs. No page text or cargo code is saved. The popup shows explicit distinction between `reconciled` and merely `read_only`.
 - Tests: `tests/test_site_reconciliation.py`, `tests/test_native_messaging.py`, `tests/browser_automation.test.cjs` now cover deterministic matching, duplicate records, unavailable mappings, no write mode, and no identifiers in progress. `browser-extension/README.md` documents the exact provisional field names and the critical limitation: they are **not verified to match any real company website**.
 - A JavaScript source corruption caused an `Illegal continue statement` in CI; fixed in commit `474963fc`. Earlier Python CI was green as of `a9914851`, while browser desktop CI needed the syntax fix. Check latest SHA and workflow state before asserting successful browser tests or installer.
 - Do not claim live ИНВента/DataLens/Asgard functional integration yet. Current code tries to match only visible standard HTML tables with literal internal field labels, and only up to 100 rendered rows. Actual resource UIs, selectors, SPA state, search forms, pagination and approved mutation capabilities still must be mapped and tested in the user's authorized environment.
@@ -893,3 +881,12 @@ Latest fix commit at this note: `4f46fdd1d7c9dc77a4b26e3244f6ed8b14af87e4` (late
 - User screenshot still displayed hard-coded future-tense DataLens/Asgard cards after adapters were added. Replaced them with descriptions of current adapters and shared-tab presence (exact hostname matching). A shared tab is labelled Вкладка передана · требуется тест; this does not claim permissions or verified live success.
 - Added per-source setup navigation and explicit extension 1.5.0 open-tab selection / permission / first-order instructions. Box-history limitation remains visible.
 - Validation: 17 navigation checks and frontend production build passed. Updated desktop must be installed to see these changes; reloading extension alone does not update desktop cards.
+
+## 2026-11-14 — whole-sheet autonomous review workspace
+
+- User rejects one-order/manual-batch workflow and requests entire INVenta review, teaching while working and a clearer interface.
+- Added InventaRun controller at App lifetime: one start queues batches up to 20, polls the exact owned job, advances only after completed acknowledgment, automatically queues the next batch, stops on failed/expired/replaced job or connection error. Pause lets an already queued batch finish and prevents the next; resume uses backend cursor. Runs survive navigation within the open desktop window. Closing app stops continuation; backend confirmed cursor survives restart.
+- Added Sources workbench with explicit shared-sheet selection, start entire sheet, pause, progress and Объяснить Малении. Uses existing KnowledgeEditor for explicitly saved memory notes; these inform assistant memory, not deterministic reconciliation rules or model weights. No claims of automatic rule learning or sheet writeback.
+- Collapse connection configuration and Browser technical/privacy diagnostics; show a primary Browser action linking to the full-sheet workspace. Legacy first-order/manual batch controls remain in advanced details for diagnostics.
+- Tests cover 45-order automatic continuation, acknowledged counts, pause/resume, failed/expired/replaced jobs, concurrent start and source-switch guards. All 87 Node tests and production frontend build passed. CI now includes controller tests.
+- Remaining: actual installed-site verification, durable per-order evidence/results and learning review, automatic audit-result-to-Sheets writeback, Asgard extended history. A pending job still requires configured extension permissions; the new UI does not fix a disconnected bridge.
