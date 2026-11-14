@@ -14,7 +14,7 @@ from typing import Any
 
 ALIASES = {
     "order_id": {"id заказа", "номер заказа", "заказ", "order id", "order_id"},
-    "date": {"дата", "дата заказа", "inventory date", "date"},
+    "date": {"дата", "дата заказа", "дата выгрузки", "дата инвентаризации", "inventory date", "date"},
     "partner": {"main_partner_code_original", "main_partner", "партнер", "партнёр", "грузоместо", "грузо место"},
     "cost": {"стоимость", "сумма", "цена", "cost", "amount"},
     "name": {"наименование", "товар", "название", "name", "product"},
@@ -133,13 +133,21 @@ def _inventory_day_from_title(title: str, rows: list[list[Any]], date_col: int |
 
 
 def analyze_inventa(rows: list[list[Any]], sheet_title: str = "", *,
-                   audit_batch_limit: int = 0, audit_batch_offset: int = 0) -> dict[str, Any]:
+                   audit_batch_limit: int = 0, audit_batch_offset: int = 0,
+                   inventory_date: str | None = None) -> dict[str, Any]:
     """Summarize an auto-read sheet; never invent statuses or repair source cells."""
     if not isinstance(rows, list) or len(rows) > 10000:
         raise ValueError("inventa_row_limit")
     header_index, columns = detect_header(rows)
     data = rows[header_index + 1:]
     sheet_inventory_date = _inventory_day_from_title(sheet_title, data, columns.get("date"))
+    if inventory_date is not None:
+        try:
+            if not isinstance(inventory_date, str) or date.fromisoformat(inventory_date).isoformat() != inventory_date:
+                raise ValueError
+            sheet_inventory_date = inventory_date
+        except (ValueError, TypeError):
+            raise ValueError("invalid_inventory_date") from None
     records: list[dict[str, Any]] = []
     ids: dict[str, list[int]] = defaultdict(list)
     statuses: Counter[str] = Counter()
