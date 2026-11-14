@@ -234,6 +234,22 @@ class TaskStore:
             )
         return {"id": tab_id, "url": url, "title": title, "shared_at": now}
 
+    def delete_browser_tab(self, tab_id: str) -> bool:
+        """Remove a user-shared tab record without closing the real browser tab."""
+        if not isinstance(tab_id, str) or not tab_id or len(tab_id) > 64:
+            return False
+        with self._session() as db:
+            cursor = db.execute("DELETE FROM browser_tabs WHERE id = ?", (tab_id,))
+            if cursor.rowcount:
+                db.execute(
+                    """INSERT INTO events (task_id, event_type, message, created_at)
+                       VALUES (NULL, 'browser.tab_unshared',
+                               'Пользователь удалил переданную вкладку из Malenia', ?)""",
+                    (_now(),),
+                )
+                return True
+        return False
+
     def list_browser_tabs(self, limit: int = 20) -> list[dict[str, Any]]:
         safe_limit = max(1, min(int(limit), 100))
         with self._session() as db:
