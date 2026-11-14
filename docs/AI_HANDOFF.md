@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 30178)
+Total output lines: 894
+
 ## CI update — 2026-11-12 — Excel batch checks
 
 - Code head `e3af7541a7cafb282354e916f73b0b6485fec79f`: Python matrix run 43254104757 succeeded on 3.11/3.12/3.13. Previous code run 43253695476 executed **172 tests per version** successfully.
@@ -580,9 +583,7 @@ Implemented in PR #2 branch `feat/desktop-shell`:
 - `browser-extension/background.js`: MV3 service worker task runs independent of popup using persistent Native Messaging `connectNative` port for task lifetime; one outstanding request at a time, request IDs matched, five-second response deadline. It stores only sanitized role/progress/character-count metadata in `chrome.storage.session`. Port is closed after run; no autonomous task runs on startup.
 - Popup version 1.3.0 exposes three resource HTTPS URL fields and one-button automatic read-only audit, after Chrome's exact-origin permission prompt. Sanitized resource URL paths are retained in extension local storage for the next run. No credentials or page text are saved.
 - Native host already supports `inspect_active_page`, validates bounded text, reports characters and `persisted: false`, but does **not** forward text to the local AI agent or correlate orders. Thus the current result is a 3-site read success/failure summary, not an actual business workflow output.
-- Desktop Browser/Sources privacy messages corrected for new opt-in rendered-text reading. `browser-extension/README.md` explains capability and setup. `tests/browser_automation.test.cjs` tests URL restrictions, sequential traversal, cleanup, redirect block, host failure. CI desktop-checks workflow runs it; existing popup mock and navigation privacy tests were adapted.
-- Latest relevant fixes: `b374095c` browser popup test mock; `85f3064b` privacy UI assertion update. Older desktop CI runs failed on stale test assertions, not on a proven packaged-browser failure. Check latest SHA Actions results before reporting success.
-- **Still missing before fulfilling user's objective:** actual authenticated target site URLs, per-site DOM/table/SPA mapping, search and pagination navigation, resilient site-specific adapters, structured data transfer through an authenticated ephemeral channel to Malenia agent, joining the three sources per cargo-place and inventory date using `evaluate_order`, user-visible job progress and report in the DESKTOP app, and separately permitted status edits. Do not invent source selectors, rely on screenshots from unrelated pages, or claim unattended business-data edits.
+- Desktop Browser/Sources privacy messages corrected for new opt-in rendered-text reading. `browser-extension/README.md` explains capability and setup. `tests/browser_automation.test.cjs` tests URL restrictions, sequential traversal, cleanup, redirect block, host failure. CI desktop-chec…178 tokens truncated…er-visible job progress and report in the DESKTOP app, and separately permitted status edits. Do not invent source selectors, rely on screenshots from unrelated pages, or claim unattended business-data edits.
 - No site-write capability; no credentials/cookies/history/form-value extraction, MFA/CAPTCHA bypass, persistent browser session scraping, or unreviewed automatic record changes. Do not widen permissions without explicit approved task scope.
 - PR #2 remains draft; main unchanged. Latest installed binaries may predate `inspect_active_page`; new installer plus unpacked extension reload required to test this on the user's machine.
 
@@ -886,3 +887,9 @@ Latest fix commit at this note: `4f46fdd1d7c9dc77a4b26e3244f6ed8b14af87e4` (late
 - Wired adapters into existing queued batch visits; temporary background tabs are still closed afterwards. Work remains limited to search/read; no automatic writeback added. Generic adapters retained for other origins.
 - Tests execute injected adapters with synthetic DOM fixtures and verify rejected ambiguous/stale/foreign results. Orchestration test covers FOUND bypassing Asgard and CHECK reaching it, reconciliation and tab cleanup. All 83 Node tests passed.
 - LIVE TEST PENDING: synthetic keyboard events may not trigger the actual DataLens widget; nearby labels may differ in DOM. User should update extension to 1.5.0, configure actual reverse-flow and DataLens pages, and run Проверить первый заказ. Do not claim real-site success until observed. No more repeated structural screenshots are necessary for this implementation step.
+
+## 2026-11-14 — remove stale disconnected source cards
+
+- User screenshot still displayed hard-coded future-tense DataLens/Asgard cards after adapters were added. Replaced them with descriptions of current adapters and shared-tab presence (exact hostname matching). A shared tab is labelled Вкладка передана · требуется тест; this does not claim permissions or verified live success.
+- Added per-source setup navigation and explicit extension 1.5.0 open-tab selection / permission / first-order instructions. Box-history limitation remains visible.
+- Validation: 17 navigation checks and frontend production build passed. Updated desktop must be installed to see these changes; reloading extension alone does not update desktop cards.
