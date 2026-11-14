@@ -8,6 +8,9 @@
   const button = document.getElementById("saveTargets");
   const status = document.getElementById("targetsStatus");
   const orderStatus = document.getElementById("orderAuditStatus");
+  const discover = document.getElementById("discoverTargets");
+  const selectors = Object.fromEntries(Object.keys(fields).map(role =>
+    [role, document.getElementById("select" + role)]));
   const reasons = {
     invalid_inventory_search_keys:"Не удалось определить грузоместо для поиска",
     unmapped_search_form:"На странице не найдено подходящее поле поиска",
@@ -51,6 +54,46 @@
     status.textContent = message;
     status.className = "status" + (kind ? " " + kind : "");
   };
+  discover?.addEventListener("click", async () => {
+    discover.disabled = true;
+    try {
+      const tabs = await chrome.tabs.query({});
+      const pages = new Map();
+      for (const tab of tabs) {
+        try {
+          const url = new URL(tab.url);
+          const clean = url.origin + url.pathname;
+          // Validate each candidate with the same rules as saved targets.
+          MaleniaAutomation.normalizeTargets(Object.fromEntries(
+            Object.keys(fields).map(role => [role, clean])));
+          if (url.username || url.password) continue;
+          if (!pages.has(clean)) pages.set(clean, {url:clean,
+            title:String(tab.title || url.hostname).slice(0,120)});
+        } catch { /* Internal browser pages and unsafe targets are omitted. */ }
+      }
+      const candidates = [...pages.values()].slice(0,100);
+      for (const role of Object.keys(fields)) {
+        const select = selectors[role];
+        select.replaceChildren();
+        const blank = document.createElement("option");
+        blank.value = ""; blank.textContent = "Выберите открытую вкладку…";
+        select.append(blank);
+        for (const page of candidates) {
+          const option = document.createElement("option");
+          option.value = page.url;
+          option.textContent = page.title + " · " + new URL(page.url).hostname;
+          select.append(option);
+        }
+        select.value = pages.has(fields[role].value) ? fields[role].value : "";
+      }
+      show(candidates.length ? "Выбери вкладки ИНВенты, DataLens и Asgard, затем разреши чтение. Содержимое страниц ещё не читается." :
+        "Открой рабочие HTTPS-вкладки в этом браузере и повтори поиск.");
+    } catch { show("Не удалось получить список вкладок. Повтори поиск.", "error"); }
+    finally { discover.disabled = false; }
+  });
+  for (const role of Object.keys(fields)) {
+    selectors[role]?.addEventListener("change", () => { fields[role].value = selectors[role].value; });
+  }
   const normalize = () => MaleniaAutomation.normalizeTargets(
     Object.fromEntries(Object.entries(fields).map(([role, field]) => [role, field.value.trim()])));
   chrome.storage.local.get("maleniaTargets").then(saved => {
