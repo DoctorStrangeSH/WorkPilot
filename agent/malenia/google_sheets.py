@@ -23,7 +23,7 @@ from urllib.request import (
 )
 
 from .google_oauth import (
-    GOOGLE_SHEETS_READONLY_SCOPE,
+    GOOGLE_SHEETS_SCOPE,
     GOOGLE_TOKEN_ENDPOINT,
     GoogleOAuthError,
     build_authorization_url,
@@ -43,7 +43,7 @@ _MAX_SHEETS_RESPONSE_BYTES = 2 * 1024 * 1024
 _MAX_SHEETS_CELLS = 100_000
 _MAX_RANGE_LENGTH = 200
 _SPREADSHEET_ID_RE = re.compile(r"^[A-Za-z0-9_-]{10,256}$")
-_REFRESH_TOKEN_KEY = "google-sheets-refresh-token"
+_REFRESH_TOKEN_KEY = "google-sheets-editor-refresh-token"
 _CLIENT_ID_KEY = "google-sheets-client-id"
 _CLIENT_SECRET_KEY = "google-sheets-client-secret"
 
