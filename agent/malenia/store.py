@@ -110,6 +110,15 @@ class TaskStore:
                     UNIQUE(job_id, cargo_place)
                 );
 
+                CREATE TABLE IF NOT EXISTS inventa_batch_cursor (
+                    source_hash TEXT PRIMARY KEY,
+                    fingerprint TEXT NOT NULL,
+                    next_offset INTEGER NOT NULL,
+                    total INTEGER NOT NULL,
+                    pending_end INTEGER,
+                    pending_job_id TEXT
+                );
+
                 CREATE TABLE IF NOT EXISTS browser_audit_summary (
                     id INTEGER PRIMARY KEY CHECK (id = 1),
                     checked_at TEXT NOT NULL,
@@ -335,11 +344,47 @@ class TaskStore:
         result["attention_sources"] = result["attention_sources"] or 0
         return result
 
+    def inventa_batch_position(self, source_hash: str, fingerprint: str) -> int:
+        """Keep only sheet hashes and a cursor, never source rows or cargo identifiers."""
+        with self._session() as db:
+            row = db.execute("SELECT fingerprint,next_offset FROM inventa_batch_cursor "
+                             "WHERE source_hash=?", (source_hash,)).fetchone()
+        if row and row["fingerprint"] == fingerprint:
+            return row["next_offset"]
+        return 0
+
+    def reset_inventa_batch_cursor(self, source_hash: str) -> bool:
+        """Explicit local reset, never alters Sheets, DataLens or Asgard."""
+        if not isinstance(source_hash, str) or len(source_hash) != 64:
+            raise ValueError("invalid_audit_cursor")
+        with self._session() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._expire_browser_audit(db)
+            active = db.execute("SELECT status FROM browser_audit_job WHERE id=1").fetchone()
+            if active and active["status"] in {"pending", "running"}:
+                raise SubmissionConflict("browser_audit_already_active")
+            return bool(db.execute("DELETE FROM inventa_batch_cursor WHERE source_hash=?",
+                                   (source_hash,)).rowcount)
+
     def request_browser_audit(self, first_order: dict[str, str] | None = None,
-                              batch: list[dict[str, str]] | None = None) -> dict[str, Any]:
+                              batch: list[dict[str, str]] | None = None,
+                              batch_cursor: dict[str, Any] | None = None) -> dict[str, Any]:
         """Single bounded browser audit requested through the authenticated desktop API."""
         if first_order is not None and batch is not None:
             raise ValueError("invalid_audit_batch")
+        if batch_cursor is not None:
+            if (batch is None or not isinstance(batch_cursor, dict)
+                    or set(batch_cursor) != {"source_hash", "fingerprint", "start", "total"}
+                    or any(not isinstance(batch_cursor[field], str) or
+                           len(batch_cursor[field]) != 64 or
+                           any(c not in "0123456789abcdef" for c in batch_cursor[field])
+                           for field in ("source_hash", "fingerprint"))
+                    or type(batch_cursor["start"]) is not int
+                    or type(batch_cursor["total"]) is not int
+                    or batch_cursor["start"] < 0
+                    or batch_cursor["start"] + len(batch) > batch_cursor["total"]
+                    or batch_cursor["total"] > 10000):
+                raise ValueError("invalid_audit_cursor")
         selected = batch if batch is not None else ([first_order] if first_order is not None else [])
         if batch is not None and not 1 <= len(batch) <= 20:
             raise ValueError("invalid_audit_batch")
@@ -366,6 +411,14 @@ class TaskStore:
             ).fetchone()
             if active and active["status"] in {"pending", "running"}:
                 raise SubmissionConflict("browser_audit_already_active")
+            if batch_cursor is not None:
+                current = db.execute(
+                    "SELECT fingerprint,next_offset FROM inventa_batch_cursor WHERE source_hash=?",
+                    (batch_cursor["source_hash"],)).fetchone()
+                expected = (current["next_offset"] if current and
+                            current["fingerprint"] == batch_cursor["fingerprint"] else 0)
+                if batch_cursor["start"] != expected:
+                    raise SubmissionConflict("inventa_batch_cursor_changed")
             now = _now()
             job_id = str(uuid.uuid4())
             db.execute("DELETE FROM browser_audit_seed WHERE id=1")
@@ -400,6 +453,17 @@ class TaskStore:
                     "(job_id,position,cargo_place,inventory_date) VALUES (?,?,?,?)",
                     [(job_id, position, item["cargo_place"], item["inventory_date"])
                      for position, item in enumerate(batch)])
+            if batch_cursor is not None:
+                db.execute(
+                    """INSERT INTO inventa_batch_cursor
+                       (source_hash,fingerprint,next_offset,total,pending_end,pending_job_id)
+                       VALUES (?,?,?,?,?,?) ON CONFLICT(source_hash) DO UPDATE SET
+                       fingerprint=excluded.fingerprint,
+                       next_offset=excluded.next_offset,total=excluded.total,
+                       pending_end=excluded.pending_end,pending_job_id=excluded.pending_job_id""",
+                    (batch_cursor["source_hash"], batch_cursor["fingerprint"],
+                     batch_cursor["start"], batch_cursor["total"],
+                     batch_cursor["start"] + len(batch), job_id))
         return {"job_id": job_id, "status": "pending", "created_at": now,
                 "updated_at": now}
 
@@ -446,6 +510,13 @@ class TaskStore:
                    WHERE id=1 AND job_id=? AND status='running'""",
                 ("completed" if succeeded else "failed", _now(), job_id),
             )
+            if cursor.rowcount:
+                db.execute(
+                    """UPDATE inventa_batch_cursor
+                       SET next_offset=CASE WHEN ? THEN pending_end ELSE next_offset END,
+                           pending_end=NULL,pending_job_id=NULL
+                       WHERE pending_job_id=?""",
+                    (1 if succeeded else 0, job_id))
             return cursor.rowcount == 1
 
     def update_browser_audit_progress(

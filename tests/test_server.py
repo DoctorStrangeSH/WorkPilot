@@ -150,6 +150,36 @@ class LocalApiTests(unittest.TestCase):
         self.assertNotIn(["BOX-2", "2026-08-22"], claimed["inventory"]["rows"])
         with self.store._session() as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM browser_audit_seed_items").fetchone()[0], 0)
+        self.assertTrue(self.store.finish_browser_audit(response["job"]["job_id"], False))
+        retry_code, retry = self.api(path, payload)
+        self.assertEqual(retry_code, 202)
+        self.assertEqual(retry["batch_start"], 0)
+        self.assertEqual(self.store.claim_browser_audit()["inventory"]["rows"][0],
+                         ["BOX-0", "2026-08-22"])
+        self.assertTrue(self.store.finish_browser_audit(retry["job"]["job_id"], True))
+        next_code, next_batch = self.api(path, payload)
+        self.assertEqual(next_code, 202)
+        self.assertEqual(next_batch["batch_start"], 20)
+        self.assertEqual(next_batch["queued_orders"], 3)
+        self.assertEqual(next_batch["remaining_orders"], 0)
+        self.assertEqual(self.store.claim_browser_audit()["inventory"]["rows"][0],
+                         ["BOX-21", "2026-08-22"])
+        self.assertTrue(self.store.finish_browser_audit(next_batch["job"]["job_id"], True))
+        self.assertEqual(self.api(path, payload)[0], 409)
+        reset_path = "/v1/integrations/google-sheets/reset-order-batch"
+        self.assertEqual(self.api(reset_path, payload, authenticated=False)[0], 401)
+        self.assertEqual(self.api(reset_path, payload),
+                         (200, {"reset": True, "read_only": True, "source_records_modified": False}))
+        fresh_code, fresh = self.api(path, payload)
+        self.assertEqual(fresh_code, 202)
+        self.assertEqual(fresh["batch_start"], 0)
+        self.assertEqual(self.api(reset_path, payload)[0], 409)
+        self.assertIsNotNone(self.store.claim_browser_audit())
+        self.assertTrue(self.store.finish_browser_audit(fresh["job"]["job_id"], True))
+        values.append(["2026-08-22", "NEW-ORDER", "BOX-NEW", 100, "Найден"])
+        restart_code, restarted = self.api(path, payload)
+        self.assertEqual(restart_code, 202)
+        self.assertEqual(restarted["batch_start"], 0)
 
     def test_browser_audit_summary_requires_auth_and_contains_only_counts(self):
         code, initial = self.api("/v1/browser/audit-summary")

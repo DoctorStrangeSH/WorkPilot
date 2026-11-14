@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import hashlib
 import json
 import re
 import sqlite3
@@ -274,6 +275,30 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                     self._send(422, {"error": code})
                 return
 
+            if parsed.path == "/v1/integrations/google-sheets/reset-order-batch":
+                payload = self._read_json(4096)
+                if payload is None:
+                    return
+                if (set(payload) != {"spreadsheet_url"} or
+                        not isinstance(payload.get("spreadsheet_url"), str)):
+                    self._send(422, {"error": "invalid_google_sheets_active_url"})
+                    return
+                try:
+                    source = sheets.read_active_sheet(payload["spreadsheet_url"])
+                    source_hash = hashlib.sha256(
+                        (source["spreadsheet_id"] + "\n" + source["sheet_title"]).encode("utf-8")
+                    ).hexdigest()
+                    reset = store.reset_inventa_batch_cursor(source_hash)
+                    self._send(200, {"reset": reset, "read_only": True,
+                                     "source_records_modified": False})
+                except SubmissionConflict:
+                    self._send(409, {"error": "browser_audit_already_active"})
+                except (GoogleSheetsError, ValueError) as error:
+                    self._send(422, {"error": error.code if isinstance(error, GoogleSheetsError) else str(error)})
+                except sqlite3.Error:
+                    self._send(503, {"error": "audit_job_unavailable"})
+                return
+
             if parsed.path in {"/v1/integrations/google-sheets/check-first-order",
                                "/v1/integrations/google-sheets/check-order-batch"}:
                 payload = self._read_json(4096)
@@ -290,6 +315,19 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                     analysis = analyze_inventa(source["values"], source["sheet_title"],
                                               audit_batch_limit=20 if is_batch else 0)
                     if is_batch:
+                        source_hash = hashlib.sha256(
+                            (source["spreadsheet_id"] + "\n" + source["sheet_title"]).encode("utf-8")
+                        ).hexdigest()
+                        fingerprint = analysis["audit_fingerprint"]
+                        offset = store.inventa_batch_position(source_hash, fingerprint)
+                        if offset >= analysis["eligible_audit_candidates"]:
+                            self._send(409, {"error": "inventa_batch_complete",
+                                             "eligible_orders": analysis["eligible_audit_candidates"]})
+                            return
+                        if offset:
+                            analysis = analyze_inventa(source["values"], source["sheet_title"],
+                                                      audit_batch_limit=20,
+                                                      audit_batch_offset=offset)
                         selected = analysis["audit_candidates"]
                         if not selected:
                             self._send(422, {"error": analysis["first_order_blocker"] or
@@ -297,10 +335,15 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
                             return
                         job = store.request_browser_audit(batch=[
                             {"cargo_place": item["cargo_place"],
-                             "inventory_date": item["inventory_date"]} for item in selected])
+                             "inventory_date": item["inventory_date"]} for item in selected],
+                            batch_cursor={"source_hash": source_hash,
+                                          "fingerprint": fingerprint,
+                                          "start": offset,
+                                          "total": analysis["eligible_audit_candidates"]})
                         self._send(202, {"job": job, "queued_orders": len(selected),
                                          "eligible_orders": analysis["eligible_audit_candidates"],
-                                         "remaining_orders": analysis["eligible_audit_candidates"] - len(selected),
+                                         "batch_start": offset,
+                                         "remaining_orders": analysis["eligible_audit_candidates"] - offset - len(selected),
                                          "read_only": True, "write_enabled": False})
                     else:
                         order = analysis["first_order"]

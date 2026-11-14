@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
+import hashlib
+import json
 import re
 from typing import Any
 
@@ -131,7 +133,7 @@ def _inventory_day_from_title(title: str, rows: list[list[Any]], date_col: int |
 
 
 def analyze_inventa(rows: list[list[Any]], sheet_title: str = "", *,
-                   audit_batch_limit: int = 0) -> dict[str, Any]:
+                   audit_batch_limit: int = 0, audit_batch_offset: int = 0) -> dict[str, Any]:
     """Summarize an auto-read sheet; never invent statuses or repair source cells."""
     if not isinstance(rows, list) or len(rows) > 10000:
         raise ValueError("inventa_row_limit")
@@ -221,10 +223,16 @@ def analyze_inventa(rows: list[list[Any]], sheet_title: str = "", *,
     # Explicitly opt in: the normal report must not include bulk cargo identifiers.
     # The local agent uses this transient list only to seed a bounded browser job.
     if audit_batch_limit:
-        if not 1 <= audit_batch_limit <= 20:
+        if not 1 <= audit_batch_limit <= 20 or not 0 <= audit_batch_offset <= 10000:
             raise ValueError("invalid_audit_batch_limit")
         safe_candidates = [item for item in unique_candidates
                            if re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", item["cargo_place"])]
-        report["audit_candidates"] = safe_candidates[:audit_batch_limit]
+        signature = [[item["order_id"], item["cargo_place"], item["inventory_date"],
+                      item["source_row"]] for item in safe_candidates]
+        report["audit_fingerprint"] = hashlib.sha256(
+            json.dumps([sheet_title, signature], ensure_ascii=False,
+                       separators=(",", ":")).encode("utf-8")).hexdigest()
+        report["audit_candidates"] = safe_candidates[
+            audit_batch_offset:audit_batch_offset + audit_batch_limit]
         report["eligible_audit_candidates"] = len(safe_candidates)
     return report

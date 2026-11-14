@@ -76,6 +76,21 @@ class InventaAnalysisTests(unittest.TestCase):
         self.assertEqual(analyze_inventa(rows, "22 августа 2026")['sheet_inventory_date'], "2026-08-22")
         self.assertEqual(analyze_inventa(rows, "Архив")['first_order_blocker'], "sheet_date_not_verified")
 
+    def test_audit_batch_paging_is_stable_and_fingerprint_detects_sheet_changes(self):
+        rows = [["Дата", "Id заказа", "Грузоместо", "Стоимость", "Статус"]]
+        rows += [["2026-08-22", f"ORD-{i}", f"BOX-{i}", 100, "В работе"] for i in range(23)]
+        first = analyze_inventa(rows, "22.08.2026", audit_batch_limit=20)
+        next_page = analyze_inventa(rows, "22.08.2026",
+                                   audit_batch_limit=20, audit_batch_offset=20)
+        self.assertEqual(len(first["audit_candidates"]), 20)
+        self.assertEqual([x["cargo_place"] for x in next_page["audit_candidates"]],
+                         ["BOX-20", "BOX-21", "BOX-22"])
+        self.assertEqual(first["audit_fingerprint"], next_page["audit_fingerprint"])
+        self.assertNotIn("audit_candidates", analyze_inventa(rows, "22.08.2026"))
+        rows.append(["2026-08-22", "ORD-NEW", "BOX-NEW", 100, "В работе"])
+        modified = analyze_inventa(rows, "22.08.2026", audit_batch_limit=20)
+        self.assertNotEqual(first["audit_fingerprint"], modified["audit_fingerprint"])
+
 
 if __name__ == "__main__":
     unittest.main()

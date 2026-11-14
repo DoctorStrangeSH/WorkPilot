@@ -94,6 +94,8 @@ fn api_post_json(token: &str, path: &str, payload: Value, timeout: Duration) -> 
             "invalid_spreadsheet_id" => "Некорректный ID таблицы Google Sheets.".to_string(),
             "invalid_spreadsheet_range" => "Проверьте диапазон ячеек (например, Orders!A1:Z100).".to_string(),
             "browser_audit_already_active" => "Проверка уже ожидает запуска или выполняется.".to_string(),
+            "inventa_batch_complete" => "Все однозначные грузоместа этого листа уже прошли пакетную сверку. Если таблица изменится, обработка нового списка начнётся сначала.".to_string(),
+            "inventa_batch_cursor_changed" => "Позиция очереди изменилась. Повторите запрос после обновления состояния.".to_string(),
             "audit_job_unavailable" => "Очередь проверки браузера временно недоступна.".to_string(),
             _ => format!("Google Sheets: {code}"),
         });
@@ -586,6 +588,19 @@ async fn check_inventa_order_batch(state: State<'_, AgentState>, spreadsheet_url
 }
 
 #[tauri::command]
+async fn reset_inventa_order_batch(state: State<'_, AgentState>, spreadsheet_url: String) -> Result<Value, String> {
+    if spreadsheet_url.len() > 2048 || !spreadsheet_url.starts_with("https://docs.google.com/spreadsheets/d/") {
+        return Err("Отклонена ссылка: выберите таблицу Google Sheets.".to_string());
+    }
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        api_post_json(&token, "/v1/integrations/google-sheets/reset-order-batch",
+            serde_json::json!({"spreadsheet_url": spreadsheet_url}), Duration::from_secs(60))
+    }).await.map_err(|_| "Не удалось сбросить позицию пакетной проверки".to_string())?
+}
+
+#[tauri::command]
 async fn read_google_sheet(
     state: State<'_, AgentState>, spreadsheet_id: String, range: String,
 ) -> Result<Value, String> {
@@ -703,7 +718,7 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .manage(AgentState::default())
         .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard,
-            request_browser_audit, remove_shared_browser_tab, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, get_skills, skill_action, suggest_skill, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, analyze_active_inventa, check_first_inventa_order, check_inventa_order_batch, disconnect_google_sheets, preview_order, preview_order_batch])
+            request_browser_audit, remove_shared_browser_tab, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, get_skills, skill_action, suggest_skill, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, analyze_active_inventa, check_first_inventa_order, check_inventa_order_batch, reset_inventa_order_batch, disconnect_google_sheets, preview_order, preview_order_batch])
         .run(tauri::generate_context!())
         .expect("error while running Malenia");
 }

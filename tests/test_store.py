@@ -94,6 +94,39 @@ class TaskStoreTests(unittest.TestCase):
         with self.store._session() as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM browser_audit_seed_items").fetchone()[0], 0)
 
+    def test_batch_cursor_advances_only_after_verified_success(self):
+        context = {"source_hash": "a" * 64, "fingerprint": "b" * 64,
+                   "start": 0, "total": 22}
+        rows = [{"cargo_place": f"BOX-{i}", "inventory_date": "2026-08-22"}
+                for i in range(20)]
+        initial = self.store.request_browser_audit(batch=rows, batch_cursor=context)
+        self.assertEqual(self.store.inventa_batch_position("a" * 64, "b" * 64), 0)
+        self.assertIsNotNone(self.store.claim_browser_audit())
+        self.assertTrue(self.store.finish_browser_audit(initial["job_id"], False))
+        self.assertEqual(self.store.inventa_batch_position("a" * 64, "b" * 64), 0)
+        retry = self.store.request_browser_audit(batch=rows, batch_cursor=context)
+        self.assertIsNotNone(self.store.claim_browser_audit())
+        self.assertTrue(self.store.finish_browser_audit(retry["job_id"], True))
+        self.assertEqual(self.store.inventa_batch_position("a" * 64, "b" * 64), 20)
+        self.assertEqual(self.store.inventa_batch_position("a" * 64, "c" * 64), 0)
+        with self.assertRaises(SubmissionConflict):
+            self.store.request_browser_audit(batch=rows, batch_cursor=context)
+        next_context = {**context, "start": 20}
+        following = self.store.request_browser_audit(
+            batch=[{"cargo_place": "BOX-20", "inventory_date": "2026-08-22"},
+                   {"cargo_place": "BOX-21", "inventory_date": "2026-08-22"}],
+            batch_cursor=next_context)
+        self.assertIsNotNone(self.store.claim_browser_audit())
+        self.assertTrue(self.store.finish_browser_audit(following["job_id"], True))
+        self.assertEqual(self.store.inventa_batch_position("a" * 64, "b" * 64), 22)
+        other = self.store.request_browser_audit(batch=rows[:1], batch_cursor={
+            "source_hash": "c" * 64, "fingerprint": "d" * 64,
+            "start": 0, "total": 1})
+        self.assertIsNotNone(self.store.claim_browser_audit())
+        self.assertTrue(self.store.finish_browser_audit(other["job_id"], True))
+        self.assertEqual(self.store.inventa_batch_position("a" * 64, "b" * 64), 22)
+        self.assertEqual(self.store.inventa_batch_position("c" * 64, "d" * 64), 1)
+
     def test_browser_audit_progress_is_coarse_monotone_and_job_bound(self):
         pending = self.store.request_browser_audit()
         job_id = pending["job_id"]
