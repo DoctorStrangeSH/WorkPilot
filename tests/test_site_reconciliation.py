@@ -22,6 +22,21 @@ def snapshots():
 
 
 class SiteReconciliationTests(unittest.TestCase):
+    def test_reviewed_datalens_scan_history_schema_and_display_formats(self):
+        data = snapshots()
+        data["datalens"]["columns"][0] = "place_external_id"
+        data["datalens"]["rows"][0] = ["TEST-001", "101\u00a0366", "OK", "2026/10/05 20:35:36"]
+        result = reconcile_tables(data)
+        self.assertEqual(result["summary"]["found"], 1)
+
+    def test_conflicting_datalens_identity_columns_are_rejected(self):
+        data = snapshots()
+        data["datalens"]["columns"].append("place_external_id")
+        for row in data["datalens"]["rows"]:
+            row.append("OTHER")
+        with self.assertRaises(SiteSnapshotError):
+            reconcile_tables(data)
+
     def test_joins_visible_tables_without_writes(self):
         value = reconcile_tables(snapshots())
         self.assertEqual(value["total"], 2)
