@@ -94,7 +94,10 @@ fn api_post_json(token: &str, path: &str, payload: Value, timeout: Duration) -> 
             "invalid_spreadsheet_id" => "Некорректный ID таблицы Google Sheets.".to_string(),
             "invalid_spreadsheet_range" => "Проверьте диапазон ячеек (например, Orders!A1:Z100).".to_string(),
             "browser_audit_already_active" => "Проверка уже ожидает запуска или выполняется.".to_string(),
-            "inventa_batch_complete" => "Все однозначные грузоместа этого листа уже прошли пакетную сверку. Если таблица изменится, обработка нового списка начнётся сначала.".to_string(),
+            "inventa_batch_complete" => "[inventa_batch_complete] Все однозначные грузоместа этого листа уже прошли пакетную сверку. Если таблица изменится, обработка нового списка начнётся сначала.".to_string(),
+            "no_safe_audit_candidates" | "no_unambiguous_order_with_cargo_and_date" => "Не найдены заказы с однозначным грузоместом. Проверьте выбранный лист и заголовки таблицы.".to_string(),
+            "sheet_date_not_verified" => "Не удалось определить дату инвентаризации. Выберите её над кнопкой запуска.".to_string(),
+            "invalid_inventory_date" => "Выберите корректную дату инвентаризации.".to_string(),
             "inventa_batch_cursor_changed" => "Позиция очереди изменилась. Повторите запрос после обновления состояния.".to_string(),
             "audit_job_unavailable" => "Очередь проверки браузера временно недоступна.".to_string(),
             _ => format!("Google Sheets: {code}"),
@@ -575,7 +578,7 @@ async fn check_first_inventa_order(state: State<'_, AgentState>, spreadsheet_url
 }
 
 #[tauri::command]
-async fn check_inventa_order_batch(state: State<'_, AgentState>, spreadsheet_url: String) -> Result<Value, String> {
+async fn check_inventa_order_batch(state: State<'_, AgentState>, spreadsheet_url: String, inventory_date: Option<String>) -> Result<Value, String> {
     if spreadsheet_url.len() > 2048 || !spreadsheet_url.starts_with("https://docs.google.com/spreadsheets/d/") {
         return Err("Отклонена ссылка: выберите таблицу Google Sheets.".to_string());
     }
@@ -583,7 +586,7 @@ async fn check_inventa_order_batch(state: State<'_, AgentState>, spreadsheet_url
         .clone().ok_or_else(|| "Сначала запустите агента".to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
         api_post_json(&token, "/v1/integrations/google-sheets/check-order-batch",
-            serde_json::json!({"spreadsheet_url": spreadsheet_url}), Duration::from_secs(60))
+            serde_json::json!({"spreadsheet_url": spreadsheet_url,"inventory_date":inventory_date}), Duration::from_secs(60))
     }).await.map_err(|_| "Не удалось создать пакетную проверку заказов".to_string())?
 }
 
