@@ -136,6 +136,35 @@ class UnauthorizedOnceOpener(FakeOpener):
 
 
 class GoogleSheetsConnectorTests(unittest.TestCase):
+    def test_restart_restores_google_grant_without_authorization_flow(self):
+        store=FakeCredentialStore({"google-sheets-editor-refresh-token":"refresh-token-fixture",
+                                   "google-sheets-client-id":CLIENT_ID})
+        for _ in range(2):
+            opener=FakeOpener()
+            connector=GoogleSheetsConnector(store,opener)
+            self.assertEqual(connector.status()["status"],"authorized")
+            connector.read_active_sheet(f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit?gid=123")
+            token_requests=[r for r in opener.requests if r.full_url==GOOGLE_TOKEN_ENDPOINT]
+            self.assertEqual(len(token_requests),1)
+            self.assertEqual(parse_qs(token_requests[0].data.decode())["grant_type"],["refresh_token"])
+            self.assertEqual(store.get("google-sheets-editor-refresh-token"),"refresh-token-fixture")
+
+    def test_metadata_401_refreshes_silently_without_deleting_saved_grant(self):
+        class MetadataUnauthorizedOnce(FakeOpener):
+            def open(self,request,timeout=0):
+                if ('/values/' not in request.full_url and request.full_url.startswith('https://sheets.googleapis.com/')
+                        and request.get_header('Authorization')=='Bearer stale-access-token'):
+                    self.requests.append(request)
+                    raise HTTPError(request.full_url,401,'expired',{},io.BytesIO(b'{}'))
+                return super().open(request,timeout)
+        store=FakeCredentialStore({"google-sheets-editor-refresh-token":"refresh-token-fixture",
+                                   "google-sheets-client-id":CLIENT_ID})
+        opener=MetadataUnauthorizedOnce();connector=GoogleSheetsConnector(store,opener)
+        connector._access_token='stale-access-token';connector._access_expires_at=time.monotonic()+3600
+        connector.read_active_sheet(f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit?gid=123")
+        self.assertEqual(connector.status()['status'],'authorized')
+        self.assertEqual(len([r for r in opener.requests if r.full_url==GOOGLE_TOKEN_ENDPOINT]),1)
+
     def test_legacy_readonly_grant_is_not_reused_as_editor_authorization(self):
         store = FakeCredentialStore({"google-sheets-refresh-token": "legacy-readonly",
                                      "google-sheets-client-id": CLIENT_ID})
