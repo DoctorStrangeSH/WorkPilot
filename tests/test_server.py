@@ -128,6 +128,25 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(self.api("/v1/integrations/google-sheets/check-first-order",
                                   {"spreadsheet_url": "https://docs.google.com/spreadsheets/d/" + "a"*24})[0], 409)
 
+    def test_batch_date_choice_reaches_browser_and_empty_sheet_is_not_complete(self):
+        path="/v1/integrations/google-sheets/check-order-batch"
+        payload={"spreadsheet_url":"https://docs.google.com/spreadsheets/d/"+"a"*24,
+                 "inventory_date":"2026-09-26"}
+        code,result=self.api(path,payload)
+        self.assertEqual(code,202)
+        job=self.store.claim_browser_audit()
+        self.assertEqual(job["inventory"]["rows"][0][1],"2026-09-26")
+        self.store.finish_browser_audit(job["job_id"],True)
+        self.google_sheets.read_active_sheet=lambda url: {
+            "spreadsheet_id":"a"*24,"sheet_title":"Пустой лист",
+            "values":[["Дата выгрузки","Id заказа","main_partner_code_original","Стоимость","Статус"]]}
+        code,result=self.api(path,payload)
+        self.assertEqual(code,422)
+        self.assertNotEqual(result["error"],"inventa_batch_complete")
+        code,result=self.api(path,{**payload,"inventory_date":"2026-02-30"})
+        self.assertEqual(code,422)
+        self.assertEqual(result["error"],"invalid_inventory_date")
+
     def test_order_batch_audit_seeds_bounded_unique_orders_from_sheet(self):
         header = ["Дата", "Id заказа", "Грузоместо", "Стоимость", "Статус"]
         values = [header] + [["2026-08-22", f"ORDER-{i}", f"BOX-{i}", 100, "Найден"]
