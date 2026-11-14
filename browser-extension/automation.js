@@ -515,6 +515,7 @@ var MaleniaAutomation = (() => {
     }
     const summary = {phase: !complete ? "needs_attention" :
       reconciliation ? "reconciled" : "read_only", results,
+      ...(!reconciliation && complete ? {reason:"reconciliation_unavailable"} : {}),
       ...(reconciliation ? {reconciliation} : {})};
     await onProgress(summary);
     return summary;

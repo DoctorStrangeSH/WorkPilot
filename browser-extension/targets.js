@@ -7,6 +7,46 @@
   };
   const button = document.getElementById("saveTargets");
   const status = document.getElementById("targetsStatus");
+  const orderStatus = document.getElementById("orderAuditStatus");
+  const reasons = {
+    invalid_inventory_search_keys:"Не удалось определить грузоместо для поиска",
+    unmapped_search_form:"На странице не найдено подходящее поле поиска",
+    unsupported_search_form:"Поиск устроен иначе, чем поддерживает адаптер",
+    dynamic_search_ui:"Найден динамический поиск — нужен адаптер страницы",
+    unsupported_dynamic_search:"Динамический поиск не удалось подтвердить",
+    dynamic_search_no_result_update:"Таблица не обновилась после поиска",
+    dynamic_search_unchanged_table:"Таблица не изменилась после поиска",
+    unmapped_search_results:"Не удалось распознать таблицу результатов",
+    unverified_search_result_identity:"Результат не совпал с искомым грузоместом",
+    changed_search_schema:"Колонки таблицы изменились при поиске",
+    virtualized_or_incomplete_grid:"Таблица неполная или использует виртуальную прокрутку",
+    navigation_outside_allowed_origin:"Страница перенаправила на другой сайт",
+    pagination_limit:"Не удалось безопасно прочитать все страницы",
+    too_many_search_rows:"Превышен предел результатов поиска",
+    native_host_rejected:"Локальное ядро отклонило данные страницы",
+    reconciliation_unavailable:"Не удалось сверить данные источников: нужно подтвердить колонки",
+    site_or_browser_error:"Ошибка при чтении сайта или браузера",
+  };
+  function renderAudit(audit) {
+    if (!orderStatus || !audit || !Array.isArray(audit.results)) return;
+    const labels = {inventory:"ИНВента",datalens:"DataLens",asgard:"Asgard"};
+    const items = audit.results.map(item => {
+      const source = labels[item.role];
+      if (!source) return null;
+      return item.status === "needs_attention" ?
+        source+": "+(reasons[item.reason] || "Требуется проверка совместимости") :
+        source+": чтение завершено";
+    }).filter(Boolean);
+    const end = audit.phase === "reconciled" ? "Сверка выполнена без изменений сайтов." :
+      audit.phase === "read_only" ? (reasons[audit.reason] || "Только чтение: сверка не подтверждена") :
+      audit.phase === "needs_attention" ? "Автоматическая проверка не завершена." : "Проверка выполняется…";
+    orderStatus.textContent = [...items,end].join(" · ");
+    orderStatus.className = "status"+(audit.phase === "reconciled" ? " ok" : "");
+  }
+  chrome.storage.session?.get("maleniaAudit").then(data => renderAudit(data?.maleniaAudit)).catch(()=>{});
+  chrome.storage.onChanged?.addListener((changes,area) => {
+    if (area === "session" && changes.maleniaAudit) renderAudit(changes.maleniaAudit.newValue);
+  });
   const show = (message, kind = "") => {
     status.textContent = message;
     status.className = "status" + (kind ? " " + kind : "");

@@ -7,12 +7,13 @@ const vm = require('node:vm');
 const automation = fs.readFileSync(path.resolve(__dirname,'../browser-extension/automation.js'),'utf8');
 const setup = fs.readFileSync(path.resolve(__dirname,'../browser-extension/targets.js'),'utf8');
 const flush = () => new Promise(resolve=>setImmediate(resolve));
-function screen(granted=true) {
-  const names = ['targetInventory','targetDatalens','targetAsgard','saveTargets','targetsStatus'];
+function screen(granted=true, audit=null) {
+  const names = ['targetInventory','targetDatalens','targetAsgard','saveTargets','targetsStatus','orderAuditStatus'];
   const nodes=Object.fromEntries(names.map(name=>[name,{value:'',textContent:'',className:'',disabled:false,
     addEventListener(event,handler){this[event]=handler;}}]));
   let stored=null, requested=0;
-  const chrome={storage:{local:{async get(){return {};},async set(value){stored=value;}}},
+  const chrome={storage:{local:{async get(){return {};},async set(value){stored=value;}},
+    session:{async get(){return {maleniaAudit:audit};}}},
     permissions:{async request({origins}){requested++; assert.equal(origins.length,3);return granted;}}};
   const ctx={URL,chrome,document:{getElementById:id=>nodes[id]}};
   vm.createContext(ctx);vm.runInContext(automation,ctx);vm.runInContext(setup,ctx);
@@ -39,4 +40,12 @@ test('URLs with embedded credentials or query parameters fail before permission 
   await ui.click();
   assert.equal(ui.requested,0);assert.equal(ui.stored,null);
   assert.doesNotMatch(ui.nodes.targetsStatus.textContent,/username|secret/);
+});
+test('diagnostic explains why DataLens failed without exposing cargo or site URLs',async()=>{
+  const ui=screen(true,{phase:'needs_attention',results:[
+    {role:'inventory',status:'read'},
+    {role:'datalens',status:'needs_attention',reason:'dynamic_search_no_result_update'}]});
+  await flush();
+  assert.match(ui.nodes.orderAuditStatus.textContent,/DataLens: Таблица не обновилась/);
+  assert.doesNotMatch(ui.nodes.orderAuditStatus.textContent,/BOX-1|https:/);
 });
