@@ -615,3 +615,93 @@ test('unrelated result-table mutations do not count as successful reactive searc
   await assert.rejects(()=>api.reactiveSearch(chrome,7,'asgard','ABC-1',
     'https://asgard.example'),/dynamic_search_unchanged_table/);
 });
+
+function workplaceFixture(role, {ambiguous=false, unchanged=false, wrongCode=false}={}) {
+  const host=role==='asgard'?'https://asgard.market.yandex-team.ru':'https://datalens.yandex-team.ru';
+  const label=role==='asgard'?'Штрихкод коробки':'ID заказа / ЛОТа / ТОТа / Тележки';
+  let updated=false, clicks=0, deadline, now=0;
+  class Input {
+    constructor(){this.type='text';this._value='';this.disabled=false;this.readOnly=false;
+      this.parentElement={textContent:label,querySelectorAll:()=>[this],parentElement:null};}
+    get value(){return this._value;} set value(v){this._value=v;}
+    getAttribute(){return null;} getClientRects(){return [{}];}
+    dispatchEvent(event){if(event.type==='keyup')updated=!unchanged;}
+  }
+  const input=new Input();
+  const headers=role==='asgard'?['Статус грузоместа','ID возврата','ID партнера','ID коробки']:
+    ['scanned_at','sc_id','result','place_external_id'];
+  const table={querySelectorAll:()=>[
+    {querySelectorAll:()=>headers.map(textContent=>({textContent}))},
+    {querySelectorAll:()=> (role==='asgard'?
+      [updated?'Выдан':'В пути','1','2',updated?'NEW-BOX':'OLD-BOX']:
+      ['2026/10/05 20:35:36','101 366','OK',wrongCode?'OTHER':updated?'TEST-1':'OLD'])
+      .map(textContent=>({textContent}))}
+  ]};
+  const button={textContent:'Найти',disabled:false,getClientRects:()=>[{}],click(){clicks++;updated=!unchanged;}};
+  const document={body:{},querySelectorAll:selector=>selector==='input'?(ambiguous?[input,new Input()]:[input]):
+    selector==='button'?[button]:selector==='table'?[table]:[]};
+  const chrome={scripting:{async executeScript({func,args}){
+    return [{result:await vm.runInNewContext('('+func.toString()+')(...args)',{
+      document,location:{origin:host},HTMLInputElement:Input,args,
+      Event:class {constructor(type){this.type=type;}},KeyboardEvent:class {constructor(type){this.type=type;}},
+      MutationObserver:class {observe(){}disconnect(){}},
+      Date:{now:()=>now},setTimeout:fn=>{deadline=fn;return 1;},clearTimeout(){},clearInterval(){},
+      setInterval:fn=>{for(let i=0;i<6;i++){now+=250;fn();}deadline();return 2;}
+    })}];
+  }}};
+  return {chrome,host,clicks:()=>clicks};
+}
+
+test('workplace adapters bind search results using observed labels and normalize source schemas',async()=>{
+  const api=runner();
+  for(const role of ['datalens','asgard']) {
+    const f=workplaceFixture(role);
+    const table=await api.workplaceSearch(f.chrome,7,role,'TEST-1',f.host);
+    assert.equal(table.rows[0][0],'TEST-1');
+    if(role==='datalens') {
+      assert.equal(table.rows[0][1],'101366');
+      assert.equal(table.rows[0][3],'2026-10-05 20:35:36');
+      assert.equal(f.clicks(),0);
+    } else {
+      assert.equal(table.rows[0][1],'Выдан');
+      assert.equal(table.rows[0][2],'NEW-BOX');
+      assert.equal(f.clicks(),1);
+    }
+  }
+});
+
+test('workplace adapters reject ambiguous fields, stale results, foreign hosts and foreign scan identity',async()=>{
+  const api=runner();
+  for(const role of ['datalens','asgard']) {
+    for(const config of [{ambiguous:true},{unchanged:true}]) {
+      const f=workplaceFixture(role,config);
+      await assert.rejects(()=>api.workplaceSearch(f.chrome,7,role,'TEST-1',f.host),/unmapped_search_results/);
+    }
+  }
+  const f=workplaceFixture('datalens',{wrongCode:true});
+  await assert.rejects(()=>api.workplaceSearch(f.chrome,7,'datalens','TEST-1',f.host),/unmapped_search_results/);
+  await assert.rejects(()=>api.workplaceSearch(f.chrome,7,'asgard','TEST-1','https://evil.example'),/unsupported_dynamic_search/);
+});
+
+test('queued seeded orders route through workplace searches and skip Asgard for found cargo',async()=>{
+  const api=runner(),chrome=fakeBrowser(),searched=[];
+  chrome.scripting.executeScript=async({args})=>{
+    const [role,code]=args;searched.push([role,code]);
+    return [{result:role==='datalens'?{
+      columns:['main_partner_code_original','sc_id','result','scanned_at'],
+      rows:[[code,'101366','OK',code==='FOUND'?'2026-10-05 20:35:36':'2026-08-01 10:00:00']]
+    }:{columns:['cargo_place','status','box_id'],rows:[[code,'Выдан','BOX-1']]}}];
+  };
+  let reconciled;
+  const result=await api.run(chrome,{
+    inventory:'https://docs.google.com/spreadsheets/d/example/edit',
+    datalens:'https://datalens.yandex-team.ru/orders',asgard:'https://asgard.market.yandex-team.ru/search'
+  },async message=>{assert.equal(message.type,'reconcile_site_tables');reconciled=message.snapshots;
+    return {ok:true,type:'site_tables_reconciled',persisted:false,read_only:true,write_enabled:false,total:2,summary:{found:1,in_progress:1,manual_review:0}};
+  },async()=>{}, {exactGetSearch:true,seedInventory:{columns:['cargo_place','inventory_date'],
+    rows:[['FOUND','2026-09-26'],['CHECK','2026-09-26']]}});
+  assert.deepEqual(searched,[['datalens','FOUND'],['datalens','CHECK'],['asgard','CHECK']]);
+  assert.equal(result.phase,'reconciled');
+  assert.equal(reconciled.asgard.rows[0][0],'CHECK');
+  assert.equal(chrome.stats.created,chrome.stats.removed);
+});
