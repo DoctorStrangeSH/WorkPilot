@@ -294,7 +294,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
   };
 
   const sheetsAuthorized=sheetsStatus.status==="authorized"||sheetsStatus.connected;
-  const statusLabel=sheetsAuthorized?"Подключён · доступ только для чтения":
+  const statusLabel=sheetsAuthorized?"Подключён · чтение и редактирование":
     sheetsStatus.status==="authorizing"?"Ожидает подтверждения в браузере":
     sheetsStatus.status==="reauthorization_required"?"Требуется повторная авторизация":
     sheetsStatus.status==="denied"?"Доступ не предоставлен":
@@ -305,14 +305,14 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
 
   return <section className="page sources-page">
     <div className="page-head"><div><div className="eyebrow">РАБОЧИЕ ПОДКЛЮЧЕНИЯ</div><h1>Источники</h1><p>Каждый источник подключается отдельно, с минимальными разрешениями и понятным статусом.</p></div></div>
-    <div className="sources-notice"><ShieldCheck size={17}/><span>Google Sheets подключается отдельно только для чтения. Malenia использует данные ИНВенты для расследования заказов и не меняет исходную таблицу. ChatGPT не передаёт свои подключения Malenia.</span></div>
+    <div className="sources-notice"><ShieldCheck size={17}/><span>Google Sheets подключается отдельно для чтения и редактирования. Маления может записывать результаты проверки заказов в ИНВенту. ChatGPT не передаёт свои подключения Malenia.</span></div>
     {sheetError?<p className="alert error" role="alert">{sheetError}</p>:null}
     {sheetNotice?<p className="alert success" role="status">{sheetNotice}</p>:null}
     <div className="sources-grid">
       <article className="panel source-card google-source-card">
         <div className="source-card-top"><span className="source-icon sheets"><Database size={19}/></span><span className={"source-state "+(sheetsAuthorized?"ready":"pending")}>{statusLabel}</span></div>
         <h2>Google Sheets · ИНВента</h2>
-        <p>Отдельная авторизация Malenia. Запрашивается только доступ на чтение Google Sheets. Исходные данные остаются нетронутыми; результат расследования хранится отдельно в Malenia.</p>
+        <p>Отдельная авторизация Malenia. Запрашивается доступ на чтение и редактирование Google Sheets. Результаты проверки можно записывать в исходную таблицу. После обновления подключи Google заново, чтобы предоставить право записи.</p>
         {!connected?<p className="source-help">Сначала запустите локальный агент на главной странице.</p>:null}
         {!sheetsAuthorized?
           <div className="google-connect-form">
@@ -331,7 +331,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
               <button className="primary" disabled={busy} onClick={()=>void analyzeActiveInventa()}>{busy?"Анализируем…":"Подключить ИНВенту для расследования"}</button>
               <button className="secondary" disabled={busy} onClick={()=>void disconnectSheets()}>Отключить Google</button>
             </div>
-            <small>Маления ищет Google Sheets во вкладках, которыми ты поделился через Browser Bridge. Если gid отсутствует, она определяет лист по заголовкам ИНВенты. Исходная таблица доступна только для чтения и не изменяется.</small>
+            <small>Маления ищет Google Sheets во вкладках, которыми ты поделился через Browser Bridge. Если gid отсутствует, она определяет лист по заголовкам ИНВенты. Подключение Google разрешает чтение и редактирование. Сам анализ таблицы не изменяет ячейки.</small>
           </div>
           {inventaReport?<div className="sheet-preview">
             <div className="sheet-preview-head"><b>{inventaReport.source.spreadsheet_title} · {inventaReport.source.sheet_title}</b><small>{inventaReport.analysis.rows_analyzed} строк</small></div>
