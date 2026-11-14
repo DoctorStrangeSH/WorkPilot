@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Malenia Browser Bridge",
+  "version": "1.5.0",
+  "description": "Read explicitly authorized resource pages with a bounded read-only background task.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "nativeMessaging",
+    "tabs",
+    "storage",
+    "alarms"
+  ],
+  "action": {
+    "default_title": "Malenia Browser Bridge",
+    "default_popup": "popup.html"
+  },
+  "optional_host_permissions": [
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

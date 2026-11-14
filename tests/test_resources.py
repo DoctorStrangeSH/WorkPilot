@@ -1,6 +1,6 @@
 import unittest
 
-from workpilot.resources import GIB, classify_memory
+from malenia.resources import GIB, classify_memory
 
 
 class ResourceClassificationTests(unittest.TestCase):

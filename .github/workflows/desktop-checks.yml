@@ -1,0 +1,52 @@
+name: Desktop checks
+
+on:
+  push:
+    branches: ["main", "feat/**"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install frontend dependencies
+        working-directory: desktop
+        run: npm install
+      - name: Build frontend
+        working-directory: desktop
+        run: npm run build
+      - name: Test Browser Bridge connection diagnostics
+        run: node --test tests/browser_bridge.test.cjs
+      - name: Test Browser Bridge source configuration
+        run: node --test tests/browser_targets.test.cjs
+      - name: Test autonomous browser traversal
+        run: node --test tests/browser_automation.test.cjs
+      - name: Test whole-sheet automatic continuation and pause
+        run: node --test tests/inventa_run.test.cjs
+      - name: Test desktop-triggered browser audit dispatch
+        run: node --test tests/browser_desktop_dispatch.test.cjs
+      - name: Test permission panel rendering
+        run: node --test tests/permissions_ui.test.cjs
+      - name: Test AI task review and retry
+        run: node --test tests/ai_ui.test.cjs
+      - name: Test primary assistant navigation and task labels
+        run: node --test tests/navigation_ui.test.cjs
+      - name: Check Tauri host
+        run: cargo check --manifest-path desktop/src-tauri/Cargo.toml
+      - name: Test runtime archive verification
+        run: cargo test --manifest-path desktop/src-tauri/Cargo.toml
+      - name: Install official portable runtime on disposable runner
+        run: cargo test --manifest-path desktop/src-tauri/Cargo.toml official_runtime_install -- --ignored
+      - name: Run Python unit tests
+        env:
+          PYTHONPATH: agent
+        run: python -m unittest discover -s tests -v

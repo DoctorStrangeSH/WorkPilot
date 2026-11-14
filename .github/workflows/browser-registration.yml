@@ -1,0 +1,38 @@
+name: Browser registration (Windows PowerShell 5.1)
+on:
+  push:
+    branches: ["feat/desktop-shell"]
+    paths:
+      - "packaging/*.ps1"
+      - ".github/workflows/browser-registration.yml"
+      - ".github/workflows/windows-installer.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  registration:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert ASCII and parse with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($PSVersionTable.PSEdition -ne "Desktop" -or $PSVersionTable.PSVersion.Major -ne 5) { throw "Expected Windows PowerShell 5.1" }
+          Get-ChildItem packaging/*.ps1 | ForEach-Object {
+            $bytes = [IO.File]::ReadAllBytes($_.FullName)
+            if (@($bytes | Where-Object { $_ -gt 127 }).Count -gt 0) { throw "Non-ASCII setup script: $_" }
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) { throw "Parser rejected $_" }
+          }
+      - name: Exercise isolated registration
+        shell: powershell
+        run: ./packaging/test_browser_bridge_registration.ps1
+
+      - name: Exercise manual-ID setup and tamper rejection
+        shell: powershell
+        run: |
+          ./packaging/test_browser_bridge_registration.ps1 -UseSetupWizard
+          ./packaging/test_browser_setup.ps1

@@ -1,0 +1,169 @@
+name: Windows installer
+
+on:
+  push:
+    branches: ["main", "feat/desktop-shell"]
+    paths:
+      - "agent/**"
+      - "browser-extension/**"
+      - "desktop/**"
+      - "packaging/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/windows-installer.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Validate Browser Bridge PowerShell scripts (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          $scripts = @(
+            "packaging/setup_browser_bridge.ps1",
+            "packaging/test_browser_setup.ps1",
+            "packaging/register_browser_bridge.ps1",
+            "packaging/unregister_browser_bridge.ps1",
+            "packaging/test_browser_bridge_registration.ps1"
+          )
+          if ($PSVersionTable.PSEdition -ne "Desktop" -or $PSVersionTable.PSVersion.Major -ne 5) {
+            throw "Windows PowerShell 5.1 is required."
+          }
+          foreach ($script in $scripts) {
+            $bytes = [IO.File]::ReadAllBytes((Resolve-Path $script).Path)
+            if (@($bytes | Where-Object { $_ -gt 127 }).Count -gt 0) {
+              throw "Non-ASCII bytes in setup script: $script"
+            }
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script).Path,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | Format-List | Out-String | Write-Error
+              throw "PowerShell syntax validation failed: $script"
+            }
+            Write-Host "PowerShell syntax OK: $script"
+          }
+
+      - name: Package local Python agent
+        run: >-
+          python -m PyInstaller --clean --onedir
+          --name malenia-agent
+          --distpath desktop/src-tauri/resources
+          --workpath "$env:RUNNER_TEMP/malenia-pyinstaller"
+          --paths agent
+          --hidden-import malenia.google_sheets
+          --hidden-import malenia.google_oauth
+          --hidden-import malenia.secret_store
+          --hidden-import malenia.order_check
+          packaging/malenia_agent_entry.py
+
+      - name: Verify bundled agent
+        shell: pwsh
+        run: |
+          $agent = "desktop/src-tauri/resources/malenia-agent/malenia-agent.exe"
+          if (!(Test-Path $agent)) { throw "Bundled Python agent was not produced." }
+          $size = (Get-Item $agent).Length
+          if ($size -lt 1000000) { throw "Bundled agent looks unexpectedly small ($size bytes)." }
+          Write-Host "Bundled agent size: $size bytes"
+          & $agent --help | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "Bundled agent smoke test failed." }
+
+      - name: Smoke-test packaged Sherlock skills and local SQLite
+        run: python packaging/smoke_test_packaged_skills.py desktop/src-tauri/resources/malenia-agent/malenia-agent.exe
+
+      - name: Verify bundled agent duplicate-start protection
+        run: python packaging/smoke_test_agent_instance.py desktop/src-tauri/resources/malenia-agent/malenia-agent.exe
+
+      - name: Package Native Messaging host
+        run: >-
+          python -m PyInstaller --clean --onedir
+          --name malenia-native-host
+          --distpath desktop/src-tauri/resources
+          --workpath "$env:RUNNER_TEMP/malenia-native-host-pyinstaller"
+          --paths agent
+          packaging/malenia_native_host_entry.py
+
+      - name: Verify Native Messaging host
+        shell: pwsh
+        run: |
+          $hostExe = "desktop/src-tauri/resources/malenia-native-host/malenia-native-host.exe"
+          if (!(Test-Path $hostExe)) { throw "Native Messaging host was not produced." }
+          $size = (Get-Item $hostExe).Length
+          if ($size -lt 1000000) { throw "Native host looks unexpectedly small ($size bytes)." }
+          python packaging/smoke_test_native_host.py $hostExe
+
+      - name: Exercise registration with bundled host (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          & ./packaging/test_browser_bridge_registration.ps1 -NativeHostPath (Resolve-Path "desktop/src-tauri/resources/malenia-native-host/malenia-native-host.exe").Path
+
+      - name: Prepare browser extension archive
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "malenia-browser-extension.zip"
+          Compress-Archive -Path "browser-extension/*" -DestinationPath $archive -Force
+          if (!(Test-Path $archive)) { throw "Browser extension archive was not created." }
+
+      - name: Install frontend dependencies
+        working-directory: desktop
+        run: npm install
+
+      - name: Build NSIS installer
+        working-directory: desktop
+        run: npm run tauri -- build --bundles nsis
+
+      - name: Verify single desktop instance
+        shell: powershell
+        run: |
+          $desktopExe = (Resolve-Path "desktop/src-tauri/target/release/Malenia.exe").Path
+          python packaging/smoke_test_desktop_instance.py $desktopExe
+          if ($LASTEXITCODE -ne 0) { throw "Malenia single-instance smoke test failed" }
+
+      - name: Verify installed resources and locked-agent upgrade
+        run: python packaging/smoke_test_installer_upgrade.py
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: malenia-windows-installer
+          path: desktop/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload browser extension preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: malenia-browser-extension
+          path: ${{ runner.temp }}/malenia-browser-extension.zip
+          if-no-files-found: error
+          retention-days: 14
