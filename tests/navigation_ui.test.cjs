@@ -31,7 +31,9 @@ test('sources page is reachable and shows truthful connection state', () => {
   assert.match(app, /<Nav[^\n]*label="Источники"/);
   assert.match(app, /Google Sheets · ИНВента/);
   assert.match(app, /ChatGPT не передаёт свои подключения Malenia/);
-  assert.match(app, /Malenia пока не читает статусы или историю коробок/);
+  assert.match(app, /Вкладка передана · требуется тест/);
+  assert.match(app, /Как настроить проверку/);
+  assert.doesNotMatch(app, /Дашборд пока не читается приложением/);
   assert.match(app, /ручная передача любых HTTPS-вкладок/);
   assert.match(app, /автоматический обход — последовательно прочитать три явно разрешённых домена/);
   assert.match(app, /Открыть Browser Bridge/);
