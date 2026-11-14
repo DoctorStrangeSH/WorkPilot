@@ -8,14 +8,25 @@ const automation = fs.readFileSync(path.resolve(__dirname,'../browser-extension/
 const setup = fs.readFileSync(path.resolve(__dirname,'../browser-extension/targets.js'),'utf8');
 const flush = () => new Promise(resolve=>setImmediate(resolve));
 function screen(granted=true, audit=null) {
-  const names = ['targetInventory','targetDatalens','targetAsgard','saveTargets','targetsStatus','orderAuditStatus'];
+  const names = ['targetInventory','targetDatalens','targetAsgard','saveTargets','targetsStatus','orderAuditStatus',
+    'discoverTargets','selectinventory','selectdatalens','selectasgard'];
   const nodes=Object.fromEntries(names.map(name=>[name,{value:'',textContent:'',className:'',disabled:false,
+    options:[],replaceChildren(){this.options=[];},append(option){this.options.push(option);},
     addEventListener(event,handler){this[event]=handler;}}]));
   let stored=null, requested=0;
   const chrome={storage:{local:{async get(){return {};},async set(value){stored=value;}},
     session:{async get(){return {maleniaAudit:audit};}}},
     permissions:{async request({origins}){requested++; assert.equal(origins.length,3);return granted;}}};
-  const ctx={URL,chrome,document:{getElementById:id=>nodes[id]}};
+  chrome.tabs={async query(){return [
+    {title:'ИНВента',url:'https://docs.google.com/spreadsheets/d/example/edit#gid=42'},
+    {title:'DataLens',url:'https://analytics.example/dashboard?token=secret'},
+    {title:'Asgard',url:'https://asgard.example/returns'},
+    {title:'Duplicate',url:'https://asgard.example/returns#private'},
+    {title:'Internal',url:'chrome://settings'},
+    {title:'Credentials',url:'https://user:pass@secret.example/'},
+    {title:'Local',url:'https://localhost/'},
+  ];}};
+  const ctx={URL,chrome,document:{getElementById:id=>nodes[id],createElement:()=>({})}};
   vm.createContext(ctx);vm.runInContext(automation,ctx);vm.runInContext(setup,ctx);
   nodes.targetInventory.value='https://docs.google.com/spreadsheets/d/example';
   nodes.targetDatalens.value='https://analytics.example/dashboard';
@@ -29,6 +40,22 @@ test('user explicitly saves three read-only sources and requests scoped permissi
   assert.equal(ui.stored.maleniaTargets.datalens,'https://analytics.example/dashboard');
   assert.equal(ui.stored.maleniaExactGetSearch,true);
   assert.match(ui.nodes.targetsStatus.textContent,/Готово/);
+});
+
+test('open-tab picker needs no typed URLs and reads no page content before permission',async()=>{
+  const ui=screen();
+  await ui.nodes.discoverTargets.click();
+  assert.equal(ui.requested,0);assert.equal(ui.stored,null);
+  assert.equal(ui.nodes.selectinventory.options.length,4);
+  assert.ok(ui.nodes.selectinventory.options.every(option=>!/[?#]|secret|user:pass/.test(option.value)));
+  for (const [role,url] of Object.entries({inventory:'https://docs.google.com/spreadsheets/d/example/edit',
+    datalens:'https://analytics.example/dashboard',asgard:'https://asgard.example/returns'})) {
+    ui.nodes['select'+role].value=url;
+    ui.nodes['select'+role].change();
+  }
+  await ui.click();
+  assert.equal(ui.requested,1);
+  assert.equal(ui.stored.maleniaTargets.inventory,'https://docs.google.com/spreadsheets/d/example/edit');
 });
 test('denied permission never persists target URLs',async()=>{
   const ui=screen(false);await ui.click();
