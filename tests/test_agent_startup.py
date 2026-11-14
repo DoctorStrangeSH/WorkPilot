@@ -52,4 +52,4 @@ class AgentStartupTests(unittest.TestCase):
         with patch.dict(os.environ, {'LOCALAPPDATA': str(self.root), 'XDG_DATA_HOME': str(self.root)}):
             self.assertEqual(data_directory(), self.root / 'Malenia')
             self.assertEqual(database_path(), self.root / 'Malenia' / 'malenia.sqlite3')
-        self.assertEqual(__version__, '0.6.1')
+        self.assertEqual(__version__, '0.6.2')
