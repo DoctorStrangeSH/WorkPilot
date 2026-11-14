@@ -270,6 +270,31 @@ fn request_browser_audit(state: State<'_, AgentState>) -> Result<Value, String> 
 }
 
 #[tauri::command]
+fn remove_shared_browser_tab(state: State<'_, AgentState>, tab_id: String) -> Result<Value, String> {
+    // Never allow user-provided path segments to alter the local API endpoint.
+    let valid_id = tab_id.len() == 36 && tab_id.chars().enumerate().all(|(index, ch)| {
+        if matches!(index, 8 | 13 | 18 | 23) { ch == '-' } else { ch.is_ascii_hexdigit() }
+    });
+    if !valid_id { return Err("Некорректный идентификатор вкладки".to_string()); }
+    let token = state.token.lock().map_err(|_| "Состояние агента недоступно".to_string())?
+        .clone().ok_or_else(|| "Сначала запустите локального агента".to_string())?;
+    reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|_| "Не удалось создать HTTP-клиент".to_string())?
+        .delete(format!("http://{API_HOST}:{API_PORT}/v1/browser/tabs/{tab_id}"))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .map_err(|_| "Локальный агент недоступен".to_string())?
+        .error_for_status()
+        .map_err(|error| format!("Не удалось убрать вкладку из Малении: {error}"))?
+        .json::<Value>()
+        .map_err(|_| "Некорректный ответ локального агента".to_string())
+}
+
+#[tauri::command]
 fn create_task(state: State<'_, AgentState>, title: String, description: String, request_id: Option<String>) -> Result<Value, String> {
     let token = state.token.lock().map_err(|_| "Ошибка состояния токена".to_string())?
         .clone().ok_or_else(|| "Сначала запусти агента".to_string())?;
@@ -665,7 +690,7 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .manage(AgentState::default())
         .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard,
-            request_browser_audit, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, get_skills, skill_action, suggest_skill, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, analyze_active_inventa, check_first_inventa_order, disconnect_google_sheets, preview_order, preview_order_batch])
+            request_browser_audit, remove_shared_browser_tab, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, get_skills, skill_action, suggest_skill, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, analyze_active_inventa, check_first_inventa_order, disconnect_google_sheets, preview_order, preview_order_batch])
         .run(tauri::generate_context!())
         .expect("error while running Malenia");
 }

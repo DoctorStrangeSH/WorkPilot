@@ -132,6 +132,17 @@ test('browser workspace displays safe progress without order identifiers',()=>{
   assert.match(app,/Обработано источников/);
 });
 
+test('shared browser tabs can be removed locally only after confirmation',()=>{
+  assert.match(app,/invoke\("remove_shared_browser_tab",\{tabId:tab\.id\}\)/);
+  assert.match(app,/window\.confirm\(/);
+  assert.match(app,/Вкладка в браузере останется открытой/);
+  assert.match(app,/Убрать из Малении/);
+  const native=fs.readFileSync(path.resolve(__dirname,'../desktop/src-tauri/src/main.rs'),'utf8');
+  assert.match(native,/fn remove_shared_browser_tab\(/);
+  assert.match(native,/\.delete\(format!\("http:\/\//);
+  assert.match(native,/v1\/browser\/tabs\/\{tab_id\}/);
+});
+
 test('skills are a first-class reviewed workspace not an inventory-only workflow',()=>{
   assert.match(app,/label="Навыки" active=\{page==="skills"\}/);
   assert.match(app,/<SkillsPage connected=\{connected\}\/>/);

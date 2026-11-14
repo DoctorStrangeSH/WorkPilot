@@ -137,6 +137,16 @@ function Empty({title,text}:{title:string;text:string}){return <div className="e
 function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];audit:BrowserAudit|null;job:BrowserAuditJob|null;connected:boolean;onRequested:()=>void}){
   const [sending,setSending]=useState(false);
   const [requestError,setRequestError]=useState("");
+  const [removingTab,setRemovingTab]=useState<string|null>(null);
+  const removeTab=async(tab:BrowserTab)=>{
+    if(!connected || removingTab || !window.confirm(`Убрать «${tab.title}» из списка Малении? Вкладка в браузере останется открытой.`))return;
+    setRemovingTab(tab.id);setRequestError("");
+    try{
+      await invoke("remove_shared_browser_tab",{tabId:tab.id});
+      onRequested();
+    }catch(error){setRequestError(`Не удалось убрать вкладку из Малении: ${String(error)}`);}
+    finally{setRemovingTab(null);}
+  };
   const requestAudit=async()=>{
     if(sending || !connected || job?.status==="pending" || job?.status==="running")return;
     setSending(true);setRequestError("");
@@ -184,7 +194,7 @@ function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];a
       </div> : <p className="note">Пока нет завершённой сверки. Передача вкладки сама по себе не запускает проверку заказа. Для неё нужны три специализированных источника и подтверждённые результаты чтения.</p>}
     </div>
     <div className="panel browser-panel"><div className="panel-head"><div><h3>Вкладки, которыми вы поделились</h3><p>Последние 20 вкладок, которыми ты поделился. Это не ограничение количества вкладок или сайтов.</p></div><span className="live">{tabs.length} SHARED</span></div>
-      {tabs.length?<div className="browser-tab-list">{tabs.map(tab=><article className="browser-tab" key={tab.id}><span className="browser-tab-icon"><Globe2 size={16}/></span><div className="browser-tab-copy"><b>{tab.title}</b><a href={tab.url} target="_blank" rel="noreferrer">{tab.url}</a><small>Передано вручную · {time(tab.shared_at)}</small></div></article>)}</div>:<Empty title="Пока нет переданных вкладок" text="Установите Malenia Browser Bridge, затем откройте нужную страницу и нажмите кнопку расширения «Поделиться вкладкой»."/>}
+      {tabs.length?<div className="browser-tab-list">{tabs.map(tab=><article className="browser-tab" key={tab.id}><span className="browser-tab-icon"><Globe2 size={16}/></span><div className="browser-tab-copy"><b>{tab.title}</b><a href={tab.url} target="_blank" rel="noreferrer">{tab.url}</a><small>Передано вручную · {time(tab.shared_at)}</small></div><button className="browser-tab-remove" type="button" title="Убрать запись из Малении, не закрывая вкладку браузера" disabled={!connected||!!removingTab} onClick={()=>void removeTab(tab)}>{removingTab===tab.id?"Убираем…":"Убрать из Малении"}</button></article>)}</div>:<Empty title="Пока нет переданных вкладок" text="Установите Malenia Browser Bridge, затем откройте нужную страницу и нажмите кнопку расширения «Поделиться вкладкой»."/>}
     </div>
     <div className="note"><CircleHelp size={15}/>Native Messaging работает только после регистрации расширения и хоста. Поддержка проверяется на установленной версии Яндекс Браузера; автоматический доступ к вкладкам не включён.</div>
   </section>;

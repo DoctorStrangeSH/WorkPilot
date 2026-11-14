@@ -505,6 +505,31 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(payload["tabs"][0]["title"], "Example")
         self.assertEqual(payload["tabs"][0]["url"], "https://example.com/path")
 
+    def test_unsharing_tab_requires_auth_and_does_not_close_browser(self):
+        first = self.store.record_browser_tab("https://example.com/first", "First")
+        second = self.store.record_browser_tab("https://example.com/second", "Second")
+
+        def delete(tab_id, authenticated=True):
+            headers = {"Authorization": f"Bearer {self.token}"} if authenticated else {}
+            request = Request(f"{self.base_url}/v1/browser/tabs/{tab_id}",
+                              method="DELETE", headers=headers)
+            try:
+                response = urlopen(request, timeout=2)
+            except HTTPError as error:
+                response = error
+            with response:
+                return response.code, json.loads(response.read())
+
+        self.assertEqual(delete(first["id"], authenticated=False)[0], 401)
+        self.assertEqual(delete("not-an-id")[0], 404)
+        status, result = delete(first["id"])
+        self.assertEqual(status, 200)
+        self.assertEqual(result, {"removed": True, "browser_tab_closed": False})
+        self.assertEqual(delete(first["id"])[0], 404)
+        status, payload = self.api("/v1/browser/tabs")
+        self.assertEqual(status, 200)
+        self.assertEqual([tab["id"] for tab in payload["tabs"]], [second["id"]])
+
     def test_authenticated_request_can_queue_task(self):
         body = json.dumps({"title": "Read-only check", "description": "Test"}).encode()
         request = Request(
