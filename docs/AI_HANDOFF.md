@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 30621)
-Total output lines: 903
+Warning: truncated output (original token count: 31109)
+Total output lines: 912
 
 ## CI update — 2026-11-12 — Excel batch checks
 
@@ -583,16 +583,7 @@ Implemented in PR #2 branch `feat/desktop-shell`:
 - `browser-extension/background.js`: MV3 service worker task runs independent of popup using persistent Native Messaging `connectNative` port for task lifetime; one outstanding request at a time, request IDs matched, five-second response deadline. It stores only sanitized role/progress/character-count metadata in `chrome.storage.session`. Port is closed after run; no autonomous task runs on startup.
 - Popup version 1.3.0 exposes three resource HTTPS URL fields and one-button automatic read-only audit, after Chrome's exact-origin permission prompt. Sanitized resource URL paths are retained in extension local storage for the next run. No credentials or page text are saved.
 - Native host already supports `inspect_active_page`, validates bounded text, reports characters and `persisted: false`, but does **not** forward text to the local AI agent or correlate orders. Thus the current result is a 3-site read success/failure summary, not an actual business workflow output.
-- Desktop Browser/Sources privacy messages corrected for new opt-in rendered-text reading. `browser-extension/README.md` explains capability and setup. `tests/browser_automation.test.cjs` tests URL restrictions, sequential traversal, cleanup, redirect block, host failure. CI desktop-chec…621 tokens truncated…able extraction for the three configured pages, sends a single ephemeral reconciliation request after all three pages are read, and stores only outcome counts in extension session progress. It does not search/paginate the remote apps or read inputs. No page text or cargo code is saved. The popup shows explicit distinction between `reconciled` and merely `read_only`.
-- Tests: `tests/test_site_reconciliation.py`, `tests/test_native_messaging.py`, `tests/browser_automation.test.cjs` now cover deterministic matching, duplicate records, unavailable mappings, no write mode, and no identifiers in progress. `browser-extension/README.md` documents the exact provisional field names and the critical limitation: they are **not verified to match any real company website**.
-- A JavaScript source corruption caused an `Illegal continue statement` in CI; fixed in commit `474963fc`. Earlier Python CI was green as of `a9914851`, while browser desktop CI needed the syntax fix. Check latest SHA and workflow state before asserting successful browser tests or installer.
-- Do not claim live ИНВента/DataLens/Asgard functional integration yet. Current code tries to match only visible standard HTML tables with literal internal field labels, and only up to 100 rendered rows. Actual resource UIs, selectors, SPA state, search forms, pagination and approved mutation capabilities still must be mapped and tested in the user's authorized environment.
-- Next: actual read-only adapters per site with proof of current document/site identity, query-by-cargo, pagination and source provenance, coupled to user-visible desktop job/results. Need explicit authorization for any write task. Never bypass MFA, CAPTCHA or organizational policy.
-
-
-## 2026-11-12 — Read-only automatic pagination
-
-- The user reiterated autonomous execution: Malenia must navigate sources herself, not require per-page manual assistance. Continue on PR #2 in `feat/desktop-shell`, not `main`.
+- Desktop Browser/Sources privacy messages corrected for new opt-in rendered-text reading. `browser-extension/README.md` explains capability and setup. `tests/browser_automation.test.cjs` tests URL restrictions, sequential traversal, cleanup, redirect block, host failure. CI desktop-chec…1109 tokens truncated…t `main`.
 - `browser-extension/automation.js` now follows an explicit HTML `a[rel~='next'][href]` link for up to 5 pages **per resource**, only within the originally approved HTTPS origin. Cross-origin redirects, credentials, fragments, custom ports, repeated URLs, table schema changes and more than 100 total rows fail closed. The extension aggregates matching rows before sending one ephemeral `reconcile_site_tables` request to the local native host, closes its inactive tab on completion/failure and retains only per-resource reading counts and page count in session progress. No site record changes are possible.
 - `browser-extension/popup.js` reports the number of pages read per resource.
 - `tests/browser_automation.test.cjs` adds multi-page merging, restriction on next-page URL, and pagination cycle coverage. CI workflow already includes this test. Desktop run `43276041134` has passed frontend, Browser Bridge, autonomous browser traversal, permission panel, AI and navigation Node checks; Rust checks were still running at last observation. Python run `43276041170` passed. Recheck the latest head and installer before claiming all checks green.
@@ -890,3 +881,12 @@ Latest fix commit at this note: `4f46fdd1d7c9dc77a4b26e3244f6ed8b14af87e4` (late
 - Collapse connection configuration and Browser technical/privacy diagnostics; show a primary Browser action linking to the full-sheet workspace. Legacy first-order/manual batch controls remain in advanced details for diagnostics.
 - Tests cover 45-order automatic continuation, acknowledged counts, pause/resume, failed/expired/replaced jobs, concurrent start and source-switch guards. All 87 Node tests and production frontend build passed. CI now includes controller tests.
 - Remaining: actual installed-site verification, durable per-order evidence/results and learning review, automatic audit-result-to-Sheets writeback, Asgard extended history. A pending job still requires configured extension permissions; the new UI does not fix a disconnected bridge.
+
+## 2026-11-14 — fix false completion and add real worksheet/date selection
+
+- User reports program unusable and no inventory-date selection. Found batch endpoint treated eligible=0 as complete (offset 0 >= 0); return the actual blocker instead. Also add actual Дата выгрузки and Дата инвентаризации header aliases so archive-sheet year can be inferred from screenshot-shaped data.
+- Rust preserves [inventa_batch_complete] machine code through translated errors; controller no longer shows completed-sheet errors as generic failures. UI headings reflect error/completed/missing Google/missing date rather than always Готова начать.
+- Active-sheet read returns bounded worksheet metadata. Sources automatically loads names and detected date after Google authorization; dropdown offers named worksheets, date input allows explicit ISO inventory-date override. Date is passed through Tauri into all batch analysis/pagination and fingerprint. Explicit Начать заново resets cursor before launch. Required connection/date steps are visible above the run controls.
+- Asgard adapter selects exact visible Обратный поток navigation when available, since shared URLs may be SPA root. This remains live-unverified.
+- Tests: parser fixture with actual export header + archive title, valid/invalid date override and fingerprint changes; HTTP verifies selected date reaches claimed browser job and empty rows are not complete; controller verifies date on every batch and reset/resume. Existing server suite (33) and parser suite (10) passed; frontend production build passed; 87 existing Node checks passed plus new date/reset controller test.
+- Still not a complete deliverable: automatic writeback, full per-order result/evidence UI and learned-rule execution are absent. Do not call it ready for other users. Windows installer and real corporate adapters require actual observed verification.
