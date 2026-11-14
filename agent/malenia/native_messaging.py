@@ -1,8 +1,8 @@
 """Restricted Chrome-compatible Native Messaging host for Malenia.
 
 The host accepts only messages from the extension ID explicitly registered by the
-user. It stores only a tab title and a URL with query/fragment removed, and only
-after the user presses the extension's Share button.
+user. Sharing stores a tab title and sanitized URL (only a numeric Google Sheets
+worksheet gid may survive), after the user presses the extension's Share button.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import struct
 import sys
 from pathlib import Path
 from typing import Any, BinaryIO
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 from .config import data_directory
 from .store import TaskStore
@@ -95,8 +95,15 @@ def _clean_tab_url(value: Any) -> str:
         parsed.port
     except ValueError as error:
         raise ValueError("tab URL has an invalid port") from error
-    # Query strings and fragments may contain private or session-like data.
-    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path or "/", "", ""))
+    # Only a numeric Sheets worksheet ID is retained; all other URL data goes.
+    query = ""
+    if (parsed.scheme == "https" and parsed.netloc == "docs.google.com"
+            and re.fullmatch(r"/spreadsheets/d/[A-Za-z0-9_-]+/edit/?", parsed.path)):
+        gids = (parse_qs(parsed.query, keep_blank_values=True).get("gid", [])
+                + parse_qs(parsed.fragment, keep_blank_values=True).get("gid", []))
+        if gids and all(re.fullmatch(r"\d{1,16}", gid) and gid == gids[0] for gid in gids):
+            query = "gid=" + gids[0]
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path or "/", query, ""))
 
 
 def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
