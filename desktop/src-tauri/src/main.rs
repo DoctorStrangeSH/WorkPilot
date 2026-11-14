@@ -22,21 +22,45 @@ struct AgentState {
     child: Mutex<Option<Child>>,
     token: Mutex<Option<String>>,
     ai_child: Mutex<Option<Child>>,
+    closing: std::sync::atomic::AtomicBool,
 }
 
+
+fn terminate_owned_child(child: &mut Child) {
+    // Keep the Child handle alive while addressing this exact owned PID.
+    #[cfg(windows)]
+    if matches!(child.try_wait(), Ok(None)) {
+        use std::os::windows::process::CommandExt;
+        let taskkill = PathBuf::from(std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into()))
+            .join("System32").join("taskkill.exe");
+        let _ = Command::new(taskkill).args(["/PID", &child.id().to_string(), "/T", "/F"])
+            .creation_flags(0x08000000).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+impl AgentState {
+    fn shutdown(&self) {
+        self.closing.store(true, std::sync::atomic::Ordering::SeqCst);
+        for slot in [&self.ai_child, &self.child] {
+            let mut guard = slot.lock().unwrap_or_else(|error| error.into_inner());
+            if let Some(mut child) = guard.take() { terminate_owned_child(&mut child); }
+        }
+        *self.token.lock().unwrap_or_else(|error| error.into_inner()) = None;
+    }
+}
 
 impl Drop for AgentState {
     fn drop(&mut self) {
         if let Ok(slot) = self.ai_child.get_mut() {
             if let Some(mut child) = slot.take() {
-                let _ = child.kill();
-                let _ = child.wait();
+                terminate_owned_child(&mut child);
             }
         }
         if let Ok(child_slot) = self.child.get_mut() {
             if let Some(mut child) = child_slot.take() {
-                let _ = child.kill();
-                let _ = child.wait();
+                terminate_owned_child(&mut child);
             }
         }
     }
@@ -121,6 +145,7 @@ fn agent_directory() -> Result<PathBuf, String> {
 #[tauri::command]
 fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<String, String> {
     let mut child_guard = state.child.lock().map_err(|_| "Ошибка состояния агента".to_string())?;
+    if state.closing.load(std::sync::atomic::Ordering::SeqCst) { return Err("Приложение закрывается".into()); }
     if let Some(child) = child_guard.as_mut() {
         if child.try_wait().map_err(|error| error.to_string())?.is_none() {
             return Ok("Агент уже запущен".to_string());
@@ -218,7 +243,7 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
             }).unwrap_or(false);
             if !compatible {
                 if let Ok(mut guard) = state.child.lock() {
-                    if let Some(mut child) = guard.take() { let _ = child.kill(); let _ = child.wait(); }
+                    if let Some(mut child) = guard.take() { terminate_owned_child(&mut child); }
                 }
                 return Err("Обнаружены файлы агента другой версии. Закройте Малению и повторите установку обновления".to_string());
             }
@@ -229,8 +254,7 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
 
     if let Ok(mut guard) = state.child.lock() {
         if let Some(mut child) = guard.take() {
-            let _ = child.kill();
-            let _ = child.wait();
+            terminate_owned_child(&mut child);
         }
     }
     Err("Агент не ответил за 6 секунд. Проверь Python и порт 8765.".to_string())
@@ -240,8 +264,7 @@ fn start_agent(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<St
 fn stop_agent(state: State<'_, AgentState>) -> Result<String, String> {
     let mut child_guard = state.child.lock().map_err(|_| "Ошибка состояния агента".to_string())?;
     if let Some(mut child) = child_guard.take() {
-        let _ = child.kill();
-        let _ = child.wait();
+        terminate_owned_child(&mut child);
     }
     *state.token.lock().map_err(|_| "Ошибка состояния токена".to_string())? = None;
     Ok("Локальный агент остановлен".to_string())
@@ -392,7 +415,7 @@ fn start_local_ai_impl(state: &AgentState) -> Result<String, String> {
     let root = PathBuf::from(std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA недоступна".to_string())?).join("Malenia");
     let standard = PathBuf::from(std::env::var("LOCALAPPDATA").unwrap_or_default()).join("Programs/Ollama/ollama.exe");
     let executable = if standard.is_file() { standard } else { runtime_setup::ensure(&root)? };
-    if let Some(mut old) = slot.take() { let _ = old.kill(); let _ = old.wait(); }
+    if let Some(mut old) = slot.take() { terminate_owned_child(&mut old); }
     let mut command = Command::new(executable);
     command.arg("serve")
         .env("OLLAMA_HOST", "127.0.0.1:11434").env("OLLAMA_MODELS", root.join("models"))
@@ -408,7 +431,7 @@ fn start_local_ai_impl(state: &AgentState) -> Result<String, String> {
         if child.try_wait().map_err(|_| "Не удалось проверить Ollama".to_string())?.is_some() { break; }
         if ollama_ready() { *slot = Some(child); return Ok("Локальная модель готова к подключению".to_string()); }
     }
-    let _ = child.kill(); let _ = child.wait();
+    terminate_owned_child(&mut child);
     Err("Ollama не запустился".to_string())
 }
 
@@ -720,6 +743,19 @@ fn main() {
         }))
         .plugin(tauri_plugin_opener::init())
         .manage(AgentState::default())
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                window.state::<AgentState>().shutdown();
+            }
+        })
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                let state = handle.state::<AgentState>();
+                let _ = start_agent(handle.clone(), state);
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![start_agent, stop_agent, get_dashboard,
             request_browser_audit, remove_shared_browser_tab, create_task, cancel_task, decide_permission, get_ai_status, chat_ai, start_local_ai, get_setup_status, open_search_source, get_knowledge, knowledge_action, get_skills, skill_action, suggest_skill, install_sherlock, get_google_sheets_status, connect_google_sheets, read_google_sheet, analyze_active_inventa, check_first_inventa_order, check_inventa_order_batch, reset_inventa_order_batch, disconnect_google_sheets, preview_order, preview_order_batch])
         .run(tauri::generate_context!())
