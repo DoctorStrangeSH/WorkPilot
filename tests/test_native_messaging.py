@@ -103,6 +103,26 @@ class NativeMessagingProtocolTests(unittest.TestCase):
             self.assertFalse(response["ok"])
         self.assertEqual(self.store.list_browser_tabs(), [])
 
+    def test_sheets_sharing_retains_only_unambiguous_numeric_worksheet_id(self):
+        base = "https://docs.google.com/spreadsheets/d/example123/edit"
+        for suffix, expected in [
+            ("?token=secret#gid=42", "?gid=42"),
+            ("?gid=0&token=secret", "?gid=0"),
+            ("?gid=42#gid=42", "?gid=42"),
+            ("?gid=1#gid=2", ""),
+            ("?gid=secret", ""),
+            ("?gid=&gid=42", ""),
+        ]:
+            with self.subTest(suffix=suffix):
+                result = handle_message({"type": "share_active_tab",
+                    "tab": {"url": base + suffix, "title": "ИНВента"}}, self.store)
+                self.assertTrue(result["ok"])
+                self.assertEqual(result["tab"]["url"], base + expected)
+        other = handle_message({"type": "share_active_tab", "tab": {
+            "url": "https://docs.google.com.evil/spreadsheets/d/example123/edit?gid=42",
+            "title": "Other"}}, self.store)
+        self.assertNotIn("?", other["tab"]["url"])
+
     def test_inspection_is_ephemeral_and_bounded(self):
         before_tabs = self.store.list_browser_tabs()
         before_events = self.store.list_events()
