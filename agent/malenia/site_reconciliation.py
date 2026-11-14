@@ -6,6 +6,7 @@ browser, stores source data or changes site records.
 from __future__ import annotations
 
 from datetime import datetime, date
+import re
 from typing import Any
 
 from .order_batch import preview_batch, OrderBatchError
@@ -28,6 +29,10 @@ def _table(raw: Any, role: str) -> list[dict[str, str]]:
     if not isinstance(raw, dict) or set(raw) != {"columns", "rows"}:
         raise SiteSnapshotError("invalid_snapshot")
     columns, rows = raw["columns"], raw["rows"]
+    # Reviewed against the user's DataLens scan-history headers (2026-11-14).
+    if role == "datalens" and isinstance(columns, list):
+        columns = ["main_partner_code_original" if c == "place_external_id" else c
+                   for c in columns]
     if (not isinstance(columns, list) or not 1 <= len(columns) <= MAX_COLUMNS
             or not all(isinstance(c, str) and 0 < len(c) <= MAX_CELL for c in columns)
             or len(columns) != len(set(columns))
@@ -57,7 +62,7 @@ def _date(raw: str, *, timestamp: bool = False) -> str:
             # Timestamp must contain time; never infer a successful scan time.
             if "T" not in value and " " not in value:
                 raise ValueError("missing scan time")
-            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00").replace("/", "-"))
             return parsed.isoformat()
         if len(value) != 10:
             raise ValueError("inventory must be ISO date")
@@ -93,9 +98,9 @@ def reconcile_tables(snapshots: Any) -> dict[str, Any]:
         # which fails closed; do not silently drop them.
         scans_by_code.setdefault(code, []).append({
             "main_partner_code_original": code,
-            "sc_id": row["sc_id"].strip(),
+            "sc_id": re.sub(r"\s+", "", row["sc_id"]),
             "result": row["result"].strip(),
-            "scanned_at": row["scanned_at"].strip(),
+            "scanned_at": row["scanned_at"].strip().replace("/", "-"),
         })
 
     asgard_by_code: dict[str, list[dict[str, str]]] = {}
