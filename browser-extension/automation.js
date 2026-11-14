@@ -263,6 +263,17 @@ var MaleniaAutomation = (() => {
         if (location.origin !== expectedOrigin) return null;
         const clean = s => String(s || "").replace(/\s+/g," ").trim();
         const visible = el => el.getClientRects().length > 0;
+        if(role==='asgard') {
+          // Shared Asgard URLs can be the SPA root; select reverse-flow explicitly.
+          const reverseTabs=[...document.querySelectorAll('a,button,[role="tab"]')]
+            .filter(el=>visible(el) && clean(el.textContent)==='Обратный поток');
+          if(reverseTabs.length>1)return null;
+          if(reverseTabs.length===1){
+            reverseTabs[0].click();
+            await new Promise(resolve=>setTimeout(resolve,750));
+            if(location.origin!==expectedOrigin)return null;
+          }
+        }
         const inputs = [...document.querySelectorAll('input')].filter(el =>
           ['text','search'].includes(el.type.toLowerCase()) && visible(el) && !el.disabled && !el.readOnly);
         const wanted = role === 'asgard' ? /^Штрихкод коробки$/i : /^ID заказа\s*\/\s*ЛОТа\s*\/\s*ТОТа\s*\/\s*Тележки$/i;
