@@ -174,6 +174,7 @@ function BrowserPage({tabs,audit,job,connected,onRequested}:{tabs:BrowserTab[];a
           <Play size={15}/>{sending?"Отправляем…":"Запустить проверку"}</button>
       </div>
       <p role="status">{statusLabel}</p>
+      <p>Настройка в Яндекс Браузере: открой расширение Browser Bridge 1.5.0 или новее → «Найти открытые вкладки» → выбери ИНВенту, DataLens «Заказы» и Asgard «Обратный поток» → «Сохранить и разрешить чтение». Для Google Sheets запускай «Проверить первый заказ» в разделе «Источники»: таблица будет прочитана через Google API.</p>
       {job?.status==="running" || job?.status==="completed" || job?.status==="failed" ?
         <div className="batch-summary" data-testid="browser-audit-progress">
           <span>Обработано источников: <b>{job.completed_sources}/3</b></span>
@@ -354,9 +355,23 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
         {sheetsStatus.status==="expired"?<p className="source-help">Окно авторизации не получило ответ вовремя. Начните подключение заново.</p>:null}
         {sheetsStatus.status==="error"?<p className="source-help">Google не подтвердил нужный scope или OAuth завершился ошибкой. Проверьте OAuth consent screen и Client ID.</p>:null}
       </article>
-      <article className="panel source-card"><div className="source-card-top"><span className="source-icon datalens"><Activity size={19}/></span><span className="source-state pending">Не подключён</span></div><h2>Yandex DataLens</h2><p>Дашборд пока не читается приложением. Сначала будет реализовано чтение выбранной авторизованной вкладки или официального API.</p><small>Следующий шаг: read-only доступ и отдельная проверка разрешений.</small></article>
-      <article className="panel source-card"><div className="source-card-top"><span className="source-icon asgard"><Globe2 size={19}/></span><span className="source-state pending">Не подключён</span></div><h2>Asgard</h2><p>Рабочая сессия остаётся в Яндекс Браузере. Malenia пока не читает статусы или историю коробок на этой странице.</p><small>Следующий шаг: разрешённое чтение выбранной страницы.</small></article>
-      <article className="panel source-card"><div className="source-card-top"><span className="source-icon browser"><Plug size={19}/></span><span className={"source-state "+(tabs.length?"ready":"pending")}>{tabs.length ? `Передано вкладок: ${tabs.length}` : "Ожидает передачи"}</span></div><h2>Browser Bridge</h2><p>Ручная передача отправляет только заголовок и очищенный URL. Текущий прототип автоматического обхода ограничен тремя заранее заданными HTTPS-источниками. Это временное ограничение реализации, а не лимит Browser Bridge; универсальный реестр источников ещё предстоит внедрить. Cookies, пароли и история не читаются.</p><small>Автоматическое чтение не означает готовую сверку заказов: подключение сценариев ИНВента → DataLens → Asgard ещё требуется.</small><button className="secondary source-action" onClick={onOpenBrowser}>Открыть Browser Bridge <ArrowUpRight size={14}/></button></article>
+      {[
+        {name:"Yandex DataLens",host:"datalens.yandex-team.ru",style:"datalens",icon:<Activity size={19}/>,
+          description:"Адаптер поиска читает историю сканов по грузоместу и проверяет успешные сканы СЦ 101366 после даты ИНВенты.",
+          help:"Выбери вкладку «Заказы» в настройках расширения Browser Bridge 1.5.0 или новее."},
+        {name:"Asgard",host:"asgard.market.yandex-team.ru",style:"asgard",icon:<Globe2 size={19}/>,
+          description:"Адаптер ищет штрихкод коробки в «Обратном потоке» и читает статус грузоместа. Расширенная история коробки ещё не подключена.",
+          help:"Выбери страницу «Обратный поток», оставив остальные поля поиска пустыми."}
+      ].map(source=>{
+        const shared=tabs.some(tab=>{try{return new URL(tab.url).hostname===source.host;}catch{return false;}});
+        return <article className="panel source-card" key={source.host} data-testid={"source-"+source.style}>
+          <div className="source-card-top"><span className={"source-icon "+source.style}>{source.icon}</span><span className="source-state pending">{shared?"Вкладка передана · требуется тест":"Передай рабочую вкладку"}</span></div>
+          <h2>{source.name}</h2><p>{source.description}</p>
+          <small>{source.help} Передача вкладки ещё не подтверждает разрешение на чтение и успешную проверку заказа.</small>
+          <button className="secondary source-action" onClick={onOpenBrowser}>Как настроить проверку <ArrowUpRight size={14}/></button>
+        </article>;
+      })}
+      <article className="panel source-card"><div className="source-card-top"><span className="source-icon browser"><Plug size={19}/></span><span className={"source-state "+(tabs.length?"ready":"pending")}>{tabs.length ? `Передано вкладок: ${tabs.length}` : "Ожидает передачи"}</span></div><h2>Browser Bridge</h2><p>Ручная передача отправляет только заголовок и очищенный URL. Текущий прототип автоматического обхода ограничен тремя заранее заданными HTTPS-источниками. Это временное ограничение реализации, а не лимит Browser Bridge; универсальный реестр источников ещё предстоит внедрить. Cookies, пароли и история не читаются.</p><small>Для проверки заказа: в расширении нажми «Найти открытые вкладки», выбери три источника и «Сохранить и разрешить чтение». Затем в Google Sheets нажми «Проверить первый заказ».</small><button className="secondary source-action" onClick={onOpenBrowser}>Открыть Browser Bridge <ArrowUpRight size={14}/></button></article>
     </div>
   </section>;
 }
