@@ -848,3 +848,11 @@ Latest fix commit at this note: `4f46fdd1d7c9dc77a4b26e3244f6ed8b14af87e4` (late
 - Fixed a service-worker race: desktop polling previously set `running` only after awaiting storage, permissions, handshake and job claim. Another alarm or popup could start work during that window. The worker now reserves execution synchronously before its first await and releases it in the outer finally, including missing configuration, denied permissions, unsupported host and no-job paths.
 - Added VM-based behavioral tests for concurrent polling/popup startup, successful completion, early exits, host errors and failed automation. Source read-only behavior and business decision rules are unchanged.
 - Live Yandex/DataLens/Asgard behavior remains unverified. The old queue still requires `maleniaTargets`; this fix does not replace the three-source audit configuration with universal shared-tab discovery.
+
+## 2026-11-14 — open-tab selection, worksheet identity and main builds
+
+- User explicitly authorized publication and updating main. Keep main current after checks; no additional approval is needed for these repository updates.
+- Order audit setup now offers open-tab dropdowns after an explicit metadata scan, rather than typing/copying three URLs. It deduplicates sanitized HTTPS paths, rejects embedded credentials/internal/local pages and requests host permissions only on Save. Role selection is explicit to avoid guessing business services from arbitrary titles.
+- Sharing a Google Sheets edit URL now retains only its unambiguous numeric gid (query or fragment, canonicalized into query). Native host independently sanitizes it. Other URL parameters are removed. This fixes loss of selected worksheet before read_active_sheet; existing date/header fallback remains for older shares without gid. Users must share the worksheet again after updating the extension/native host.
+- Windows installer workflow now runs for main as well as feat/desktop-shell when relevant code changes.
+- Local validation: 79 Node tests passed, 221 Python tests completed (one skipped), frontend production build passed. Windows installer/real installed app not verified locally on Linux. Live DataLens/Asgard mappings still require the actual authorized pages; generic traversal must not be described as proven on their real services.
