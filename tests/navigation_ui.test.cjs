@@ -32,7 +32,7 @@ test('sources page shows truthful connection state and no fake connect actions',
   assert.match(app, /Google Sheets · ИНВента/);
   assert.match(app, /ChatGPT не передаёт свои подключения Malenia/);
   assert.match(app, /Malenia пока не читает статусы или историю коробок/);
-  assert.match(app, /ручная передача вкладки и автоматическое чтение трёх разрешённых HTTPS-страниц/);
+  assert.match(app, /ручная передача любых HTTPS-вкладок/);
   assert.match(app, /автоматический обход — последовательно прочитать три явно разрешённых домена/);
   assert.match(app, /Открыть Browser Bridge/);
 });
