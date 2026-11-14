@@ -69,6 +69,7 @@ export default function App(){
       <nav>
         <Nav icon={<Sparkles/>} label="Ассистент" active={page==="ai"} onClick={()=>setPage("ai")}/>
         <Nav icon={<Globe2/>} label="Моя рабочая среда" active={page==="browser"} onClick={()=>setPage("browser")}/>
+        <Nav icon={<Database/>} label="Источники" active={page==="sources"} onClick={()=>setPage("sources")}/>
         <Nav icon={<ListTodo/>} label="Задания" active={page==="tasks"} count={data?.tasks.length} onClick={()=>setPage("tasks")}/>
       </nav>
       <div className="nav-label separated">ЗНАНИЯ И БЕЗОПАСНОСТЬ</div>

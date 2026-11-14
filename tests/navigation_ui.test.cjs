@@ -27,8 +27,8 @@ test('the navigation groups work, knowledge, safety and system areas', () => {
 });
 
 
-test('sources page shows truthful connection state and no fake connect actions', () => {
-  assert.doesNotMatch(app, /<Nav[^\n]*label="Источники"/);
+test('sources page is reachable and shows truthful connection state', () => {
+  assert.match(app, /<Nav[^\n]*label="Источники"/);
   assert.match(app, /Google Sheets · ИНВента/);
   assert.match(app, /ChatGPT не передаёт свои подключения Malenia/);
   assert.match(app, /Malenia пока не читает статусы или историю коробок/);
@@ -144,6 +144,7 @@ test('shared browser tabs can be removed locally only after confirmation',()=>{
 });
 
 test('Google Sheets can queue a read-only bounded batch without claiming completion',()=>{
+  assert.match(app,/label="Источники" active=\{page==="sources"\} onClick=\{\(\)=>setPage\("sources"\)\}/);
   assert.match(app,/invoke<\{queued_orders:number;remaining_orders:number\}>\("check_inventa_order_batch"/);
   assert.match(app,/Проверить следующую партию \(до 20\)/);
   assert.match(app,/Следующие партии запускаются твоим нажатием/);
