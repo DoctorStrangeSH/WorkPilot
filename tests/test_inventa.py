@@ -4,6 +4,19 @@ from malenia.inventa import analyze_inventa, detect_header
 
 
 class InventaAnalysisTests(unittest.TestCase):
+    def test_actual_export_date_header_supplies_year_for_archive_sheet(self):
+        rows=[["Дата выгрузки", "Id заказа", "main_partner_code_original", "Стоимость", "Статус"],
+              ["2026-08-29", "TEST-1", "CARGO-1", 100, "Найден"]]
+        result=analyze_inventa(rows,"29.08 (Архив)",audit_batch_limit=20)
+        self.assertEqual(result["sheet_inventory_date"],"2026-08-29")
+        self.assertEqual(result["eligible_audit_candidates"],1)
+        override=analyze_inventa(rows,"29.08 (Архив)",audit_batch_limit=20,inventory_date="2026-09-26")
+        self.assertEqual(override["audit_candidates"][0]["inventory_date"],"2026-09-26")
+        self.assertNotEqual(override["audit_fingerprint"],result["audit_fingerprint"])
+        for invalid in ["2026-02-30","29.08.2026",123]:
+            with self.assertRaisesRegex(ValueError,"invalid_inventory_date"):
+                analyze_inventa(rows,inventory_date=invalid)
+
     def setUp(self):
         self.rows = [
             ["Отчёт за период", None, None],
