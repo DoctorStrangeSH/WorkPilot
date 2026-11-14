@@ -255,6 +255,90 @@ var MaleniaAutomation = (() => {
     }
   }
 
+  async function workplaceSearch(chromeApi, tabId, role, code, origin) {
+    const hosts = {datalens:"https://datalens.yandex-team.ru",asgard:"https://asgard.market.yandex-team.ru"};
+    if (origin !== hosts[role] || !/^[A-Za-z0-9_.-]{1,128}$/.test(code)) throw new Error("unsupported_dynamic_search");
+    const response = await chromeApi.scripting.executeScript({target:{tabId},
+      func: async (role, code, expectedOrigin) => {
+        if (location.origin !== expectedOrigin) return null;
+        const clean = s => String(s || "").replace(/\s+/g," ").trim();
+        const visible = el => el.getClientRects().length > 0;
+        const inputs = [...document.querySelectorAll('input')].filter(el =>
+          ['text','search'].includes(el.type.toLowerCase()) && visible(el) && !el.disabled && !el.readOnly);
+        const wanted = role === 'asgard' ? /^Штрихкод коробки$/i : /^ID заказа\s*\/\s*ЛОТа\s*\/\s*ТОТа\s*\/\s*Тележки$/i;
+        const matches = inputs.filter(el => {
+          const labels = [el.getAttribute('aria-label'), el.getAttribute('placeholder'),
+            ...Array.from(el.labels || []).map(x=>x.textContent)];
+          let parent=el.parentElement;
+          for(let i=0;parent && i<4;i++,parent=parent.parentElement) {
+            if(parent.querySelectorAll('input').length !== 1) break;
+            labels.push(parent.textContent);
+          }
+          return labels.some(label=>wanted.test(clean(label)));
+        });
+        if(matches.length!==1) return null;
+        const input=matches[0];
+        if(role==='asgard' && inputs.some(el=>el!==input && el.value.trim())) return null;
+        const buttons=role==='asgard' ? [...document.querySelectorAll('button')]
+          .filter(el=>visible(el) && !el.disabled && clean(el.textContent)==='Найти') : [];
+        if(role==='asgard' && buttons.length!==1) return null;
+        const read = () => {
+          const candidates=[];
+          for(const table of document.querySelectorAll('table')) {
+            const trs=[...table.querySelectorAll('tr')];
+            const heads=trs[0]?[...trs[0].querySelectorAll('th')].map(el=>clean(el.textContent)):[];
+            const required=role==='datalens'?['scanned_at','sc_id','result','place_external_id']:
+              ['Статус грузоместа','ID возврата','ID партнера','ID коробки'];
+            if(!required.every(name=>heads.includes(name))) continue;
+            if(trs.length<2 || trs.length>101 || new Set(heads).size!==heads.length) return null;
+            const rows=trs.slice(1).map(tr=>[...tr.querySelectorAll('td')].map(el=>clean(el.textContent)));
+            if(rows.some(row=>row.length!==heads.length || row.some(v=>v.length>256))) return null;
+            if(role==='datalens') {
+              const col=name=>heads.indexOf(name);
+              if(rows.some(row=>row[col('place_external_id')]!==code)) return null;
+              candidates.push({columns:['main_partner_code_original','sc_id','result','scanned_at'],
+                rows:rows.map(row=>[code,row[col('sc_id')].replace(/\s/g,''),row[col('result')],row[col('scanned_at')].replace(/\//g,'-')])});
+            } else {
+              // A result is bound only to the exact barcode search completed below.
+              if(rows.length!==1) return null;
+              candidates.push({columns:['cargo_place','status','box_id'],
+                rows:[[code,rows[0][heads.indexOf('Статус грузоместа')],rows[0][heads.indexOf('ID коробки')]]]});
+            }
+          }
+          return candidates.length===1?candidates[0]:null;
+        };
+        const before=JSON.stringify(read());
+        const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;
+        if(!setter) return null;
+        return await new Promise(resolve=>{
+          let timer, deadline, observer, last='', stableAt=0, done=false;
+          const finish=value=>{if(done)return;done=true;clearInterval(timer);clearTimeout(deadline);observer.disconnect();resolve(value);};
+          const check=()=>{
+            if(location.origin!==expectedOrigin || input.value!==code) return finish(null);
+            const table=read(), serialized=JSON.stringify(table);
+            if(!table || serialized===before){stableAt=0;return;}
+            if(serialized!==last){last=serialized;stableAt=Date.now();return;}
+            if(stableAt && Date.now()-stableAt>=750) finish(table);
+          };
+          observer=new MutationObserver(check);
+          observer.observe(document.body,{subtree:true,childList:true,characterData:true});
+          deadline=setTimeout(()=>finish(null),15000);
+          setter.call(input,code);
+          input.dispatchEvent(new Event('input',{bubbles:true}));
+          input.dispatchEvent(new Event('change',{bubbles:true}));
+          if(role==='asgard') buttons[0].click();
+          else {
+            input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true}));
+            input.dispatchEvent(new KeyboardEvent('keyup',{key:'Enter',code:'Enter',bubbles:true}));
+          }
+          timer=setInterval(check,250);
+        });
+      },args:[role,code,origin]});
+    const table=response?.[0]?.result;
+    if(!table) throw new Error("unmapped_search_results");
+    return table;
+  }
+
   async function visit(chromeApi, role, url, sendNative, searchKey = null) {
     let tabId;
     try {
@@ -266,6 +350,11 @@ var MaleniaAutomation = (() => {
         const current = await chromeApi.tabs.get(tabId);
         if (new URL(current.url || "").origin !== new URL(url).origin) {
           throw new Error("search_origin_mismatch");
+        }
+        if ((role === "datalens" && new URL(url).origin === "https://datalens.yandex-team.ru") ||
+            (role === "asgard" && new URL(url).origin === "https://asgard.market.yandex-team.ru")) {
+          const table = await workplaceSearch(chromeApi, tabId, role, searchKey, new URL(url).origin);
+          return {table,characters:0,pages:1};
         }
         try {
           await exactGetSearch(chromeApi, tabId, role, searchKey, new URL(url).origin);
@@ -532,5 +621,5 @@ var MaleniaAutomation = (() => {
     await onProgress(summary);
     return summary;
   }
-  return {ROLES, MAX_TEXT, MAX_PAGES, MAX_SEARCHES, normalizeTargets, origins, nextPage, exactGetSearch, reactiveSearch, asgardSearchKeys, reasonCode, waitLoaded, run};
+  return {ROLES, MAX_TEXT, MAX_PAGES, MAX_SEARCHES, normalizeTargets, origins, nextPage, exactGetSearch, reactiveSearch, workplaceSearch, asgardSearchKeys, reasonCode, waitLoaded, run};
 })();
