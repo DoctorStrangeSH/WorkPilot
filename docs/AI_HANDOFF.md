@@ -842,3 +842,9 @@ The previous red runs were investigated from job logs and current branch source,
 4. The Windows smoke test also leaked the agent process if readiness/version assertions failed inside `start()`, leaving its frozen DLLs locked and causing TemporaryDirectory cleanup to raise WinError 5. Wrapped startup validation in exception-safe cleanup; process is terminated, waited, and killed only if graceful termination times out. Commit `2ffe07fafe072432bcfb42bffe665d169f2a6c11`.
 
 Latest fix commit at this note: `4f46fdd1d7c9dc77a4b26e3244f6ed8b14af87e4` (later than test changes? Check actual branch head before relying on this list). Actions have not yet been confirmed for the final branch head. Do not claim CI green until Python, Desktop, and Windows installer complete successfully on the same SHA.
+
+## 2026-11-14 — serialize desktop audit startup
+
+- Fixed a service-worker race: desktop polling previously set `running` only after awaiting storage, permissions, handshake and job claim. Another alarm or popup could start work during that window. The worker now reserves execution synchronously before its first await and releases it in the outer finally, including missing configuration, denied permissions, unsupported host and no-job paths.
+- Added VM-based behavioral tests for concurrent polling/popup startup, successful completion, early exits, host errors and failed automation. Source read-only behavior and business decision rules are unchanged.
+- Live Yandex/DataLens/Asgard behavior remains unverified. The old queue still requires `maleniaTargets`; this fix does not replace the three-source audit configuration with universal shared-tab discovery.
