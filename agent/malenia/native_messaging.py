@@ -175,8 +175,15 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
         page = payload.get("page")
         required = {"url", "title", "table_headers", "search_labels",
                     "has_aria_grid", "virtualized", "login_required"}
-        if not isinstance(page, dict) or set(page) != required:
+        if (not isinstance(page, dict) or set(page) - required - {"structure"}
+                or not required.issubset(page)):
             return {**response, "ok": False, "error": "invalid_capability_snapshot"}
+        if "structure" in page:
+            structure = page["structure"]
+            if (not isinstance(structure, dict) or set(structure) != {
+                    "inputs", "unlabelled_inputs", "frames", "inaccessible_frames", "shadow_roots"}
+                    or any(type(v) is not int or not 0 <= v <= 300000 for v in structure.values())):
+                return {**response, "ok": False, "error": "invalid_capability_snapshot"}
         try:
             url = _clean_tab_url(page["url"])
             title = page["title"]
@@ -196,6 +203,7 @@ def handle_message(payload: dict[str, Any], store: TaskStore) -> dict[str, Any]:
                          "search_labels": labels, "has_aria_grid": page["has_aria_grid"],
                          "virtualized": page["virtualized"],
                          "login_required": page["login_required"]},
+                **({"structure": page["structure"]} if "structure" in page else {}),
                 "persisted": False}
 
     if message_type == "inspect_active_page":
