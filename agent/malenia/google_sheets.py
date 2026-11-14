@@ -480,7 +480,15 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
                         "?fields=properties.title,sheets.properties")
         request = Request(metadata_url, headers={"Authorization": f"Bearer {token}",
                          "Accept": "application/json"}, method="GET")
-        metadata = self._request_json(request, _MAX_SHEETS_RESPONSE_BYTES)
+        try:
+            metadata = self._request_json(request, _MAX_SHEETS_RESPONSE_BYTES)
+        except GoogleSheetsError as error:
+            if error.status != 401:
+                raise
+            token = self._refresh_access_token()
+            retry = Request(metadata_url, headers={"Authorization": f"Bearer {token}",
+                "Accept": "application/json"}, method="GET")
+            metadata = self._request_json(retry, _MAX_SHEETS_RESPONSE_BYTES)
         sheets = metadata.get("sheets")
         if not isinstance(sheets, list) or not sheets or len(sheets) > 100:
             raise GoogleSheetsError("google_sheets_metadata_invalid")
