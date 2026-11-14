@@ -254,7 +254,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
     setBusy(true);setSheetError("");setSheetNotice("");
     try{
       await invoke("check_first_inventa_order",{spreadsheetUrl:activeTab.url});
-      setSheetNotice("Первый заказ передан Browser Bridge на проверку. Запусти Яндекс Браузер и открой раздел «Моя рабочая среда» для просмотра выполнения.");
+      setSheetNotice("Задача проверки создана. В этой версии исполнитель ещё не выполняет поиск в DataLens и Asgard автоматически; создание задачи не означает, что заказ проверен.");
       onOpenBrowser();
     }catch(error){setSheetError(String(error));}
     finally{setBusy(false);}
@@ -320,7 +320,7 @@ function SourcesPage({tabs,connected,onOpenBrowser}:{tabs:BrowserTab[];connected
       </article>
       <article className="panel source-card"><div className="source-card-top"><span className="source-icon datalens"><Activity size={19}/></span><span className="source-state pending">Не подключён</span></div><h2>Yandex DataLens</h2><p>Дашборд пока не читается приложением. Сначала будет реализовано чтение выбранной авторизованной вкладки или официального API.</p><small>Следующий шаг: read-only доступ и отдельная проверка разрешений.</small></article>
       <article className="panel source-card"><div className="source-card-top"><span className="source-icon asgard"><Globe2 size={19}/></span><span className="source-state pending">Не подключён</span></div><h2>Asgard</h2><p>Рабочая сессия остаётся в Яндекс Браузере. Malenia пока не читает статусы или историю коробок на этой странице.</p><small>Следующий шаг: разрешённое чтение выбранной страницы.</small></article>
-      <article className="panel source-card"><div className="source-card-top"><span className="source-icon browser"><Plug size={19}/></span><span className={"source-state "+(tabs.length?"ready":"pending")}>{tabs.length ? `Передано вкладок: ${tabs.length}` : "Ожидает передачи"}</span></div><h2>Browser Bridge</h2><p>Ручная передача отправляет только заголовок и очищенный URL. Отдельный автоматический обход читает видимый текст до 16 000 символов с каждого из трёх явно разрешённых сайтов без сохранения текста; cookies, пароли и история не читаются.</p><small>Автоматическое чтение не означает готовую сверку заказов: подключение сценариев ИНВента → DataLens → Asgard ещё требуется.</small><button className="secondary source-action" onClick={onOpenBrowser}>Открыть Browser Bridge <ArrowUpRight size={14}/></button></article>
+      <article className="panel source-card"><div className="source-card-top"><span className="source-icon browser"><Plug size={19}/></span><span className={"source-state "+(tabs.length?"ready":"pending")}>{tabs.length ? `Передано вкладок: ${tabs.length}` : "Ожидает передачи"}</span></div><h2>Browser Bridge</h2><p>Ручная передача отправляет только заголовок и очищенный URL. Текущий прототип автоматического обхода ограничен тремя заранее заданными HTTPS-источниками. Это временное ограничение реализации, а не лимит Browser Bridge; универсальный реестр источников ещё предстоит внедрить. Cookies, пароли и история не читаются.</p><small>Автоматическое чтение не означает готовую сверку заказов: подключение сценариев ИНВента → DataLens → Asgard ещё требуется.</small><button className="secondary source-action" onClick={onOpenBrowser}>Открыть Browser Bridge <ArrowUpRight size={14}/></button></article>
     </div>
   </section>;
 }
