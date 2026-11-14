@@ -8,6 +8,7 @@ import os
 import secrets
 import sys
 
+from . import __version__
 from .config import database_path
 from .resources import ResourceManager
 from .server import create_server, run_server
@@ -43,7 +44,7 @@ def main() -> int:
             return 2
         raise
 
-    print("Malenia Agent 0.2.0")
+    print(f"Malenia Agent {__version__}")
     print(f"Local API: http://{args.host}:{args.port}")
     print(f"Resource mode: {snapshot.mode}")
     print(f"Available memory: {snapshot.available_memory_bytes} bytes")
