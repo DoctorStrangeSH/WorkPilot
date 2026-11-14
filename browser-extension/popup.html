@@ -22,16 +22,17 @@
     <div class="automation"><strong>Диагностика рабочей вкладки</strong><p>Открой ИНВенту, DataLens или Asgard в Яндекс Браузере и проверь структуру активной страницы. Передаются только видимые заголовки таблиц и подписи полей поиска; содержимое заказов не сохраняется.</p><div id="auditStatus" class="status" role="status" aria-live="polite">Ожидает проверки активной вкладки.</div></div>
     <section class="automation" aria-label="Настройка проверки заказов">
       <strong>Источники проверки заказов</strong>
-      <p>Один раз укажи страницы своих рабочих сервисов. Разрешения браузера будут запрошены только по кнопке. Это настройки первого навыка Малении, а не ограничение числа её будущих источников.</p>
-      <label>ИНВента · Google Sheets<input id="targetInventory" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" autocomplete="off" spellcheck="false"></label>
-      <label>DataLens<input id="targetDatalens" type="url" placeholder="https://…" autocomplete="off" spellcheck="false"></label>
-      <label>Asgard<input id="targetAsgard" type="url" placeholder="https://…" autocomplete="off" spellcheck="false"></label>
+      <p>Найди открытые вкладки и выбери, где какой сервис. Копировать ссылки не нужно. Разрешения на чтение запрашиваются отдельно по кнопке.</p>
+      <button id="discoverTargets" type="button" class="secondary">Найти открытые вкладки</button>
+      <label>ИНВента · Google Sheets<select id="selectinventory" aria-label="Вкладка ИНВенты"></select><input id="targetInventory" type="url" readonly aria-label="Адрес ИНВенты"></label>
+      <label>DataLens<select id="selectdatalens" aria-label="Вкладка DataLens"></select><input id="targetDatalens" type="url" readonly aria-label="Адрес DataLens"></label>
+      <label>Asgard<select id="selectasgard" aria-label="Вкладка Asgard"></select><input id="targetAsgard" type="url" readonly aria-label="Адрес Asgard"></label>
       <button id="saveTargets" type="button" class="secondary">Сохранить и разрешить чтение</button>
       <div id="targetsStatus" class="status" role="status">Источники ещё не настроены.</div>
       <div id="orderAuditStatus" class="status" role="status">Проверка заказов ещё не запускалась в этом сеансе браузера.</div>
     </section>
     <button id="retry" class="secondary" type="button" disabled>Повторить подключение</button>
-    <p class="privacy">«Передать открытые вкладки» по вашему нажатию передаёт заголовки и адреса без параметров HTTP(S)-вкладок во всех окнах браузера (не содержимое страниц). «Проверить структуру активной вкладки» передаёт только видимые заголовки таблиц, подписи поисковых полей и структурные признаки страницы. Строки заказов, cookies, пароли и содержимое форм не передаются.</p>
+    <p class="privacy">Передача вкладок отправляет заголовки и адреса HTTP(S)-страниц; для Google Sheets сохраняется только числовой ID листа (gid). Остальные параметры удаляются. Диагностика передаёт видимые заголовки таблиц, подписи поиска и структурные признаки. Проверка заказов читает результаты в разрешённых источниках; строки не сохраняются. Cookies и пароли не передаются.</p>
   </main>
   <script src="automation.js"></script>
   <script src="popup.js"></script>
