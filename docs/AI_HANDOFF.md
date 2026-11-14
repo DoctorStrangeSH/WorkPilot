@@ -870,3 +870,10 @@ Latest fix commit at this note: `4f46fdd1d7c9dc77a4b26e3244f6ed8b14af87e4` (late
 - Screenshot Asgard reverse-flow result headers: Статус грузоместа, ID возврата, ID партнера, ID коробки, Дата создания, Дата обновления, Точка назначения. No cargo barcode is present in result columns, so rows cannot be attributed to an order without a verified search interaction. Do not inject the searched cargo into arbitrary visible rows.
 - Diagnostic still reports zero labelled inputs although screenshots show input controls. Need actual DOM structure (possibly unlabelled controls/frame/shadow roots) before implementing live search. Screenshots establish labels/layout, not DOM selectors. Asgard general Orders and reverse-flow are distinct views; use reverse-flow barcode search.
 - Validation: 25 automation tests passed, eight reconciliation tests passed. End-to-end live searches remain unverified.
+
+## 2026-11-14 — fix zero-input capability diagnostics
+
+- Diagnostics previously discarded controls without recognized labels, so zero search labels did not mean zero inputs. Count visible unlabelled controls and report a generic type descriptor without reading values.
+- Inspect accessible same-origin frame documents and open shadow roots, with bounded traversal; report inaccessible frame counts rather than crossing browser access boundaries. Add numeric optional structure metadata validated by native host. Existing snapshots without it remain accepted.
+- Correct whitespace normalization and recognize aria-labelledby/textContent labels. Stop reading body text to guess login state; detect password controls instead.
+- Behavioral test executes the actual injected function against nested frame/shadow fixtures and throws if any input value is read. Tests pass. Live search adapters remain pending actual control identification; this change diagnoses structure and does not execute searches or edit orders.
