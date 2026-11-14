@@ -2,7 +2,7 @@
 
 No network calls, browser launches, tokens, or credentials are handled here.
 The eventual desktop integration must use a loopback listener and the
-Windows Credential Manager backend; it must not add broader scopes. The investigation workflow is read-only.
+Windows Credential Manager backend; it must not add broader scopes. The user-authorized connector can read and edit spreadsheets.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 
 GOOGLE_AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
-GOOGLE_SHEETS_READONLY_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
+GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 GOOGLE_CALLBACK_PATH = "/"
 
 _VERIFIER_RE = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
@@ -111,7 +111,7 @@ def build_authorization_url(
         "client_id": client_id,
         "redirect_uri": redirect_uri,
         "response_type": "code",
-        "scope": GOOGLE_SHEETS_READONLY_SCOPE,
+        "scope": GOOGLE_SHEETS_SCOPE,
         "access_type": "offline",
         "prompt": "consent",
         "state": state,
@@ -155,7 +155,7 @@ def validate_granted_scope(scope_value: str) -> None:
     if not isinstance(scope_value, str):
         raise GoogleOAuthError("Google did not confirm the granted scope")
     granted = set(scope_value.split())
-    if granted != {GOOGLE_SHEETS_READONLY_SCOPE}:
+    if granted != {GOOGLE_SHEETS_SCOPE}:
         raise GoogleOAuthError("Google granted unexpected or incomplete access scopes")
 
 
@@ -181,7 +181,7 @@ def validate_token_response(payload: object) -> dict[str, object]:
         "access_token": access_token,
         "refresh_token": refresh_token,
         "expires_in": expires_in,
-        "scope": GOOGLE_SHEETS_READONLY_SCOPE,
+        "scope": GOOGLE_SHEETS_SCOPE,
     }
 
 
@@ -205,5 +205,5 @@ def validate_refresh_response(payload: object) -> dict[str, object]:
     return {
         "access_token": access_token,
         "expires_in": expires_in,
-        "scope": GOOGLE_SHEETS_READONLY_SCOPE,
+        "scope": GOOGLE_SHEETS_SCOPE,
     }
