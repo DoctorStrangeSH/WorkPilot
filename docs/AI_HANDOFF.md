@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 31109)
-Total output lines: 912
+Warning: truncated output (original token count: 31560)
+Total output lines: 921
 
 ## CI update — 2026-11-12 — Excel batch checks
 
@@ -583,16 +583,7 @@ Implemented in PR #2 branch `feat/desktop-shell`:
 - `browser-extension/background.js`: MV3 service worker task runs independent of popup using persistent Native Messaging `connectNative` port for task lifetime; one outstanding request at a time, request IDs matched, five-second response deadline. It stores only sanitized role/progress/character-count metadata in `chrome.storage.session`. Port is closed after run; no autonomous task runs on startup.
 - Popup version 1.3.0 exposes three resource HTTPS URL fields and one-button automatic read-only audit, after Chrome's exact-origin permission prompt. Sanitized resource URL paths are retained in extension local storage for the next run. No credentials or page text are saved.
 - Native host already supports `inspect_active_page`, validates bounded text, reports characters and `persisted: false`, but does **not** forward text to the local AI agent or correlate orders. Thus the current result is a 3-site read success/failure summary, not an actual business workflow output.
-- Desktop Browser/Sources privacy messages corrected for new opt-in rendered-text reading. `browser-extension/README.md` explains capability and setup. `tests/browser_automation.test.cjs` tests URL restrictions, sequential traversal, cleanup, redirect block, host failure. CI desktop-chec…1109 tokens truncated…t `main`.
-- `browser-extension/automation.js` now follows an explicit HTML `a[rel~='next'][href]` link for up to 5 pages **per resource**, only within the originally approved HTTPS origin. Cross-origin redirects, credentials, fragments, custom ports, repeated URLs, table schema changes and more than 100 total rows fail closed. The extension aggregates matching rows before sending one ephemeral `reconcile_site_tables` request to the local native host, closes its inactive tab on completion/failure and retains only per-resource reading counts and page count in session progress. No site record changes are possible.
-- `browser-extension/popup.js` reports the number of pages read per resource.
-- `tests/browser_automation.test.cjs` adds multi-page merging, restriction on next-page URL, and pagination cycle coverage. CI workflow already includes this test. Desktop run `43276041134` has passed frontend, Browser Bridge, autonomous browser traversal, permission panel, AI and navigation Node checks; Rust checks were still running at last observation. Python run `43276041170` passed. Recheck the latest head and installer before claiming all checks green.
-- `browser-extension/README.md` describes the exact rel-next behavior and limitations. The actual user's corporate sites may use JavaScript virtualized grids/search; no verified site-specific adapters exist yet. This milestone does not meet the full end-to-end requirement, and **reconciled visible tables do not prove complete corporate data coverage**. Next work should target site-specific dynamic navigation/search and reliable completeness/provenance signals; do not invent selector names or claim live business-site access.
-
-
-## 2026-11-12 — Accessible dynamic table read support
-
-- Continued the existing PR #2 `feat/desktop-shell`; do not merge the draft without explicit approval. `main` unchanged.
+- Desktop Browser/Sources privacy messages corrected for new opt-in rendered-text reading. `browser-extension/README.md` explains capability and setup. `tests/browser_automation.test.cjs` tests URL restrictions, sequential traversal, cleanup, redirect block, host failure. CI desktop-chec…1560 tokens truncated… not merge the draft without explicit approval. `main` unchanged.
 - `browser-extension/automation.js` can now read a fully-rendered **ARIA grid/table** (roles grid/table, row, columnheader, gridcell/cell), using the same exact source field names as the existing HTML table adapter. Extraction is read-only, bounded, same-origin and excludes form values/cookies.
 - An ARIA grid is eligible only when `aria-rowcount` exists and equals its rendered row count, including the header; otherwise `incomplete=true` aborts that source and suppresses all aggregate reconciliation. Missing columns, malformed data and more than 100 rows also fail closed. This prevents false positives on virtualized lists where only a viewport's rows are in the DOM.
 - `tests/browser_automation.test.cjs` includes synthetic incomplete-grid suppression and source checks for extractor guards. Browser Bridge/desktop CI results for the current head still need verification; latest green Python on commit `19e2caf0` (CI run `43276661779`). Do not claim that the actual three company websites have been tested.
@@ -890,3 +881,12 @@ Latest fix commit at this note: `4f46fdd1d7c9dc77a4b26e3244f6ed8b14af87e4` (late
 - Asgard adapter selects exact visible Обратный поток navigation when available, since shared URLs may be SPA root. This remains live-unverified.
 - Tests: parser fixture with actual export header + archive title, valid/invalid date override and fingerprint changes; HTTP verifies selected date reaches claimed browser job and empty rows are not complete; controller verifies date on every batch and reset/resume. Existing server suite (33) and parser suite (10) passed; frontend production build passed; 87 existing Node checks passed plus new date/reset controller test.
 - Still not a complete deliverable: automatic writeback, full per-order result/evidence UI and learned-rule execution are absent. Do not call it ready for other users. Windows installer and real corporate adapters require actual observed verification.
+
+## 2026-11-14 — 0.6.2 lifecycle and Google reconnection fixes
+
+- User reports repeated Google authorization and orphaned agent processes on closing desktop. Add explicit main CloseRequested shutdown (Drop alone may not run during GUI runtime exit), terminate owned Windows child process trees via system taskkill /PID /T /F while retaining Child handles, and clear owned slots/token. No name-wide/process-wide termination. This covers normal close, not forced shell termination/crashes.
+- Desktop now starts its local agent during setup; a closing flag prevents startup racing with window shutdown. Existing port-occupied checks still refuse unrelated agents.
+- Metadata GET in read_active_sheet now mirrors values GET behavior: on 401 refresh once using saved Credential Manager token and retry silently. Added tests across connector restart and stale metadata token. This is not proof of the cause of every repeated login: Google invalid_grant and external OAuth Testing expiration still require account action; tokens are retained on ordinary errors. Editor token key unchanged in this release.
+- Bump desktop/package/Cargo/Tauri/runtime/CLI/pyproject and version expectations to 0.6.2 so installed old/new code can be distinguished. CLI no longer prints stale 0.2.0.
+- Windows desktop smoke test now sends WM_CLOSE, checks automatic bundled-agent readiness, and verifies port health disappears after closing. Added typed PostMessageW signature. This verification requires the Windows CI runner; Rust/GUI cannot be executed locally (cargo unavailable).
+- Frontend build and 88 JS checks passed. Python suite reached 228 tests with one stale version expectation; that expectation was updated and targeted startup checks passed; rerun current suite/Windows CI before claiming final release verified.
