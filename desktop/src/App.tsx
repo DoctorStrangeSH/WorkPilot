@@ -213,6 +213,9 @@ type GoogleSheetsStatus = {connected:boolean;status:string;error:string|null;cli
 
 function SourcesPage({tabs,connected,onOpenBrowser,runState,runner}:{tabs:BrowserTab[];connected:boolean;onOpenBrowser:()=>void;runState:RunState;runner:InventaRun}){
   const [selectedSheet,setSelectedSheet]=useState("");
+  const [inventoryDate,setInventoryDate]=useState("");
+  const [sheetOptions,setSheetOptions]=useState<{url:string;title:string}[]>([]);
+  const [loadingSheets,setLoadingSheets]=useState(false);
   const [lesson,setLesson]=useState<KnowledgeDraft|null>(null);
   const sheetTabs=tabs.filter(tab=>/^https:\/\/docs\.google\.com\/spreadsheets\/d\//.test(tab.url));
   const sheetUrl=selectedSheet||sheetTabs[0]?.url||"";
@@ -262,7 +265,7 @@ function SourcesPage({tabs,connected,onOpenBrowser,runState,runner}:{tabs:Browse
   };
   const analyzeActiveInventa=async()=>{
     setBusy(true);setSheetError("");setSheetNotice("");setInventaReport(null);
-    const activeTab=tabs.find(tab=>tab.url===sheetUrl);
+    const activeTab=sheetUrl?{url:sheetUrl}:undefined;
     if(!activeTab){setSheetError("Не найдена переданная вкладка Google Sheets. Открой ИНВенту в браузере и поделись этой вкладкой через Browser Bridge.");setBusy(false);return;}
     const spreadsheetUrl=activeTab.url;
     try{
@@ -273,7 +276,7 @@ function SourcesPage({tabs,connected,onOpenBrowser,runState,runner}:{tabs:Browse
     finally{setBusy(false);}
   };
   const checkFirstOrder=async()=>{
-    const activeTab=tabs.find(tab=>tab.url===sheetUrl);
+    const activeTab=sheetUrl?{url:sheetUrl}:undefined;
     if(!activeTab){setSheetError("Передай вкладку ИНВенты через Browser Bridge.");return;}
     setBusy(true);setSheetError("");setSheetNotice("");
     try{
@@ -284,7 +287,7 @@ function SourcesPage({tabs,connected,onOpenBrowser,runState,runner}:{tabs:Browse
     finally{setBusy(false);}
   };
   const checkOrderBatch=async()=>{
-    const activeTab=tabs.find(tab=>tab.url===sheetUrl);
+    const activeTab=sheetUrl?{url:sheetUrl}:undefined;
     if(!activeTab){setSheetError("Передай вкладку ИНВенты через Browser Bridge.");return;}
     setBusy(true);setSheetError("");setSheetNotice("");
     try{
@@ -295,7 +298,7 @@ function SourcesPage({tabs,connected,onOpenBrowser,runState,runner}:{tabs:Browse
     finally{setBusy(false);}
   };
   const resetOrderBatch=async()=>{
-    const activeTab=tabs.find(tab=>tab.url===sheetUrl);
+    const activeTab=sheetUrl?{url:sheetUrl}:undefined;
     if(!activeTab){setSheetError("Передай вкладку ИНВенты через Browser Bridge.");return;}
     if(!window.confirm("Начать пакетную проверку этого листа с самого начала? Уже проверенные грузоместа будут включены снова. Данные сайтов не изменятся."))return;
     setBusy(true);setSheetError("");setSheetNotice("");
@@ -307,6 +310,18 @@ function SourcesPage({tabs,connected,onOpenBrowser,runState,runner}:{tabs:Browse
   };
 
   const sheetsAuthorized=sheetsStatus.status==="authorized"||sheetsStatus.connected;
+  useEffect(()=>{
+    if(!sheetUrl||!sheetsAuthorized||!connected)return;
+    let cancelled=false;setLoadingSheets(true);
+    invoke<any>("analyze_active_inventa",{spreadsheetUrl:sheetUrl}).then(report=>{
+      if(cancelled)return;
+      setInventaReport(report);setSheetError("");
+      setInventoryDate(report.analysis.sheet_inventory_date||"");
+      const base=sheetUrl.split("?")[0];
+      setSheetOptions((report.source.available_sheets||[]).map((sheet:{id:number;title:string})=>({url:base+"?gid="+sheet.id,title:sheet.title})));
+    }).catch(error=>{if(!cancelled)setSheetError(String(error));}).finally(()=>{if(!cancelled)setLoadingSheets(false);});
+    return()=>{cancelled=true;};
+  },[sheetUrl,sheetsAuthorized,connected]);
   const statusLabel=sheetsAuthorized?"Подключён · чтение и редактирование":
     sheetsStatus.status==="authorizing"?"Ожидает подтверждения в браузере":
     sheetsStatus.status==="reauthorization_required"?"Требуется повторная авторизация":
@@ -325,14 +340,19 @@ function SourcesPage({tabs,connected,onOpenBrowser,runState,runner}:{tabs:Browse
       <h2>Разобрать ИНВенту</h2><p>Выбери лист. Маления последовательно проверит заказы в DataLens и Asgard до конца списка.</p>
       <label>Таблица и лист<select value={sheetUrl} disabled={runBusy} onChange={e=>setSelectedSheet(e.target.value)}>
         {!sheetTabs.length?<option value="">Передай вкладку ИНВенты через расширение</option>:null}
-        {sheetTabs.map(tab=><option value={tab.url} key={tab.id}>{tab.title} · {new URL(tab.url).searchParams.get("gid")||"лист по заголовкам"}</option>)}
+        {sheetTabs.filter(tab=>!sheetOptions.some(sheet=>sheet.url===tab.url)).map(tab=><option value={tab.url} key={tab.id}>{tab.title} · открытый лист</option>)}
+        {sheetOptions.map(sheet=><option value={sheet.url} key={sheet.url}>{sheet.title}</option>)}
       </select></label>
+      <label>Дата инвентаризации<input type="date" value={inventoryDate} disabled={runBusy} onChange={e=>setInventoryDate(e.target.value)}/><small>Успешные сканы сравниваются с этой датой. Можно изменить перед запуском.</small></label>
+      {!sheetsAuthorized?<p role="status">Сначала подключи Google в разделе ниже — без доступа к таблице разбор недоступен.</p>:null}
+      {loadingSheets?<p role="status">Загружаю названия листов и дату…</p>:null}
       <div className="google-actions">
-        <button className="primary" disabled={!connected||!sheetsAuthorized||!sheetUrl||runBusy} onClick={()=>void runner.start(sheetUrl)}><Play size={16}/>{runState.phase==="paused"||runState.phase==="error"?"Продолжить разбор":"Разобрать весь лист"}</button>
+        <button className="primary" disabled={!connected||!sheetsAuthorized||!sheetUrl||!inventoryDate||loadingSheets||runBusy} onClick={()=>void runner.start(sheetUrl,inventoryDate)}><Play size={16}/>{runState.phase==="paused"||runState.phase==="error"?"Продолжить разбор":"Разобрать весь лист"}</button>
+        <button className="secondary" disabled={!connected||!sheetsAuthorized||!sheetUrl||!inventoryDate||loadingSheets||runBusy} onClick={()=>void runner.restart(sheetUrl,inventoryDate)}>Начать заново</button>
         <button className="secondary" disabled={!runBusy||runState.phase==="pausing"} onClick={()=>runner.pause()}>Пауза</button>
         <button className="secondary" disabled={!connected||!!lesson} onClick={()=>{runner.pause();setLesson({id:crypto.randomUUID(),title:"Правило разбора ИНВенты",content:"",kind:"memory"});}}>Объяснить Малении</button>
       </div>
-      <div className="inventa-progress" role="status" aria-live="polite"><b>{runState.total?`${runState.processed} из ${runState.total} заказов проверено`:"Готова начать"}</b><p>{runState.message}</p>
+      <div className="inventa-progress" role="status" aria-live="polite"><b>{runState.phase==="error"?"Разбор остановлен":runState.phase==="completed"?"Проверка завершена":runState.total?`${runState.processed} из ${runState.total} заказов проверено`:runBusy?"Подготавливаю проверку":!sheetsAuthorized?"Нужно подключить Google":!inventoryDate?"Выбери дату инвентаризации":"Готова начать"}</b><p>{runState.message}</p>
         {runState.total>0?<progress aria-label="Прогресс разбора" max={runState.total} value={runState.processed}/>:null}
       </div>
       <small>Партии до 20 заказов переходят одна в другую автоматически. При ошибке разбор остановится; проверенная позиция сохранится. Можно переходить между разделами, пока окно Малении открыто. Запись результатов в таблицу ещё не подключена.</small>
