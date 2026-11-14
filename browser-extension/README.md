@@ -9,7 +9,7 @@ This is a developer-preview Manifest V3 extension for Yandex Browser builds that
 - `scripting`: read bounded rendered text of the selected, permitted page.
 - `tabs`: create and close three isolated background tabs for the explicitly started read-only audit.
 - `storage`: remember user-supplied resource URL paths and non-sensitive job progress only.
-- Optional host permissions: requested at runtime for **only the three HTTPS origins entered by the user**. The manifest advertises an optional HTTPS pattern but does not automatically grant that entire pattern.
+- Optional host permissions: requested at runtime for **only the HTTPS origins selected by the user** from open tabs. The manifest advertises an optional HTTPS pattern but does not automatically grant that entire pattern.
 
 There is no `history` or `cookies` permission, no persistent content script, and no automatic form submission.
 
