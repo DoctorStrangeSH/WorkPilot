@@ -110,6 +110,19 @@ class TaskStoreTests(unittest.TestCase):
         self.assertEqual(report["completed_sources"], 0)
         self.assertIsNone(report["failed_role"])
 
+    def test_delete_browser_tab_removes_only_shared_record(self):
+        shared = self.store.record_browser_tab("https://example.com/orders", "Orders")
+        self.assertEqual(len(self.store.list_browser_tabs()), 1)
+        self.assertTrue(self.store.delete_browser_tab(shared["id"]))
+        self.assertEqual(self.store.list_browser_tabs(), [])
+        self.assertFalse(self.store.delete_browser_tab(shared["id"]))
+        event = self.store.list_events(1)[0]
+        self.assertEqual(event["event_type"], "browser.tab_unshared")
+
+    def test_delete_browser_tab_rejects_invalid_id(self):
+        self.assertFalse(self.store.delete_browser_tab(""))
+        self.assertFalse(self.store.delete_browser_tab("../all"))
+
     def test_unknown_task_returns_none(self):
         self.assertIsNone(self.store.get_task("not-a-real-id"))
         self.assertIsNone(self.store.cancel_task("not-a-real-id"))
