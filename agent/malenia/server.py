@@ -175,6 +175,21 @@ def make_handler(store: TaskStore, token: str, resources: ResourceManager,
             else:
                 self._send(404, {"error": "not_found"})
 
+        def do_DELETE(self) -> None:
+            if not self._require_access():
+                return
+            parsed = urlsplit(self.path)
+            match = re.fullmatch(r"/v1/browser/tabs/([0-9a-fA-F-]{36})", parsed.path)
+            if not match:
+                self._send(404, {"error": "not_found"})
+                return
+            removed = store.delete_browser_tab(match.group(1))
+            if not removed:
+                self._send(404, {"error": "browser_tab_not_found"})
+                return
+            # This removes only Malenia's shared-tab record; it never closes the browser tab.
+            self._send(200, {"removed": True, "browser_tab_closed": False})
+
         def do_POST(self) -> None:
             if not self._require_access():
                 return
