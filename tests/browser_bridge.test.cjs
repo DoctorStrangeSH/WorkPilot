@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '../browser-extension/popup.js'), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
-function popup(url = 'https://example.com/orders?secret=remove#private') {
+function popup(url = 'https://example.com/orders?secret=remove#private', pageDocument = null) {
   const nodes = Object.fromEntries(['status', 'share', 'shareAll', 'retry', 'inspect', 'auditStatus'].map(id => [id, {
     disabled: true, textContent: '', className: '', handlers: {},
     addEventListener(type, callback) { this.handlers[type] = callback; }
@@ -15,7 +15,7 @@ function popup(url = 'https://example.com/orders?secret=remove#private') {
   const chrome = {
     runtime: {lastError: null, sendNativeMessage(host, message, callback) { calls.push({host, message, callback}); }},
     tabs: {async query() { queries++; return [{id: 7, title: 'x'.repeat(400), url}]; }},
-    scripting: {async executeScript() {return [{result:{title:'Orders',table_headers:['Order ID','Status'],search_labels:['Search'],has_aria_grid:true,virtualized:false,login_required:false}}];}}
+    scripting: {async executeScript({func}) {if (pageDocument) return [{result:vm.runInNewContext("("+func.toString()+")()", {document:pageDocument})}];return [{result:{title:'Orders',table_headers:['Order ID','Status'],search_labels:['Search'],has_aria_grid:true,virtualized:false,login_required:false}}];}}
   };
   vm.runInNewContext(source, {document: {getElementById: id => nodes[id]}, chrome, URL, URLSearchParams,
     crypto: {randomUUID: () => 'request-id'},
@@ -32,6 +32,33 @@ function popup(url = 'https://example.com/orders?secret=remove#private') {
   };
 }
 const hello = {ok: true, host: 'com.malenia.browser'};
+
+test('diagnostics count unlabelled controls and inspect accessible frame/shadow structure without values',async()=>{
+  const input = attrs => ({
+    getAttribute:name=>attrs[name] || null,
+    getClientRects:()=>[{}], getBoundingClientRect:()=>({width:100}),
+    get value(){throw Error('Input values must never be read');}
+  });
+  const controls='input, textarea, [role=searchbox], [role=combobox]';
+  const root = nodes => ({title:'Asgard',querySelector:()=>null,
+    querySelectorAll:selector=>nodes[selector] || []});
+  const shadow = root({[controls]:[input({'aria-label':'Штрихкод коробки'})]});
+  const frame = root({[controls]:[input({placeholder:'Внешний ID заказа'})]});
+  const doc = root({[controls]:[input({type:'text'}),input({type:'password'})],
+    'iframe,frame':[{contentDocument:frame},{contentDocument:null}],
+    '*':[{shadowRoot:shadow}]});
+  const p=popup('https://example.com/search',doc);
+  await p.reply(0,hello);await p.click('inspect');
+  const page=p.calls[1].message.page;
+  assert.equal(page.structure.inputs,3);
+  assert.equal(page.structure.unlabelled_inputs,1);
+  assert.equal(page.structure.frames,2);
+  assert.equal(page.structure.inaccessible_frames,1);
+  assert.equal(page.structure.shadow_roots,1);
+  assert.deepEqual(Array.from(page.search_labels),[
+    '[поле без подписи: text]','Внешний ID заказа','Штрихкод коробки']);
+  assert.equal('text' in page,false);
+});
 
 test('sharing Sheets preserves the selected worksheet but strips other parameters',async()=>{
   for (const action of ['share','shareAll']) {
