@@ -856,3 +856,10 @@ Latest fix commit at this note: `4f46fdd1d7c9dc77a4b26e3244f6ed8b14af87e4` (late
 - Sharing a Google Sheets edit URL now retains only its unambiguous numeric gid (query or fragment, canonicalized into query). Native host independently sanitizes it. Other URL parameters are removed. This fixes loss of selected worksheet before read_active_sheet; existing date/header fallback remains for older shares without gid. Users must share the worksheet again after updating the extension/native host.
 - Windows installer workflow now runs for main as well as feat/desktop-shell when relevant code changes.
 - Local validation: 79 Node tests passed, 221 Python tests completed (one skipped), frontend production build passed. Windows installer/real installed app not verified locally on Linux. Live DataLens/Asgard mappings still require the actual authorized pages; generic traversal must not be described as proven on their real services.
+
+## 2026-11-14 — user changed requirement to editable INVenta
+
+- Latest user instruction supersedes earlier read-only preference: Malenia should edit INVenta and operate as an AI colleague. User also requests live DataLens/Asgard testing.
+- OAuth now requests the exact spreadsheets editor scope, with no Drive scope. Editor refresh tokens use a separate credential key so existing read-only grants are never presented as editor authorization. Reconnect Google once after upgrading.
+- UI describes editor access. Existing edit-preview/edit-approve API, formula protection, source-change detection and readback verification remain. Automatic audit-to-sheet writeback and its desktop controls are not implemented by this change; do not claim they are.
+- Checked available computer surfaces: only a separate Chrome with zero tabs is exposed; the user's Yandex session is not available. No live DataLens/Asgard check was performed. Obtain structural diagnostics from the actual pages or an accessible authorized browser session before implementing real schema mappings. Do not guess selectors or report synthetic tests as live success.
