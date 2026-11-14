@@ -215,7 +215,9 @@ inspectButton.addEventListener("click", async () => {
     auditStatus.textContent = role+": "+(summary.login_required?"похоже, требуется вход": "страница доступна")+
       "; заголовков: "+summary.table_headers.length+"; полей поиска: "+summary.search_labels.length+
       (summary.has_aria_grid?"; есть ARIA grid":"")+(summary.virtualized?"; вероятна виртуализация":"")+
-      ". Сырые данные не сохранялись.";
+      ". Заголовки: "+(summary.table_headers.join(" | ") || "не обнаружены")+
+      ". Поля поиска: "+(summary.search_labels.join(" | ") || "не обнаружены")+
+      ". Строки заказов не сохранялись.";
     auditStatus.className = "status ok";
     setStatus("Структурная диагностика завершена. Это ещё не проверка заказов.", "ok");
   } catch {
