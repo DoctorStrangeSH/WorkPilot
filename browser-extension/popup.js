@@ -190,18 +190,49 @@ inspectButton.addEventListener("click", async () => {
     const page = new URL(tab.url);
     if (!["http:","https:"].includes(page.protocol) || page.username || page.password) throw new Error("url");
     const results = await chrome.scripting.executeScript({target:{tabId:tab.id},func:() => {
+      const clean = value => String(value || "").replace(/\s+/g," ").trim().slice(0,120);
       const visible = el => !!(el && (el.getClientRects().length || el.getBoundingClientRect().width));
-      const clean = value => String(value || "").replace(/\\s+/g," ").trim().slice(0,120);
-      const headers = Array.from(document.querySelectorAll("table thead th, [role=columnheader]"))
-        .filter(visible).map(el=>clean(el.innerText || el.getAttribute("aria-label"))).filter(Boolean).slice(0,40);
-      const labels = Array.from(document.querySelectorAll("input:not([type=hidden]), [role=searchbox]"))
-        .filter(visible).map(el=>clean(el.getAttribute("aria-label") || el.getAttribute("placeholder") ||
-          (el.labels && Array.from(el.labels).map(x=>x.innerText).join(" ")))).filter(Boolean).slice(0,30);
-      const body = document.body ? document.body.innerText.slice(0,5000).toLowerCase() : "";
-      return {title:document.title.slice(0,300),table_headers:headers,search_labels:labels,
-        has_aria_grid:!!document.querySelector('[role="grid"],[role="table"]'),
-        virtualized:!!document.querySelector('[aria-rowcount], [data-virtualized="true"], .ag-virtual-list-viewport'),
-        login_required:/sign in|log in|войти|авторизац|вход в аккаунт/.test(body)};
+      const roots = [document], seen = new Set();
+      const headers = [], labels = [];
+      const structure = {inputs:0,unlabelled_inputs:0,frames:0,inaccessible_frames:0,shadow_roots:0};
+      let hasGrid = false, virtualized = false, loginRequired = false;
+      for (let i=0; i<roots.length && i<30; i++) {
+        const root = roots[i];
+        if (seen.has(root)) continue;
+        seen.add(root);
+        loginRequired ||= !!root.querySelector('input[type="password"]');
+        hasGrid ||= !!root.querySelector('[role="grid"],[role="table"]');
+        virtualized ||= !!root.querySelector('[aria-rowcount], [data-virtualized="true"], .ag-virtual-list-viewport');
+        for (const el of root.querySelectorAll("table th, [role=columnheader]")) {
+          if (visible(el)) headers.push(clean(el.innerText || el.getAttribute("aria-label")));
+        }
+        for (const el of root.querySelectorAll("input, textarea, [role=searchbox], [role=combobox]")) {
+          const type = String(el.getAttribute("type") || "text").toLowerCase();
+          if (["hidden","password","checkbox","radio","file","submit","button"].includes(type) || !visible(el)) continue;
+          structure.inputs++;
+          const label = clean(el.getAttribute("aria-label") || el.getAttribute("placeholder") ||
+            (el.labels && Array.from(el.labels).map(x=>x.innerText || x.textContent).join(" ")) ||
+            String(el.getAttribute("aria-labelledby") || "").split(/\s+/)
+              .map(id=>root.getElementById?.(id)?.textContent || "").join(" "));
+          if (!label) structure.unlabelled_inputs++;
+          labels.push(label || "[поле без подписи: " + type + "]");
+        }
+        for (const frame of root.querySelectorAll("iframe,frame")) {
+          structure.frames++;
+          try {
+            if (frame.contentDocument) roots.push(frame.contentDocument);
+            else structure.inaccessible_frames++;
+          } catch { structure.inaccessible_frames++; }
+        }
+        // Open shadow roots are accessible without bypassing browser boundaries.
+        for (const el of Array.from(root.querySelectorAll("*")).slice(0,10000)) {
+          if (el.shadowRoot) { structure.shadow_roots++; roots.push(el.shadowRoot); }
+        }
+      }
+      return {title:document.title.slice(0,300),
+        table_headers:[...new Set(headers.filter(Boolean))].slice(0,40),
+        search_labels:[...new Set(labels)].slice(0,30),structure,
+        has_aria_grid:hasGrid,virtualized,login_required:loginRequired};
     }});
     const summary = results?.[0]?.result;
     if (!summary || typeof summary !== "object") throw new Error("snapshot");
@@ -215,6 +246,9 @@ inspectButton.addEventListener("click", async () => {
     auditStatus.textContent = role+": "+(summary.login_required?"похоже, требуется вход": "страница доступна")+
       "; заголовков: "+summary.table_headers.length+"; полей поиска: "+summary.search_labels.length+
       (summary.has_aria_grid?"; есть ARIA grid":"")+(summary.virtualized?"; вероятна виртуализация":"")+
+      (summary.structure ? "; полей без подписи: "+summary.structure.unlabelled_inputs+
+        "; фреймов: "+summary.structure.frames+" (недоступных: "+summary.structure.inaccessible_frames+")"+
+        "; shadow roots: "+summary.structure.shadow_roots : "")+
       ". Заголовки: "+(summary.table_headers.join(" | ") || "не обнаружены")+
       ". Поля поиска: "+(summary.search_labels.join(" | ") || "не обнаружены")+
       ". Строки заказов не сохранялись.";
