@@ -521,7 +521,10 @@ fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlen
         return {"spreadsheet_id": spreadsheet_id, "spreadsheet_title": metadata.get("properties", {}).get("title", ""),
                 "sheet_title": title, "sheet_id": sheet_id, "range": values["range"],
                 "values": values["values"], "read_only": False,
-                "source": "explicit_browser_tab", "gid_selected": selected_gid is not None}
+                "source": "explicit_browser_tab", "gid_selected": selected_gid is not None,
+                "available_sheets": [{"id": item["properties"]["sheetId"], "title": item["properties"]["title"]}
+                    for item in sheets if isinstance(item, dict) and isinstance(item.get("properties"), dict)
+                    and type(item["properties"].get("sheetId")) is int and isinstance(item["properties"].get("title"), str)]}
 
     def write_values(self, spreadsheet_id: str, range_a1: str, values: list[list[Any]]) -> dict[str, Any]:
         """Write literal values to an exact range; callers must enforce approval."""
